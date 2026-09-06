@@ -1,5 +1,27 @@
 # Design QA
 
+## Latest correction — context-menu polish
+
+The previous pass missed raised submenu rows and a submenu extending beyond
+the chooser. Its acceptance statements below describe the earlier pass, not
+the corrected appearance.
+
+- Verified capture: `/tmp/picker-menu-polished-final.png` (1500 × 1000 pixels,
+  1200 × 800 logical viewport, 1.25 scale).
+- Detail: `/tmp/picker-menu-detail.png`.
+- Fixed the overly broad `contents` CSS selector: it was styling internal GTK
+  button content as a popup surface. Only the popover's direct contents now
+  receive borders and shadows.
+- Flat 32-pixel action rows, centered labels/icons, lighter popup shadows,
+  and compact trailing size values replace the large stacked controls.
+- Submenus open left near the right edge; disclosure arrows match the direction.
+- Captured and inspected the final open submenu: all options are visible,
+  without raised inner panels or truncated size labels.
+- GTK smoke check passed for submenu callback activation, dismissal, reload,
+  and the background context. Media commands and portal protocol are unchanged.
+
+## Earlier review (superseded)
+
 ## Comparison target
 
 - Source visual truth: `/tmp/omarchy-picker-context-final.png`.

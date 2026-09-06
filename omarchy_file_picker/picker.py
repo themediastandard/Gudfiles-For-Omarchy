@@ -686,9 +686,11 @@ class PickerWindow(Gtk.ApplicationWindow):
         icon.add_css_class("context-icon")
         row.append(icon)
 
-        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        copy = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
         copy.set_hexpand(True)
+        copy.set_valign(Gtk.Align.CENTER)
         title = label(text, "context-label")
+        title.set_hexpand(True)
         title.set_ellipsize(Pango.EllipsizeMode.END)
         copy.append(title)
         if detail:
@@ -735,9 +737,13 @@ class PickerWindow(Gtk.ApplicationWindow):
         menu_button.add_css_class("context-action")
         menu_button.set_halign(Gtk.Align.FILL)
         menu_button.set_hexpand(True)
-        menu_button.set_direction(Gtk.ArrowType.RIGHT)
+        menu_button.set_direction(self.context_submenu_direction)
         menu_button.set_child(
-            self._context_row(text, icon_name, end_icon="go-next-symbolic")
+            self._context_row(
+                text,
+                icon_name,
+                end_icon="go-previous-symbolic" if self.context_submenu_direction == Gtk.ArrowType.LEFT else "go-next-symbolic",
+            )
         )
 
         submenu = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=False)
@@ -750,14 +756,15 @@ class PickerWindow(Gtk.ApplicationWindow):
         submenu_box.set_margin_start(7)
         submenu_box.set_margin_end(7)
         for item_text, detail, item_icon, callback in items:
-            submenu_box.append(
-                self._menu_button(
+            item_button = self._menu_button(
                     item_text,
                     callback,
                     icon_name=item_icon,
                     detail=detail,
-                )
             )
+            if detail.endswith(" px"):
+                item_button.set_tooltip_text("Maximum longest edge; smaller images are not enlarged.")
+            submenu_box.append(item_button)
         submenu.set_child(submenu_box)
         menu_button.set_popover(submenu)
         self.context_submenus.append(submenu)
@@ -772,6 +779,12 @@ class PickerWindow(Gtk.ApplicationWindow):
         popover = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=True)
         popover.add_css_class("file-context-menu")
         anchor = self.children_by_path.get(path, self.flow) if path else self.flow
+        valid_bounds, bounds = anchor.compute_bounds(self)
+        anchor_x = bounds.get_x() + (bounds.get_width() / 2 if path else x) if valid_bounds else x
+        # Keep cascading choices inside the chooser when the anchor is near its right edge.
+        self.context_submenu_direction = (
+            Gtk.ArrowType.LEFT if anchor_x + 370 > self.get_width() else Gtk.ArrowType.RIGHT
+        )
         popover.set_parent(anchor)
         popover.connect("closed", self._on_context_closed)
         rectangle = Gdk.Rectangle()
@@ -786,19 +799,15 @@ class PickerWindow(Gtk.ApplicationWindow):
         rectangle.height = 1
         popover.set_pointing_to(rectangle)
 
-        menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-        menu.set_margin_top(8)
-        menu.set_margin_bottom(8)
-        menu.set_margin_start(8)
-        menu.set_margin_end(8)
+        menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        menu.set_margin_top(5)
+        menu.set_margin_bottom(5)
+        menu.set_margin_start(5)
+        menu.set_margin_end(5)
         popover.set_child(menu)
 
         self.context_submenus.clear()
         self.qa_submenu_button = None
-        kind = "IMAGE" if path and path.suffix.casefold() in IMAGE_TYPES else (
-            "VIDEO" if path and path.suffix.casefold() in VIDEO_TYPES else "FOLDER"
-        )
-        menu.append(label(f"{kind} ACTIONS", "context-heading"))
         new_folder = self._menu_button(
             "New Folder…",
             lambda: self._show_create_dialog("folder"),
@@ -820,7 +829,7 @@ class PickerWindow(Gtk.ApplicationWindow):
             resize_items = [
                 (
                     size.title(),
-                    f"Longest edge · {pixels}px",
+                    f"{pixels} px",
                     "image-x-generic-symbolic",
                     lambda p=path, s=size: self._resize_image(p, s),
                 )
@@ -835,7 +844,7 @@ class PickerWindow(Gtk.ApplicationWindow):
             format_items = [
                 (
                     image_format.upper(),
-                    "Create a new copy",
+                    "",
                     "image-x-generic-symbolic",
                     lambda p=path, f=image_format: self._convert_image(p, f),
                 )
@@ -853,7 +862,7 @@ class PickerWindow(Gtk.ApplicationWindow):
             video_items = [
                 (
                     video_format.upper(),
-                    "Create a new copy",
+                    "",
                     "video-x-generic-symbolic",
                     lambda p=path, f=video_format: self._convert_video(p, f),
                 )

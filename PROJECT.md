@@ -12,6 +12,8 @@ as the desktop's XDG FileChooser portal backend.
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Compact context actions create folders and text files; cascading media menus
   expose resize presets and format conversions without replacing originals.
+- Context-menu surfaces use scoped GTK CSS, compact flat rows, and inward
+  submenu placement near the chooser's right edge.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
   prompts; mounted shares are refreshed into the Devices sidebar.
 - Reads the active Omarchy `colors.toml` on every launch.

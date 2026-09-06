@@ -154,13 +154,13 @@ def build_css(colors: dict[str, str]) -> str:
       font-size: 11px;
     }}
     .empty-title {{ font-size: 18px; font-weight: 700; }}
-    .file-context-menu contents {{
+    popover.file-context-menu > contents {{
       background: {colors['background']};
       border: 1px solid {colors['darker_background']};
       border-radius: 10px;
-      box-shadow: 0 10px 28px alpha(#000000, 0.24);
+      padding: 0;
+      box-shadow: 0 4px 14px alpha(#000000, 0.16);
     }}
-    .file-submenu contents {{ box-shadow: 0 12px 34px alpha(#000000, 0.28); }}
     .context-heading {{
       color: {colors['dark_foreground']};
       font-size: 10px;
@@ -172,9 +172,9 @@ def build_css(colors: dict[str, str]) -> str:
       background: transparent;
       border: 0;
       box-shadow: none;
-      padding: 7px 9px;
-      min-width: 218px;
-      min-height: 34px;
+      padding: 4px 9px;
+      min-width: 200px;
+      min-height: 24px;
     }}
     button.context-action:hover {{ background: {colors['lighter_background']}; }}
     menubutton.context-action {{
@@ -182,20 +182,22 @@ def build_css(colors: dict[str, str]) -> str:
       border: 0;
       box-shadow: none;
       padding: 0;
-      min-width: 218px;
-      min-height: 34px;
+      min-width: 200px;
+      min-height: 0;
     }}
     menubutton.context-action > button {{
       background: transparent;
       border: 0;
       box-shadow: none;
-      padding: 7px 9px;
-      min-height: 34px;
+      padding: 4px 9px;
+      min-height: 24px;
     }}
     menubutton.context-action > button:hover {{ background: {colors['lighter_background']}; }}
+    menubutton.context-action > button:checked {{ background: {colors['lighter_background']}; }}
+    .context-action:focus-visible {{ outline: 2px solid {colors['accent']}; outline-offset: -2px; }}
     .context-icon {{ color: {colors['light_foreground']}; }}
     .context-label {{ color: {colors['foreground']}; font-size: 13px; }}
-    .context-detail {{ color: {colors['dark_foreground']}; font-size: 10px; }}
+    .context-detail {{ color: {colors['light_foreground']}; font-size: 11px; }}
     .context-arrow {{ color: {colors['dark_foreground']}; }}
     .file-context-menu separator {{ margin: 5px 4px; }}
     .nas-button {{ margin-top: 2px; }}
