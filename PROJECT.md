@@ -10,8 +10,8 @@ as the desktop's XDG FileChooser portal backend.
 - Native GTK 4 picker with grid and list layouts.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
-- Context actions create folders and text files, resize images to three presets,
-  and convert common image and video formats without replacing originals.
+- Compact context actions create folders and text files; cascading media menus
+  expose resize presets and format conversions without replacing originals.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
   prompts; mounted shares are refreshed into the Devices sidebar.
 - Reads the active Omarchy `colors.toml` on every launch.

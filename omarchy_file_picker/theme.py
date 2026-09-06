@@ -157,23 +157,47 @@ def build_css(colors: dict[str, str]) -> str:
     .file-context-menu contents {{
       background: {colors['background']};
       border: 1px solid {colors['darker_background']};
-      border-radius: 9px;
+      border-radius: 10px;
       box-shadow: 0 10px 28px alpha(#000000, 0.24);
     }}
+    .file-submenu contents {{ box-shadow: 0 12px 34px alpha(#000000, 0.28); }}
     .context-heading {{
       color: {colors['dark_foreground']};
       font-size: 10px;
       font-weight: 700;
-      margin: 5px 7px 2px 7px;
+      letter-spacing: 0.08em;
+      margin: 5px 9px 4px 9px;
     }}
-    .context-action {{
+    button.context-action {{
       background: transparent;
       border: 0;
       box-shadow: none;
-      padding: 6px 9px;
-      min-height: 30px;
+      padding: 7px 9px;
+      min-width: 218px;
+      min-height: 34px;
     }}
-    .context-action:hover {{ background: {colors['lighter_background']}; }}
+    button.context-action:hover {{ background: {colors['lighter_background']}; }}
+    menubutton.context-action {{
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+      min-width: 218px;
+      min-height: 34px;
+    }}
+    menubutton.context-action > button {{
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 7px 9px;
+      min-height: 34px;
+    }}
+    menubutton.context-action > button:hover {{ background: {colors['lighter_background']}; }}
+    .context-icon {{ color: {colors['light_foreground']}; }}
+    .context-label {{ color: {colors['foreground']}; font-size: 13px; }}
+    .context-detail {{ color: {colors['dark_foreground']}; font-size: 10px; }}
+    .context-arrow {{ color: {colors['dark_foreground']}; }}
+    .file-context-menu separator {{ margin: 5px 4px; }}
     .nas-button {{ margin-top: 2px; }}
     .error {{ color: {colors['red']}; }}
     separator {{ background: {colors['darker_background']}; }}

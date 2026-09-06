@@ -8,6 +8,7 @@ and serves as an XDG desktop portal backend.
 - Thumbnail-first grid and compact list views
 - Image previews and freedesktop video thumbnail cache support
 - Pinned folders, recent files, and mounted volumes
+- Compact, icon-led right-click menu with grouped media submenus
 - Right-click creation of folders and text files
 - Non-destructive image resizing: Small (1080 px), Medium (2160 px), Large (3160 px)
 - Image conversion to JPEG, PNG, WebP, and AVIF

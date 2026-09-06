@@ -120,6 +120,8 @@ class PickerWindow(Gtk.ApplicationWindow):
         self.choice_widgets: dict[str, Gtk.Widget] = {}
         self.active_processes: set[Gio.Subprocess] = set()
         self.context_popover: Gtk.Popover | None = None
+        self.context_submenus: list[Gtk.Popover] = []
+        self.qa_submenu_button: Gtk.MenuButton | None = None
         self.volume_monitor = Gio.VolumeMonitor.get()
 
         self.set_default_size(1200, 800)
@@ -141,7 +143,7 @@ class PickerWindow(Gtk.ApplicationWindow):
             GLib.timeout_add(150, lambda: self._automation_select_first())
         elif automation == "accept":
             GLib.timeout_add(150, lambda: self._automation_accept())
-        elif automation == "context-menu":
+        elif automation in {"context-menu", "context-submenu"}:
             GLib.timeout_add(250, lambda: self._automation_context_menu())
 
     def _install_theme(self) -> None:
@@ -669,16 +671,104 @@ class PickerWindow(Gtk.ApplicationWindow):
             self.flow.select_child(child)
         self._show_context_menu(x, y, path)
 
-    def _menu_button(self, text: str, callback) -> Gtk.Button:
-        button = Gtk.Button(label=text)
+    def _context_row(
+        self,
+        text: str,
+        icon_name: str,
+        *,
+        detail: str = "",
+        end_icon: str = "",
+    ) -> Gtk.Widget:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row.set_hexpand(True)
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(17)
+        icon.add_css_class("context-icon")
+        row.append(icon)
+
+        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        copy.set_hexpand(True)
+        title = label(text, "context-label")
+        title.set_ellipsize(Pango.EllipsizeMode.END)
+        copy.append(title)
+        if detail:
+            copy.append(label(detail, "context-detail"))
+        row.append(copy)
+
+        if end_icon:
+            arrow = Gtk.Image.new_from_icon_name(end_icon)
+            arrow.set_pixel_size(14)
+            arrow.add_css_class("context-arrow")
+            row.append(arrow)
+        return row
+
+    def _menu_button(
+        self,
+        text: str,
+        callback,
+        *,
+        icon_name: str = "document-open-symbolic",
+        detail: str = "",
+    ) -> Gtk.Button:
+        button = Gtk.Button()
         button.add_css_class("context-action")
         button.set_halign(Gtk.Align.FILL)
-        button.connect("clicked", lambda _button: (self._close_context_menu(), callback()))
+        button.set_hexpand(True)
+        button.set_child(self._context_row(text, icon_name, detail=detail))
+
+        def on_clicked(_button: Gtk.Button) -> None:
+            self._close_context_menu()
+            callback()
+
+        button.connect("clicked", on_clicked)
         return button
+
+    def _submenu_button(
+        self,
+        text: str,
+        icon_name: str,
+        items: list[tuple[str, str, str, Any]],
+        *,
+        keep_open_for_qa: bool,
+    ) -> Gtk.MenuButton:
+        menu_button = Gtk.MenuButton()
+        menu_button.add_css_class("context-action")
+        menu_button.set_halign(Gtk.Align.FILL)
+        menu_button.set_hexpand(True)
+        menu_button.set_direction(Gtk.ArrowType.RIGHT)
+        menu_button.set_child(
+            self._context_row(text, icon_name, end_icon="go-next-symbolic")
+        )
+
+        submenu = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=False)
+        submenu.add_css_class("file-context-menu")
+        submenu.add_css_class("file-submenu")
+        submenu.set_position(Gtk.PositionType.RIGHT)
+        submenu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        submenu_box.set_margin_top(7)
+        submenu_box.set_margin_bottom(7)
+        submenu_box.set_margin_start(7)
+        submenu_box.set_margin_end(7)
+        for item_text, detail, item_icon, callback in items:
+            submenu_box.append(
+                self._menu_button(
+                    item_text,
+                    callback,
+                    icon_name=item_icon,
+                    detail=detail,
+                )
+            )
+        submenu.set_child(submenu_box)
+        menu_button.set_popover(submenu)
+        self.context_submenus.append(submenu)
+        if self.qa_submenu_button is None:
+            self.qa_submenu_button = menu_button
+        return menu_button
 
     def _show_context_menu(self, x: float, y: float, path: Path | None = None) -> None:
         self._close_context_menu()
-        keep_open_for_qa = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION") == "context-menu"
+        automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
+        keep_open_for_qa = automation in {"context-menu", "context-submenu"}
         popover = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=True)
         popover.add_css_class("file-context-menu")
         anchor = self.children_by_path.get(path, self.flow) if path else self.flow
@@ -703,10 +793,22 @@ class PickerWindow(Gtk.ApplicationWindow):
         menu.set_margin_end(8)
         popover.set_child(menu)
 
-        create_heading = label("CREATE", "context-heading")
-        menu.append(create_heading)
-        new_folder = self._menu_button("New Folder…", lambda: self._show_create_dialog("folder"))
-        new_text = self._menu_button("New Text File…", lambda: self._show_create_dialog("text"))
+        self.context_submenus.clear()
+        self.qa_submenu_button = None
+        kind = "IMAGE" if path and path.suffix.casefold() in IMAGE_TYPES else (
+            "VIDEO" if path and path.suffix.casefold() in VIDEO_TYPES else "FOLDER"
+        )
+        menu.append(label(f"{kind} ACTIONS", "context-heading"))
+        new_folder = self._menu_button(
+            "New Folder…",
+            lambda: self._show_create_dialog("folder"),
+            icon_name="folder-new-symbolic",
+        )
+        new_text = self._menu_button(
+            "New Text File…",
+            lambda: self._show_create_dialog("text"),
+            icon_name="document-new-symbolic",
+        )
         can_create = self.special_mode is None and os.access(self.current_dir, os.W_OK)
         new_folder.set_sensitive(can_create)
         new_text.set_sensitive(can_create)
@@ -715,40 +817,74 @@ class PickerWindow(Gtk.ApplicationWindow):
 
         if path and path.is_file() and path.suffix.casefold() in IMAGE_TYPES:
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-            menu.append(label("RESIZE IMAGE", "context-heading"))
-            sizes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            for size, pixels in IMAGE_SIZE_PIXELS.items():
-                sizes.append(self._menu_button(
-                    f"{size.title()}\n{pixels}px",
+            resize_items = [
+                (
+                    size.title(),
+                    f"Longest edge · {pixels}px",
+                    "image-x-generic-symbolic",
                     lambda p=path, s=size: self._resize_image(p, s),
-                ))
-            menu.append(sizes)
-            menu.append(label("CONVERT IMAGE", "context-heading"))
-            formats = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            for image_format in ("jpeg", "png", "webp", "avif"):
-                formats.append(self._menu_button(
+                )
+                for size, pixels in IMAGE_SIZE_PIXELS.items()
+            ]
+            menu.append(self._submenu_button(
+                "Resize Image",
+                "image-x-generic-symbolic",
+                resize_items,
+                keep_open_for_qa=keep_open_for_qa,
+            ))
+            format_items = [
+                (
                     image_format.upper(),
+                    "Create a new copy",
+                    "image-x-generic-symbolic",
                     lambda p=path, f=image_format: self._convert_image(p, f),
-                ))
-            menu.append(formats)
+                )
+                for image_format in ("jpeg", "png", "webp", "avif")
+            ]
+            menu.append(self._submenu_button(
+                "Convert Image",
+                "view-refresh-symbolic",
+                format_items,
+                keep_open_for_qa=keep_open_for_qa,
+            ))
 
         if path and path.is_file() and path.suffix.casefold() in VIDEO_TYPES:
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-            menu.append(label("CONVERT VIDEO", "context-heading"))
-            formats = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            for video_format in ("mp4", "webm", "mov", "gif"):
-                formats.append(self._menu_button(
+            video_items = [
+                (
                     video_format.upper(),
+                    "Create a new copy",
+                    "video-x-generic-symbolic",
                     lambda p=path, f=video_format: self._convert_video(p, f),
-                ))
-            menu.append(formats)
+                )
+                for video_format in ("mp4", "webm", "mov", "gif")
+            ]
+            menu.append(self._submenu_button(
+                "Convert Video",
+                "video-x-generic-symbolic",
+                video_items,
+                keep_open_for_qa=keep_open_for_qa,
+            ))
 
         menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        menu.append(self._menu_button("Connect to NAS…", lambda: self._show_nas_dialog(None)))
+        menu.append(self._menu_button(
+            "Connect to NAS…",
+            lambda: self._show_nas_dialog(None),
+            icon_name="network-server-symbolic",
+        ))
         self.context_popover = popover
         popover.popup()
+        if automation == "context-submenu" and self.qa_submenu_button:
+            GLib.timeout_add(150, self._open_qa_submenu)
+
+    def _open_qa_submenu(self) -> bool:
+        if self.qa_submenu_button:
+            self.qa_submenu_button.popup()
+        return GLib.SOURCE_REMOVE
 
     def _close_context_menu(self) -> None:
+        for submenu in self.context_submenus:
+            submenu.popdown()
         if self.context_popover:
             self.context_popover.popdown()
 
