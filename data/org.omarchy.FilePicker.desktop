@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Omarchy File Picker
+Comment=Choose files with an Omarchy-native visual browser
+Exec=omarchy-file-picker --demo
+Icon=folder-pictures-symbolic
+Terminal=false
+Type=Application
+Categories=Utility;FileTools;
+StartupWMClass=org.omarchy.FilePicker
+

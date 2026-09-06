@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.omarchy.FilePicker
+Exec=@BIN_DIR@/omarchy-file-picker-portal
+SystemdService=omarchy-file-picker-portal.service
+
