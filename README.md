@@ -22,11 +22,32 @@ and serves as an XDG desktop portal backend.
 - Portal file filters and caller-supplied choices
 - `Ctrl+F`, `Ctrl+L`, `Ctrl+H`, `Alt+Left`, `Alt+Right`, and `Escape`
 - Automatic colors from the active Omarchy theme
+- Cohesive sidebar, browser, previews and dialogs using the same Omarchy palette
+- Space-bar Quick Look: animated expansion from the selected file and return
+- Image, UTF-8 text and first-page PDF previews; arrow keys browse adjacent files
+- NAS dialog automatically discovers advertised SMB/NFS servers and GVfs
+  network locations; select an SMB server to browse its shares, then Connect
 
 All media operations create a new, uniquely named file beside the original.
 Image work uses ImageMagick; video work uses FFmpeg. NAS connections use the
 installed GVfs SMB/NFS backends and appear in the Devices section after mount.
 NAS connection is sidebar-only, not a context-menu action.
+
+Press `Space` on a selected file to preview it, and `Space` again or `Escape`
+to close. The preview restores file focus and respects GTK's reduced-motion
+setting. Images are scaled to fit without cropping, text is read-only and
+limited to 128 KB, and PDFs show their first page with the total page count.
+Video/audio playback uses GTK/GStreamer and needs the appropriate codecs
+(`gst-plugins-good` and `gst-libav` on Arch). Missing codecs show an explanation
+instead of opening another app. These optional system packages are not installed
+by `install.sh`.
+
+Network search starts every time Connect to NAS opens; Refresh scans again.
+Discovery uses Avahi DNS-SD and GVfs, plus mounted shares and GTK-saved network
+bookmarks. It does not port-scan the subnet or connect to servers automatically.
+Selecting a server explicitly browses shares and may prompt for credentials;
+selecting a share fills the address for Connect. Non-advertising servers may
+still require a typed address. No passwords are saved by the picker.
 
 Rename and paste refuse filename collisions instead of overwriting existing
 files. Trash and permanent deletion both require confirmation. Clipboard file

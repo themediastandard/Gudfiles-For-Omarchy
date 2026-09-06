@@ -112,6 +112,13 @@ class ThemeTests(unittest.TestCase):
         colors = DEFAULT_COLORS | {"accent": "#123456"}
         self.assertIn("#123456", build_css(colors))
 
+    def test_sidebar_matches_application_background(self):
+        colors = DEFAULT_COLORS | {'background': '#112233', 'foreground': '#eeeeee'}
+        css = build_css(colors)
+        sidebar = css.split('.sidebar {', 1)[1].split('}', 1)[0]
+        self.assertIn('background: #112233', sidebar)
+        self.assertIn('color: #eeeeee', sidebar)
+
 
 if __name__ == "__main__":
     unittest.main()

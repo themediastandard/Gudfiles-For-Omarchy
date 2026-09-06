@@ -1,5 +1,27 @@
 # Design QA
 
+## Current — cohesive palette, Quick Look and NAS discovery
+
+- Sidebar now uses the same theme background/foreground as the browser. The
+  user's initial pure-white request was superseded by a cohesive palette.
+- Quick Look uses GTK frame-clock translation/scale/opacity (240 ms), originating
+  at the selected tile. Full-image open state inspected at 1200 × 800; automated
+  tests sample intermediate opening/closing states and test reversal, selection,
+  focus restoration, keyboard isolation, text-entry Space and reduced motion.
+- Native tests cover image/text/PDF rendering and the missing-codec fallback.
+  Actual audio/video playback is not verified until system codecs are installed.
+- NAS dialog has flat themed action buttons, inline validation and an automatic
+  discovery list. Live app discovery found an advertised SMB server. The manual
+  server-address route and share-selection route are tested without mounting.
+- Final NAS appearance verified from `/tmp/picker-nas-native.png`, a native
+  WidgetPaintable/renderer capture at 540 × 484 pixels. This captures only the
+  dialog, avoiding unrelated desktop authentication overlays. Labels, discovery
+  rows, field spacing and both footer actions are fully visible.
+- Final checks: 25 unit tests; Quick Look, file-management and live NAS-discovery
+  UI smoke tests pass. The installed portal services are active.
+
+Earlier menu-specific evidence follows.
+
 ## Current — stock actions and background menu
 
 - Inspected `/tmp/picker-background-complete.png` and

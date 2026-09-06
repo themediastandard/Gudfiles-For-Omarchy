@@ -7,6 +7,7 @@ import mimetypes
 import os
 import subprocess
 import sys
+from urllib.parse import urlsplit
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,9 @@ from .model import PickerRequest, file_type, format_size, list_directory, recent
 from .theme import build_css, load_colors
 from .file_management import FileManagement
 from .file_actions import sort_entries
+from .quicklook import QuickLook
+from .network_ui import NetworkBrowser
+from .network import NetworkLocation, safe_network_uri
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -133,6 +137,8 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self._install_theme()
         self._build_header()
         self._build_content()
+        self.quicklook = QuickLook(self)
+        self.preview_overlay.add_overlay(self.quicklook)
         self.volume_monitor.connect("mount-added", lambda *_args: self._refresh_sidebar())
         self.volume_monitor.connect("mount-removed", lambda *_args: self._refresh_sidebar())
         self._install_shortcuts()
@@ -151,6 +157,17 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             GLib.timeout_add(250, lambda: self._automation_context_menu())
         elif automation == 'context-background':
             GLib.timeout_add(250, lambda: self._show_context_menu(300, 180) or False)
+        elif automation == 'quicklook':
+            GLib.timeout_add(350, self._automation_quicklook)
+        elif automation == 'nas-dialog':
+            GLib.timeout_add(350, lambda: self._show_nas_dialog(None) or False)
+
+    def _automation_quicklook(self):
+        self._select_first_file()
+        paths = self._selected_paths()
+        if paths:
+            self.quicklook.show_file(paths[0])
+        return False
 
     def _install_theme(self) -> None:
         colors = load_colors()
@@ -178,7 +195,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
 
     def _build_content(self) -> None:
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.set_child(root)
+        self.preview_overlay = Gtk.Overlay()
+        self.preview_overlay.set_child(root)
+        self.set_child(self.preview_overlay)
 
         body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         body.set_vexpand(True)
@@ -416,6 +435,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         hints.append(label("Ctrl+F Search", "key-hint"))
         hints.append(label("Ctrl+H Hidden", "key-hint"))
+        hints.append(label("Space Preview", "key-hint"))
         hints.append(label("Enter Open", "key-hint"))
         row.append(hints)
 
@@ -428,11 +448,41 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         row.append(self.accept_button)
 
     def _install_shortcuts(self) -> None:
+        preview_keys = Gtk.EventControllerKey()
+        preview_keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        preview_keys.connect('key-pressed', self._on_preview_key)
+        self.add_controller(preview_keys)
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self._on_key_pressed)
         self.add_controller(keys)
 
+    def _on_preview_key(self, _controller, keyval, _keycode, state):
+        if self.quicklook.get_visible():
+            if keyval in (Gdk.KEY_space, Gdk.KEY_Escape):
+                if self.quicklook.target == 0:
+                    self.quicklook.show_file(self.quicklook.path)
+                else:
+                    self.quicklook.close()
+                return Gdk.EVENT_STOP
+            if keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
+                self.quicklook.step(-1 if keyval == Gdk.KEY_Left else 1)
+                return Gdk.EVENT_STOP
+            # Preview must not accept/delete/rename a file behind the overlay.
+            if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_Delete, Gdk.KEY_F2):
+                return Gdk.EVENT_STOP
+            return Gdk.EVENT_PROPAGATE
+        editing = isinstance(self.get_focus(), (Gtk.Editable, Gtk.TextView))
+        modifiers = state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK)
+        if keyval == Gdk.KEY_space and not editing and not modifiers:
+            paths = self._selected_paths()
+            if paths and paths[0].is_file():
+                self.quicklook.show_file(paths[0])
+                return Gdk.EVENT_STOP
+        return Gdk.EVENT_PROPAGATE
+
     def _on_key_pressed(self, _controller, keyval, _keycode, state):
+        if self.quicklook.get_visible():
+            return Gdk.EVENT_PROPAGATE
         control = bool(state & Gdk.ModifierType.CONTROL_MASK)
         alt = bool(state & Gdk.ModifierType.ALT_MASK)
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
@@ -1104,37 +1154,77 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
 
     def _show_nas_dialog(self, _button) -> None:
         dialog = Gtk.Dialog(title="Connect to NAS", transient_for=self, modal=True)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Connect", Gtk.ResponseType.ACCEPT)
-        dialog.set_default_response(Gtk.ResponseType.ACCEPT)
+        dialog.add_css_class('picker-dialog')
+        dialog.set_default_size(540, -1)
+        header = Gtk.HeaderBar()
+        header.set_title_widget(label('Connect to NAS', 'metadata-title'))
+        dialog.set_titlebar(header)
         content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_margin_top(18)
-        content.set_margin_bottom(18)
-        content.set_margin_start(18)
-        content.set_margin_end(18)
-        content.append(label("SMB or NFS address", "metadata-title"))
-        content.append(label("Examples: smb://nas/media or nfs://nas.local/archive", "muted"))
+        content.set_spacing(12)
+        for edge in ('top', 'bottom', 'start', 'end'):
+            getattr(content, 'set_margin_' + edge)(24)
+        description = label('Browse a shared folder on your network.', 'muted')
+        content.append(description)
         entry = Gtk.Entry(placeholder_text="smb://server/share")
-        entry.set_width_chars(44)
+        discovery = NetworkBrowser(self, dialog, entry)
+        content.append(discovery)
+        content.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        content.append(label('Server or share address', 'metadata-title'))
+        entry.set_width_chars(36)
         entry.set_activates_default(True)
         content.append(entry)
+        content.append(label('SMB  smb://nas/media     ·     NFS  nfs://nas/archive', 'muted'))
+        error_label = Gtk.Label(xalign=0, wrap=True, max_width_chars=48)
+        error_label.add_css_class('error')
+        error_label.set_visible(False)
+        content.append(error_label)
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.END)
+        footer.set_margin_top(12)
+        cancel = Gtk.Button(label='Cancel')
+        cancel.add_css_class('secondary-action')
+        cancel.connect('clicked', lambda *_: dialog.response(Gtk.ResponseType.CANCEL))
+        connect = Gtk.Button(label='Connect')
+        connect.add_css_class('suggested-action')
+        connect.connect('clicked', lambda *_: dialog.response(Gtk.ResponseType.ACCEPT))
+        footer.append(cancel)
+        footer.append(connect)
+        content.append(footer)
+        dialog.set_default_widget(connect)
+        mount_cancel = Gio.Cancellable()
+        mounting = False
 
         def on_response(_dialog: Gtk.Dialog, response: int) -> None:
+            nonlocal mounting
             if response != Gtk.ResponseType.ACCEPT:
-                dialog.destroy()
+                mount_cancel.cancel()
+                self._dismiss_dialog(dialog)
+                return
+            if mounting:
                 return
             try:
+                raw = entry.get_text().strip()
+                parsed = urlsplit(raw if '://' in raw else 'smb://' + raw)
+                if parsed.scheme in {'smb', 'smbs'} and parsed.hostname and not parsed.path.strip('/'):
+                    discovery.browse(NetworkLocation(parsed.hostname, safe_network_uri(parsed.geturl()), 'SMB server', True))
+                    return
                 uri = normalize_nas_uri(entry.get_text())
-            except ActionError as error:
+            except (ActionError, ValueError) as error:
                 entry.add_css_class("error")
-                entry.set_tooltip_text(str(error))
+                error_label.set_text(str(error))
+                error_label.set_visible(True)
                 return
-            dialog.set_sensitive(False)
+            error_label.set_visible(False)
+            entry.remove_css_class('error')
+            connect.set_label('Connecting…')
+            mounting = True
+            connect.set_sensitive(False)
+            entry.set_sensitive(False)
+            discovery.set_sensitive(False)
             target = Gio.File.new_for_uri(uri)
             mount_operation = Gtk.MountOperation.new(self)
 
             def on_mounted(source: Gio.File, result) -> None:
+                nonlocal mounting
                 mounted = True
                 try:
                     source.mount_enclosing_volume_finish(result)
@@ -1143,13 +1233,19 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                         mounted = True
                     else:
                         mounted = False
-                        dialog.set_sensitive(True)
+                        mounting = False
+                        if not dialog.get_visible():
+                            return
+                        connect.set_sensitive(True)
+                        entry.set_sensitive(True)
+                        discovery.set_sensitive(True)
+                        connect.set_label('Connect')
                         entry.add_css_class("error")
-                        entry.set_tooltip_text(error.message)
-                        self._show_error("Could not connect to NAS", error.message)
-                if not mounted:
+                        error_label.set_text(error.message)
+                        error_label.set_visible(True)
+                if not mounted or not dialog.get_visible():
                     return
-                dialog.destroy()
+                self._dismiss_dialog(dialog)
                 self._refresh_sidebar()
                 mounted_path = self._path_for_mount_uri(uri)
                 if mounted_path:
@@ -1159,11 +1255,12 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             target.mount_enclosing_volume(
                 Gio.MountMountFlags.NONE,
                 mount_operation,
-                None,
+                mount_cancel,
                 on_mounted,
             )
 
         dialog.connect("response", on_response)
+        dialog.connect('close-request', lambda *_: on_response(dialog, Gtk.ResponseType.CANCEL) or True)
         dialog.present()
         entry.grab_focus()
 

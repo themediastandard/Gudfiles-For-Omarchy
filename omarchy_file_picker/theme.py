@@ -60,7 +60,8 @@ def build_css(colors: dict[str, str]) -> str:
       border-top: 1px solid {colors['darker_background']};
     }}
     .sidebar {{
-      background: {colors['dark_background']};
+      background: {colors['background']};
+      color: {colors['foreground']};
       border-right: 1px solid {colors['darker_background']};
       padding: 12px 8px;
     }}
@@ -84,6 +85,41 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['selection']};
       color: {colors['accent']};
     }}
+    .quicklook-card {{
+      background: {colors['background']};
+      color: {colors['foreground']};
+      border-radius: 14px;
+      border: 1px solid alpha({colors['foreground']}, 0.15);
+      box-shadow: 0 18px 48px alpha(#000000, 0.26);
+    }}
+    .quicklook-bar {{ padding: 10px 14px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .quicklook-bar button {{ background: transparent; border: 0; min-width: 28px; }}
+    .quicklook-content {{ padding: 12px; }}
+    .quicklook-content textview, .quicklook-content text {{
+      background: {colors['background']}; color: {colors['foreground']}; font-family: monospace;
+    }}
+    .quicklook-caption {{ color: {colors['light_foreground']}; font-size: 12px; padding: 10px 16px; }}
+    .picker-dialog button.secondary-action {{
+      background: {colors['dark_background']};
+      color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']};
+      background-image: none;
+      text-shadow: none;
+    }}
+    .picker-dialog button.secondary-action:hover {{ background: {colors['lighter_background']}; }}
+    .picker-dialog button.secondary-action, .picker-dialog button.suggested-action {{
+      min-width: 88px; min-height: 36px; padding: 2px 14px; border-radius: 6px;
+      box-shadow: none;
+    }}
+    .picker-dialog button.suggested-action {{ background-image: none; text-shadow: none; }}
+    .picker-dialog entry {{ padding: 3px 10px; }}
+    .picker-dialog button.network-location {{
+      background: {colors['dark_background']}; color: {colors['foreground']};
+      background-image: none; border: 1px solid {colors['darker_background']};
+      border-radius: 6px; padding: 10px 12px; text-shadow: none; box-shadow: none;
+    }}
+    .picker-dialog button.network-location:hover {{ background: {colors['lighter_background']}; }}
+    .picker-dialog button.flat {{ background: transparent; background-image: none; border: 0; }}
     button {{
       border-radius: 7px;
       min-height: 34px;
