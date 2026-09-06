@@ -1,5 +1,27 @@
 # Design QA
 
+## Current — stock actions and background menu
+
+- Inspected `/tmp/picker-background-complete.png` and
+  `/tmp/picker-file-menu-complete.png`, 1500 × 1000 pixels at 1.25 scale.
+- Background: New Folder/Text, Paste, Select All, Refresh, Folder, View, Sort.
+  File: Open, Rename, clipboard actions, More, Properties, Trash, View/Sort,
+  applicable media actions. NAS appears only in the sidebar.
+- Disabled Paste is visibly muted. Selected-file menu remains inside the
+  1200 × 800 chooser; submenu arrows point inward near its right edge.
+- `tests/ui_file_management.py` exercises blank/empty hit-testing, creation,
+  collision-safe rename and F2, clipboard copy/cut/paste, single/multi menus,
+  properties, bookmarks, view/sort, reload with an open menu, and cancellation
+  of the permanent-delete confirmation. All filesystem tests use temporary data.
+- Stress testing exposed two lifetime errors: destroying a focused entry before
+  Wayland input events drained, and parenting a popover to a disposable tile.
+  Dialog destruction is deferred; popovers now use the stable browser stack.
+- Final verification: 20 unit tests passed; UI smoke passed twice with the native
+  input method. Installed backend Open, Save and folder selection passed, as did
+  Open through the public XDG portal. Test automation was cleared afterward.
+
+Earlier evidence below describes superseded menu contents.
+
 ## Latest correction — context-menu polish
 
 The previous pass missed raised submenu rows and a submenu extending beyond

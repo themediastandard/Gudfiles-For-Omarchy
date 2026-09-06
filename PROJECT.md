@@ -14,6 +14,9 @@ as the desktop's XDG FileChooser portal backend.
   expose resize presets and format conversions without replacing originals.
 - Context-menu surfaces use scoped GTK CSS, compact flat rows, and inward
   submenu placement near the chooser's right edge.
+- File and background menus include rename, clipboard file operations,
+  confirmed trash/permanent deletion, properties, bookmarks, view and sort.
+  NAS connection is sidebar-only. Rename and paste never overwrite collisions.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
   prompts; mounted shares are refreshed into the Devices sidebar.
 - Reads the active Omarchy `colors.toml` on every launch.
@@ -26,6 +29,9 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/model.py` — request parsing, filters, filesystem helpers.
 - `omarchy_file_picker/actions.py` — validated media commands, output naming,
   and NAS address normalization.
+- `omarchy_file_picker/file_actions.py` — filesystem operations and sorting.
+- `omarchy_file_picker/file_management.py` — file dialogs, clipboard, shared
+  GTK bookmarks and persisted display preferences.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `data/` — user-local portal, D-Bus, desktop, and systemd templates.
 - `install.sh` / `uninstall.sh` — reversible user installation.
@@ -34,6 +40,7 @@ as the desktop's XDG FileChooser portal backend.
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_file_management.py
 ./bin/omarchy-file-picker --demo ~/Pictures
 ./install.sh
 ```
@@ -55,6 +62,11 @@ gdbus introspect --session \
   current Omarchy environment; NAS access uses GVfs SMB/NFS support.
 - Portal routing changes are user-local and backed up before replacement.
 - The stock GTK portal remains the fallback for all non-FileChooser interfaces.
+- Context popovers are parented to the stable browser stack, not replaceable
+  file tiles. Entry dialogs release focus/hide before deferred destruction to
+  avoid queued Wayland input-method events reaching destroyed widgets.
+- UI smoke tests require a desktop session and temporarily use the clipboard;
+  file actions run only against a disposable fixture with isolated preferences.
 
 ## Known risks and next actions
 

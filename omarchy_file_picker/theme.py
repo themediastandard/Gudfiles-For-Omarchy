@@ -199,6 +199,7 @@ def build_css(colors: dict[str, str]) -> str:
     .context-label {{ color: {colors['foreground']}; font-size: 13px; }}
     .context-detail {{ color: {colors['light_foreground']}; font-size: 11px; }}
     .context-arrow {{ color: {colors['dark_foreground']}; }}
+    .context-action:disabled label, .context-action:disabled image {{ color: {colors['dark_foreground']}; }}
     .file-context-menu separator {{ margin: 5px 4px; }}
     .nas-button {{ margin-top: 2px; }}
     .error {{ color: {colors['red']}; }}

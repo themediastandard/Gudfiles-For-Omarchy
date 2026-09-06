@@ -28,6 +28,8 @@ from .actions import (
 )
 from .model import PickerRequest, file_type, format_size, list_directory, recent_files, safe_uri
 from .theme import build_css, load_colors
+from .file_management import FileManagement
+from .file_actions import sort_entries
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -103,7 +105,7 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
     return widget
 
 
-class PickerWindow(Gtk.ApplicationWindow):
+class PickerWindow(FileManagement, Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None):
         super().__init__(application=app, title=request.title)
         self.request = request
@@ -118,6 +120,7 @@ class PickerWindow(Gtk.ApplicationWindow):
         self.children_by_path: dict[Path, Gtk.FlowBoxChild] = {}
         self.location_buttons: list[Gtk.Button] = []
         self.choice_widgets: dict[str, Gtk.Widget] = {}
+        self._init_file_management()
         self.active_processes: set[Gio.Subprocess] = set()
         self.context_popover: Gtk.Popover | None = None
         self.context_submenus: list[Gtk.Popover] = []
@@ -133,6 +136,7 @@ class PickerWindow(Gtk.ApplicationWindow):
         self.volume_monitor.connect("mount-added", lambda *_args: self._refresh_sidebar())
         self.volume_monitor.connect("mount-removed", lambda *_args: self._refresh_sidebar())
         self._install_shortcuts()
+        self.connect('close-request', self._on_close_requested)
         self._load()
         if os.environ.get("OMARCHY_FILE_PICKER_DEMO_SELECT_FIRST") == "1":
             GLib.idle_add(self._select_first_file)
@@ -145,6 +149,8 @@ class PickerWindow(Gtk.ApplicationWindow):
             GLib.timeout_add(150, lambda: self._automation_accept())
         elif automation in {"context-menu", "context-submenu"}:
             GLib.timeout_add(250, lambda: self._automation_context_menu())
+        elif automation == 'context-background':
+            GLib.timeout_add(250, lambda: self._show_context_menu(300, 180) or False)
 
     def _install_theme(self) -> None:
         colors = load_colors()
@@ -215,7 +221,7 @@ class PickerWindow(Gtk.ApplicationWindow):
         context_click = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
         context_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         context_click.connect("pressed", self._on_context_pressed)
-        self.flow.add_controller(context_click)
+        self.browser_stack.add_controller(context_click)
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -281,6 +287,14 @@ class PickerWindow(Gtk.ApplicationWindow):
         separator.set_margin_top(10)
         separator.set_margin_bottom(6)
         self.sidebar.append(separator)
+        existing_locations = {getattr(button, '_picker_path', None) for button in self.location_buttons}
+        extra_bookmarks = [(path, name) for path, name in self._bookmarks() if path not in existing_locations]
+        if extra_bookmarks:
+            self.sidebar.append(label('BOOKMARKS', 'sidebar-heading'))
+        for path, name in extra_bookmarks:
+            button = self._sidebar_button(name, 'folder-symbolic', lambda _b, p=path: self.navigate(p))
+            button._picker_path = path
+            self.sidebar.append(button)
         self.sidebar.append(label("DEVICES", "sidebar-heading"))
 
         seen: set[str] = set()
@@ -421,6 +435,50 @@ class PickerWindow(Gtk.ApplicationWindow):
     def _on_key_pressed(self, _controller, keyval, _keycode, state):
         control = bool(state & Gdk.ModifierType.CONTROL_MASK)
         alt = bool(state & Gdk.ModifierType.ALT_MASK)
+        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        focus = self.get_focus()
+        editing = isinstance(focus, (Gtk.Editable, Gtk.TextView))
+        if keyval == Gdk.KEY_Escape and self.context_popover:
+            self._close_context_menu()
+            return Gdk.EVENT_STOP
+        if not editing:
+            selected = self._selected_paths()
+            if self.file_job_active and (keyval in (Gdk.KEY_F2, Gdk.KEY_Delete) or
+                    (control and keyval in (Gdk.KEY_v, Gdk.KEY_V, Gdk.KEY_n, Gdk.KEY_N))):
+                return Gdk.EVENT_STOP
+            if keyval == Gdk.KEY_F2 and len(selected) == 1:
+                self._show_rename_dialog(selected[0])
+                return Gdk.EVENT_STOP
+            if keyval == Gdk.KEY_Delete and selected:
+                self._confirm_remove(selected, permanent=shift)
+                return Gdk.EVENT_STOP
+            if keyval == Gdk.KEY_F5:
+                self._refresh_files()
+                return Gdk.EVENT_STOP
+            if control and keyval in (Gdk.KEY_a, Gdk.KEY_A) and self.request.multiple:
+                self.flow.select_all()
+                return Gdk.EVENT_STOP
+            if control and keyval in (Gdk.KEY_c, Gdk.KEY_C, Gdk.KEY_x, Gdk.KEY_X):
+                if shift and keyval in (Gdk.KEY_c, Gdk.KEY_C):
+                    self._copy_location(selected or [self.current_dir])
+                else:
+                    self._copy_files(selected, cut=keyval in (Gdk.KEY_x, Gdk.KEY_X))
+                return Gdk.EVENT_STOP
+            if control and keyval in (Gdk.KEY_v, Gdk.KEY_V):
+                self._paste_files()
+                return Gdk.EVENT_STOP
+            if control and shift and keyval in (Gdk.KEY_n, Gdk.KEY_N):
+                if self.special_mode is None: self._show_create_dialog('folder')
+                return Gdk.EVENT_STOP
+            if alt and keyval == Gdk.KEY_Up:
+                self.navigate(self.current_dir.parent)
+                return Gdk.EVENT_STOP
+            if alt and keyval == Gdk.KEY_Return:
+                self._show_properties(selected or [self.current_dir])
+                return Gdk.EVENT_STOP
+            if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
+                self._show_context_menu(24, 24, selected[0] if selected else None)
+                return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_Escape:
             if self.path_stack.get_visible_child_name() == "entry":
                 self.path_stack.set_visible_child_name("crumbs")
@@ -472,13 +530,16 @@ class PickerWindow(Gtk.ApplicationWindow):
                 query=query,
                 directories_only=self.request.directory,
             )
+        self.entries = sort_entries(self.entries, self.file_preferences['sort_key'],
+                                    self.file_preferences['descending'], self.file_preferences['folders_first'])
         self._rebuild_pathbar()
         self._rebuild_files()
         self._update_nav_state()
         self._update_active_location()
 
     def _rebuild_files(self) -> None:
-        while child := self.flow.get_first_child():
+        self._close_context_menu()
+        for child in list(self.children_by_path.values()):
             self.flow.remove(child)
         self.children_by_path.clear()
         for path in self.entries:
@@ -536,15 +597,16 @@ class PickerWindow(Gtk.ApplicationWindow):
         row.append(name)
         kind = label(file_type(path), "muted")
         kind.set_size_request(150, -1)
-        row.append(kind)
+        if self.file_preferences['show_type']: row.append(kind)
         try:
             size_text = "—" if path.is_dir() else format_size(path.stat().st_size)
-            modified_text = datetime.fromtimestamp(path.stat().st_mtime).strftime("%b %-d, %H:%M")
+            date_format = "%b %-d, %H:%M" if self.file_preferences['show_time'] else "%b %-d, %Y"
+            modified_text = datetime.fromtimestamp(path.stat().st_mtime).strftime(date_format)
         except OSError:
             size_text, modified_text = "—", "—"
         size = label(size_text, "muted")
         size.set_size_request(95, -1)
-        row.append(size)
+        if self.file_preferences['show_size']: row.append(size)
         modified = label(modified_text, "muted")
         modified.set_size_request(125, -1)
         row.append(modified)
@@ -661,14 +723,17 @@ class PickerWindow(Gtk.ApplicationWindow):
             self._accept()
 
     def _on_context_pressed(self, _gesture: Gtk.GestureClick, _presses: int, x: float, y: float) -> None:
-        picked = self.flow.pick(x, y, Gtk.PickFlags.DEFAULT)
+        picked = self.browser_stack.pick(x, y, Gtk.PickFlags.DEFAULT)
         child: Gtk.Widget | None = picked
-        while child and child is not self.flow and not isinstance(child, Gtk.FlowBoxChild):
+        while child and child is not self.browser_stack and not isinstance(child, Gtk.FlowBoxChild):
+            if isinstance(child, Gtk.Popover): return
             child = child.get_parent()
         path = getattr(child, "_picker_path", None) if isinstance(child, Gtk.FlowBoxChild) else None
         if isinstance(child, Gtk.FlowBoxChild) and not child.is_selected():
             self.flow.unselect_all()
             self.flow.select_child(child)
+        if path is None: self.flow.unselect_all()
+        _gesture.set_state(Gtk.EventSequenceState.CLAIMED)
         self._show_context_menu(x, y, path)
 
     def _context_row(
@@ -775,12 +840,20 @@ class PickerWindow(Gtk.ApplicationWindow):
     def _show_context_menu(self, x: float, y: float, path: Path | None = None) -> None:
         self._close_context_menu()
         automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
-        keep_open_for_qa = automation in {"context-menu", "context-submenu"}
+        keep_open_for_qa = automation in {"context-menu", "context-submenu", "context-background"}
         popover = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=True)
         popover.add_css_class("file-context-menu")
-        anchor = self.children_by_path.get(path, self.flow) if path else self.flow
+        # Search, view changes, and refresh rebuild tiles. Keep the popup on the
+        # stable browser surface, never on a tile that can be destroyed.
+        anchor = self.browser_stack
+        tile = self.children_by_path.get(path) if path else None
+        if tile:
+            valid_tile_bounds, tile_bounds = tile.compute_bounds(anchor)
+            if valid_tile_bounds:
+                x = tile_bounds.get_x() + tile_bounds.get_width() / 2
+                y = tile_bounds.get_y() + tile_bounds.get_height() / 2
         valid_bounds, bounds = anchor.compute_bounds(self)
-        anchor_x = bounds.get_x() + (bounds.get_width() / 2 if path else x) if valid_bounds else x
+        anchor_x = bounds.get_x() + x if valid_bounds else x
         # Keep cascading choices inside the chooser when the anchor is near its right edge.
         self.context_submenu_direction = (
             Gtk.ArrowType.LEFT if anchor_x + 370 > self.get_width() else Gtk.ArrowType.RIGHT
@@ -788,13 +861,8 @@ class PickerWindow(Gtk.ApplicationWindow):
         popover.set_parent(anchor)
         popover.connect("closed", self._on_context_closed)
         rectangle = Gdk.Rectangle()
-        if anchor is self.flow:
-            rectangle.x = int(x)
-            rectangle.y = int(y)
-        else:
-            allocation = anchor.get_allocation()
-            rectangle.x = allocation.width // 2
-            rectangle.y = allocation.height // 2
+        rectangle.x = int(x)
+        rectangle.y = int(y)
         rectangle.width = 1
         rectangle.height = 1
         popover.set_pointing_to(rectangle)
@@ -818,13 +886,18 @@ class PickerWindow(Gtk.ApplicationWindow):
             lambda: self._show_create_dialog("text"),
             icon_name="document-new-symbolic",
         )
-        can_create = self.special_mode is None and os.access(self.current_dir, os.W_OK)
+        can_create = not self.file_job_active and self.special_mode is None and os.access(self.current_dir, os.W_OK)
         new_folder.set_sensitive(can_create)
         new_text.set_sensitive(can_create)
-        menu.append(new_folder)
-        menu.append(new_text)
+        if path is None:
+            menu.append(new_folder)
+            menu.append(new_text)
+            menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        paths = self._selected_paths() if path else []
+        if path and path not in paths: paths = [path]
+        self._append_common_context(menu, paths, background=path is None, qa=keep_open_for_qa)
 
-        if path and path.is_file() and path.suffix.casefold() in IMAGE_TYPES:
+        if path and len(paths) == 1 and path.is_file() and path.suffix.casefold() in IMAGE_TYPES:
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
             resize_items = [
                 (
@@ -857,7 +930,7 @@ class PickerWindow(Gtk.ApplicationWindow):
                 keep_open_for_qa=keep_open_for_qa,
             ))
 
-        if path and path.is_file() and path.suffix.casefold() in VIDEO_TYPES:
+        if path and len(paths) == 1 and path.is_file() and path.suffix.casefold() in VIDEO_TYPES:
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
             video_items = [
                 (
@@ -875,12 +948,6 @@ class PickerWindow(Gtk.ApplicationWindow):
                 keep_open_for_qa=keep_open_for_qa,
             ))
 
-        menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        menu.append(self._menu_button(
-            "Connect to NAS…",
-            lambda: self._show_nas_dialog(None),
-            icon_name="network-server-symbolic",
-        ))
         self.context_popover = popover
         popover.popup()
         if automation == "context-submenu" and self.qa_submenu_button:
@@ -892,7 +959,7 @@ class PickerWindow(Gtk.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _close_context_menu(self) -> None:
-        for submenu in self.context_submenus:
+        for submenu in list(self.context_submenus):
             submenu.popdown()
         if self.context_popover:
             self.context_popover.popdown()
@@ -927,7 +994,7 @@ class PickerWindow(Gtk.ApplicationWindow):
 
         def on_response(_dialog: Gtk.Dialog, response: int) -> None:
             if response != Gtk.ResponseType.ACCEPT:
-                dialog.destroy()
+                self._dismiss_dialog(dialog)
                 return
             name = entry.get_text().strip()
             if not name or name in {".", ".."} or Path(name).name != name:
@@ -945,7 +1012,7 @@ class PickerWindow(Gtk.ApplicationWindow):
                 entry.add_css_class("error")
                 entry.set_tooltip_text(str(error))
                 return
-            dialog.destroy()
+            self._dismiss_dialog(dialog)
             self._load()
             child = self.children_by_path.get(destination)
             if child:
@@ -1167,6 +1234,9 @@ class PickerWindow(Gtk.ApplicationWindow):
         return results
 
     def _finish(self, *, cancelled: bool = False, paths: list[Path] | None = None) -> None:
+        if self.file_job_active:
+            self._show_error('File operation in progress', 'Wait for the operation to finish before closing the picker.')
+            return
         paths = paths or []
         active_filter = self._active_filter()
         payload: dict[str, Any] = {
@@ -1303,6 +1373,10 @@ class PickerWindow(Gtk.ApplicationWindow):
 
     def close_request(self) -> None:
         self._finish(cancelled=True)
+
+    def _on_close_requested(self, _window):
+        self._finish(cancelled=True)
+        return True
 
 
 class PickerApplication(Gtk.Application):
