@@ -8,6 +8,9 @@ as the desktop's XDG FileChooser portal backend.
 ## Current state
 
 - Native GTK 4 picker with grid and list layouts.
+- Standalone Open defaults to multi-selection with native Shift-click ranges,
+  Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
+  and single-destination Save behavior remain authoritative.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Compact context actions create folders and text files; cascading media menus
@@ -56,6 +59,7 @@ PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
+PYTHONPATH=. python tests/ui_selection.py
 ./bin/omarchy-file-picker --demo ~/Pictures
 ./install.sh
 ```
@@ -89,6 +93,8 @@ gdbus introspect --session \
   regression exercises deep paths, long names/types and user-selected sizes.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
+- Selection smoke tests exercise GTK's native range/toggle action signals in
+  both views, not injected mouse events; reuse native FlowBox pointer handling.
 - For unobstructed NAS visual QA, set `NAS_QA_SCREENSHOT=/tmp/nas-qa.png` when
   running `tests/ui_nas.py`; it snapshots the native dialog via GTK's renderer,
   excluding other desktop windows and authentication overlays.

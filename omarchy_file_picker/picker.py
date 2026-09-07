@@ -1524,7 +1524,11 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
     parser.add_argument("--result", type=Path, help="JSON result destination")
     parser.add_argument("--demo", nargs="?", const=str(Path.home() / "Pictures"), help="Open standalone demo")
     parser.add_argument("--mode", choices=("open", "save", "save_files"), default="open")
-    parser.add_argument("--multiple", action="store_true")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--multiple", dest="multiple", action="store_true", default=None,
+                           help="Allow multiple selections (default for standalone Open)")
+    selection.add_argument("--single", dest="multiple", action="store_false",
+                           help="Restrict standalone Open to one selection")
     parser.add_argument("--directory", action="store_true")
     args = parser.parse_args(argv)
     if args.request:
@@ -1537,7 +1541,7 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
             accept_label="Save" if args.mode == "save" else ("Select Folder" if args.directory else "Open"),
             current_folder=folder if folder.is_dir() else folder.parent,
             current_name="untitled.txt" if args.mode == "save" else "",
-            multiple=args.multiple,
+            multiple=args.mode == "open" and args.multiple is not False,
             directory=args.directory or args.mode == "save_files",
         )
     return request, args.result

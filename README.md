@@ -61,6 +61,12 @@ delete, `Ctrl+X/C/V` Cut/Copy/Paste, `Ctrl+Shift+C` Copy Location,
 `Shift+F10` context menu. `Ctrl+A` selects all when the caller permits multiple
 files. Text-entry editing retains its normal clipboard shortcuts.
 
+Standalone Open enables multi-selection by default: click replaces the selection,
+Shift-click selects a continuous range in display order, and Ctrl-click adds or
+removes individual files. Both grid and list views support these gestures. Use
+`--single` for a single-selection standalone picker. Portal dialogs honor the
+calling application's single/multiple setting; Save stays a single destination.
+
 See [stock-picker-comparison.md](stock-picker-comparison.md) for the stock GTK
 action comparison and intentional differences.
 
