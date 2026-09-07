@@ -113,7 +113,8 @@ class MediaDetailsTests(unittest.TestCase):
             path.touch()
             values = ['6000', '4000', '8', 'JPEG', 'Make', 'Camera',
                       '35mm lens', '400', '1/125', '28/10', '2026:09:06 12:00:00']
-            with patch('omarchy_file_picker.media_details._run', return_value='\x1e'.join(values)):
+            with patch('omarchy_file_picker.media_details.shutil.which', return_value='/fixture/magick'), \
+                 patch('omarchy_file_picker.media_details._run', return_value='\x1e'.join(values)):
                 result = probe_media(path)
             self.assertEqual(dict(result.fields)['Camera model'], 'Camera')
             self.assertEqual(dict(result.fields)['Lens'], '35mm lens')

@@ -34,7 +34,9 @@ class Interrupted(Exception):
 
 
 def identity(info):
-    return info.st_dev, info.st_ino
+    # Filesystems can reuse an unlinked inode immediately for a different kind
+    # of entry. A replacement symlink must never count as our partial file.
+    return info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode)
 
 
 def signature(info):
@@ -93,6 +95,10 @@ class Entry:
     stamp: tuple
     link: str | None = None
     digest: bytes | None = None
+
+    @property
+    def identity(self):
+        return self.stamp[0], self.stamp[1], stat.S_IFMT(self.stamp[2])
 
     @property
     def size(self):
@@ -516,14 +522,14 @@ class TransferEngine:
                         job.phase, job.current_name = 'Moving item', item.source.name
                         self._check_destination(job)
                         with directory_fd(item.source.parent.resolve(strict=True), item.parent_id) as fd:
-                            if self._reconcile(job, dest_fd, fd, item.source.name, item, item.entries[0].stamp[:2]):
+                            if self._reconcile(job, dest_fd, fd, item.source.name, item, item.entries[0].identity):
                                 job.done_bytes += item.entries[0].size
                                 continue
                             if signature(entry_stat(fd, item.source.name)) != item.entries[0].stamp:
                                 raise RestartRequired('The source changed. Restart unfinished items to review its current version.')
                             try:
                                 job.checkpoint()
-                                self._publish(job, dest_fd, fd, item.source.name, item, item.entries[0].stamp[:2])
+                                self._publish(job, dest_fd, fd, item.source.name, item, item.entries[0].identity)
                             except OSError as error:
                                 if error.errno == errno.EXDEV:
                                     raise ValueError('Moving between volumes is not supported. Use Copy, verify the result, then remove the original yourself.') from error
@@ -549,7 +555,7 @@ class TransferEngine:
                 for item in job.items:
                     if item.publishing:
                         with directory_fd(item.source.parent.resolve(strict=True), item.parent_id) as source_fd:
-                            self._reconcile(job, dest_fd, source_fd, item.source.name, item, item.entries[0].stamp[:2])
+                            self._reconcile(job, dest_fd, source_fd, item.source.name, item, item.entries[0].identity)
         if not job.stage_name:
             return
         with directory_fd(job.destination, job.destination_id) as dest_fd:

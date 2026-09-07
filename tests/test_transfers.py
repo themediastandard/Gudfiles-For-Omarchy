@@ -1,11 +1,13 @@
 import errno
 import os
+import stat
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from omarchy_file_picker import transfers
 
 from omarchy_file_picker.transfers import (
     Interrupted, RestartRequired, TransferEngine, TransferJob, TransferQueue, rename_noreplace,
@@ -247,6 +249,28 @@ class TransferTests(unittest.TestCase):
             self.engine.cleanup(job)
         self.assertTrue(stage.exists())
         self.assertEqual(surprise.read_text(), 'unexpected')
+
+    def test_cleanup_rejects_reused_inode_with_different_type(self):
+        job = self.job()
+        stage = self.partial(job)
+        original = stage.stat()
+        stage.unlink()
+        stage.symlink_to(self.file)
+        real_stat = transfers.entry_stat
+
+        def reused_inode(fd, name):
+            info = real_stat(fd, name)
+            if stat.S_ISLNK(info.st_mode):
+                values = list(info)
+                values[1], values[2] = original.st_ino, original.st_dev
+                return os.stat_result(values)
+            return info
+
+        with patch.object(transfers, 'entry_stat', side_effect=reused_inode):
+            with self.assertRaises(RestartRequired):
+                self.engine.cleanup(job)
+        self.assertTrue(stage.is_symlink())
+        self.assertEqual(self.file.read_bytes(), self.data)
 
     def test_replaced_destination_cannot_receive_resumed_data(self):
         job = self.job()

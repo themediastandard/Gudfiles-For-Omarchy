@@ -388,6 +388,13 @@ gdbus introspect --session \
 
 ## Decisions and constraints
 
+- Transfer identity includes device, inode and file type. Filesystems can reuse
+  an unlinked regular file's inode for a symlink; cleanup must reject that
+  replacement. Move publication derives the same identity from the scanned
+  entry. Regression coverage simulates inode reuse so it is independent of
+  the filesystem running the tests. Mocked EXIF parsing tests also mock tool
+  discovery, allowing headless CI to verify parsing without ImageMagick.
+
 - Sound cues report successful batches, not individual files or action requests.
   Drag batches use the drop cue; other transfers/conversions use completion.
   Assets install with the Python package. Missing `paplay`, files or audio output
