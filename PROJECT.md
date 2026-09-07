@@ -13,10 +13,15 @@ as the desktop's XDG FileChooser portal backend.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
+- Blank-background drags select intersecting files in grid/list views with a
+  theme-colored rectangle, Shift-add, Ctrl-toggle, edge scrolling and Escape
+  restoration. File-origin click gestures remain native GTK.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Compact context actions create folders and text files; cascading media menus
   expose resize presets and format conversions without replacing originals.
+- Conversion completion uses one dismissible in-window notification, expiring
+  after eight seconds, without a modal dialog or duplicate system notification.
 - New Text File creates and selects an empty `untitled.txt` immediately, with
   numbered collision-safe names and no naming dialog. Rename remains available.
 - Context-menu surfaces use scoped GTK CSS, compact flat rows, and inward
@@ -56,6 +61,7 @@ as the desktop's XDG FileChooser portal backend.
   GTK bookmarks and persisted display preferences.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
+- `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
 - `data/` — user-local portal, D-Bus, desktop, and systemd templates.
@@ -71,6 +77,8 @@ PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
+PYTHONPATH=. python tests/ui_drag_selection.py
+PYTHONPATH=. python tests/ui_conversion_notice.py
 PYTHONPATH=. python tests/ui_mounts.py
 ./bin/omarchy-file-picker --demo ~/Pictures
 ./install.sh
@@ -111,6 +119,10 @@ gdbus introspect --session \
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in
   both views, not injected mouse events; reuse native FlowBox pointer handling.
+- Background-drag tests invoke the gesture handlers against actual GTK bounds
+  and hit testing, including scrolling and cancellation; no physical pointer
+  injection. Overlays are excluded from size requests. Conversion-notice QA
+  performs a real ImageMagick conversion against a disposable image fixture.
 - A GVfs mount and `GFile.get_path()` can exist without a running FUSE bridge.
   Verify local directory accessibility before navigation; never treat a path
   string as proof of a working mount. Start only the existing user bridge, not

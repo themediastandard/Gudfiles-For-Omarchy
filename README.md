@@ -74,6 +74,12 @@ Shift-click selects a continuous range in display order, and Ctrl-click adds or
 removes individual files. Both grid and list views support these gestures. Use
 `--single` for a single-selection standalone picker. Portal dialogs honor the
 calling application's single/multiple setting; Save stays a single destination.
+Click and drag from blank folder background to draw a selection rectangle in
+either view. Shift-drag adds to the selection, Ctrl-drag toggles covered items,
+and Escape cancels the drag. Dragging near the top/bottom edge scrolls the folder.
+
+Successful conversions show a compact theme-matched notification inside the
+picker, not a modal popup. It disappears after eight seconds or when dismissed.
 
 See [stock-picker-comparison.md](stock-picker-comparison.md) for the stock GTK
 action comparison and intentional differences.

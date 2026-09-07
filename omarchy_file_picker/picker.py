@@ -33,6 +33,7 @@ from .theme import build_css, load_colors
 from .file_management import FileManagement
 from .file_actions import create_untitled_text, sort_entries
 from .quicklook import QuickLook
+from .drag_selection import BackgroundSelection
 from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri, mounted_local_path
 
@@ -225,7 +226,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.browser_stack = Gtk.Stack()
         self.browser_stack.set_vexpand(True)
         self.browser_stack.set_hexpand(True)
-        browser.append(self.browser_stack)
+        self.browser_overlay = Gtk.Overlay()
+        self.browser_overlay.set_child(self.browser_stack)
+        browser.append(self.browser_overlay)
 
         self.flow = Gtk.FlowBox()
         self.flow.set_activate_on_single_click(False)
@@ -239,7 +242,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.flow.set_max_children_per_line(6)
         self.flow.set_homogeneous(False)
         self.flow.connect("child-activated", self._on_child_activated)
-        self.flow.connect("selected-children-changed", self._on_selection_changed)
+        self.selection_changed_handler = self.flow.connect("selected-children-changed", self._on_selection_changed)
         context_click = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
         context_click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         context_click.connect("pressed", self._on_context_pressed)
@@ -248,7 +251,12 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_child(self.flow)
+        self.file_scroller = scroller
         self.browser_stack.add_named(scroller, "files")
+        self.drag_selection = BackgroundSelection(self)
+        self.browser_overlay.add_overlay(self.drag_selection)
+        self.browser_overlay.set_measure_overlay(self.drag_selection, False)
+        self.browser_overlay.set_clip_overlay(self.drag_selection, True)
 
         empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         empty.set_halign(Gtk.Align.CENTER)
@@ -483,6 +491,10 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.add_controller(keys)
 
     def _on_preview_key(self, _controller, keyval, _keycode, state):
+        if self.drag_selection.active:
+            if keyval == Gdk.KEY_Escape:
+                self.drag_selection.cancel()
+            return Gdk.EVENT_STOP
         if self.quicklook.get_visible():
             if keyval in (Gdk.KEY_space, Gdk.KEY_Escape):
                 if self.quicklook.target == 0:
@@ -614,6 +626,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self._update_active_location()
 
     def _rebuild_files(self) -> None:
+        self.drag_selection.cancel()
         self._close_context_menu()
         for child in list(self.children_by_path.values()):
             self.flow.remove(child)
@@ -1185,14 +1198,57 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                     self.flow.unselect_all()
                     self.flow.select_child(child)
                     child.grab_focus()
-                self._notify("Conversion complete", output.name)
-                alert = Gtk.AlertDialog(message="Conversion complete", detail=f"Created {output.name}")
-                alert.show(self)
+                self._show_conversion_notice(output)
             else:
                 detail = (stderr or "The converter exited without creating a file.").strip()[-800:]
                 self._show_error("Conversion failed", detail)
 
         process.communicate_utf8_async(None, None, on_finished)
+
+    def _show_conversion_notice(self, output: Path) -> None:
+        if not hasattr(self, 'conversion_notice'):
+            notice = Gtk.Revealer(halign=Gtk.Align.END, valign=Gtk.Align.END)
+            notice.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+            notice.set_transition_duration(180)
+            notice.set_margin_end(16)
+            notice.set_margin_bottom(16)
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            row.add_css_class('conversion-notice')
+            icon = Gtk.Image.new_from_icon_name('emblem-ok-symbolic')
+            icon.add_css_class('conversion-success')
+            row.append(icon)
+            copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+            copy.append(label('Conversion complete', 'metadata-title'))
+            self.conversion_notice_filename = label('', 'muted')
+            self.conversion_notice_filename.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            self.conversion_notice_filename.set_max_width_chars(36)
+            copy.append(self.conversion_notice_filename)
+            row.append(copy)
+            close = self._icon_button('window-close-symbolic', 'Dismiss notification',
+                                      lambda *_: self._dismiss_conversion_notice())
+            close.add_css_class('flat')
+            row.append(close)
+            notice.set_child(row)
+            self.browser_overlay.add_overlay(notice)
+            self.browser_overlay.set_measure_overlay(notice, False)
+            self.browser_overlay.set_clip_overlay(notice, True)
+            self.conversion_notice = notice
+            self.conversion_notice_timer = 0
+        self._dismiss_conversion_notice()
+        self.conversion_notice_filename.set_text(output.name)
+        self.conversion_notice_filename.set_tooltip_text(str(output))
+        self.conversion_notice.set_reveal_child(True)
+        def expire():
+            self.conversion_notice_timer = 0
+            self.conversion_notice.set_reveal_child(False)
+            return False
+        self.conversion_notice_timer = GLib.timeout_add_seconds(8, expire)
+
+    def _dismiss_conversion_notice(self) -> None:
+        if self.conversion_notice_timer:
+            GLib.source_remove(self.conversion_notice_timer)
+            self.conversion_notice_timer = 0
+        self.conversion_notice.set_reveal_child(False)
 
     def _notify(self, headline: str, detail: str) -> None:
         notifier = GLib.find_program_in_path("omarchy-notification-send")

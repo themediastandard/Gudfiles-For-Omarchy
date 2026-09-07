@@ -243,6 +243,22 @@ def build_css(colors: dict[str, str]) -> str:
     .context-action:disabled label, .context-action:disabled image {{ color: {colors['dark_foreground']}; }}
     .file-context-menu separator {{ margin: 5px 4px; }}
     .nas-button {{ margin-top: 2px; }}
+    .conversion-notice {{
+      background: {colors['dark_background']};
+      color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']};
+      border-radius: 8px;
+      padding: 12px 14px;
+    }}
+    .conversion-success {{ color: {colors['accent']}; }}
+    .conversion-notice button {{
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      min-height: 24px;
+      min-width: 24px;
+      padding: 3px;
+    }}
     .error {{ color: {colors['red']}; }}
     separator {{ background: {colors['darker_background']}; }}
     """
