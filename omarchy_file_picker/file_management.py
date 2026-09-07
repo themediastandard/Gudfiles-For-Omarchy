@@ -36,7 +36,8 @@ class FileManagement(TransferUI):
         self.preferences_path = Path.home() / '.config/omarchy-file-picker/preferences.json'
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
-                        show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH)
+                        show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH,
+                        transfer_mode='queue')
         try:
             saved = json.loads(self.preferences_path.read_text())
             if not isinstance(saved, dict):
@@ -48,6 +49,8 @@ class FileManagement(TransferUI):
             pass
         if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'}:
             defaults['sort_key'] = 'name'
+        if defaults['transfer_mode'] not in {'queue', 'all'}:
+            defaults['transfer_mode'] = 'queue'
         defaults['sidebar_width'] = max(SIDEBAR_MIN_WIDTH, defaults['sidebar_width'])
         self.file_preferences = defaults
 

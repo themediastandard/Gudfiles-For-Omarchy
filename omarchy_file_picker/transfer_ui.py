@@ -74,7 +74,7 @@ class TransferRow(Gtk.Box):
 
     def _primary(self):
         if self.job.state == 'running':
-            self.owner.transfer_queue.pause()
+            self.owner.transfer_queue.pause(self.job)
         else:
             self.owner.transfer_queue.start(self.job)
         self.owner._poll_transfers()
@@ -97,13 +97,15 @@ class TransferRow(Gtk.Box):
         self.progress.set_fraction(min(1, max(0, fraction)))
         self.progress.set_visible(state not in {'queued', 'cancelled'})
         if state in {'queued', 'waiting'}:
-            detail = 'Not started · contents scanned when started' if state == 'queued' else 'Waiting · one transfer at a time'
+            detail = ('Not started · contents scanned when started' if state == 'queued' else
+                      job.phase if job.phase != 'Waiting for its turn' else
+                      'Waiting · one transfer at a time' if queue.mode == 'queue' else 'Waiting · up to 3 at a time')
         elif state == 'pausing':
             detail = 'Pausing after the current filesystem operation…'
         elif state == 'cancelling':
-            detail = 'Stopping and removing owned partial copies…'
+            detail = 'Stopping and removing owned partial copies…' if job in queue.active_jobs else job.phase
         elif state == 'failed':
-            detail = f'{len(job.completed)} item(s) complete · queue held'
+            detail = f'{len(job.completed)} item(s) complete · ' + ('queue held' if queue.held else 'transfer stopped')
         else:
             detail = job.phase + (f' · {job.current_name}' if state == 'running' and job.current_name else '')
         self.detail.set_text(detail)
@@ -122,14 +124,15 @@ class TransferRow(Gtk.Box):
         self.primary.set_label('Pause' if state == 'running' else
                                ('Resume' if job.stage_name and state in {'paused', 'failed'} else
                                 'Continue' if state == 'paused' else 'Retry' if state == 'failed' else 'Start'))
-        self.primary.set_visible(state in {'queued', 'waiting', 'running', 'paused', 'failed'} and not job.restart_required)
-        self.primary.set_sensitive(queue.active in (None, job) or state in {'queued', 'waiting'})
+        self.primary.set_visible(state in {'queued', 'waiting', 'running', 'paused', 'failed'} and
+                                 (state != 'waiting' or queue.held) and not job.restart_required)
+        self.primary.set_sensitive(state == 'running' or job not in queue.active_jobs)
         self.primary.set_tooltip_text('Retained bytes are compared with the unchanged source before continuing.'
                                      if job.stage_name else None)
         self.restart.set_visible(state in {'failed', 'paused'} and bool(job.items or job.stage_name))
-        self.restart.set_sensitive(queue.active is None)
+        self.restart.set_sensitive(job not in queue.active_jobs)
         self.cancel.set_visible(state not in TERMINAL)
-        self.cancel.set_sensitive(state != 'cancelling' and (queue.active in (None, job) or not job.stage_name))
+        self.cancel.set_sensitive(state != 'cancelling')
         if self.owner.transfer_cancel_close:
             self.primary.set_sensitive(False)
             self.restart.set_sensitive(False)
@@ -150,6 +153,7 @@ class TransferUI:
         self.transfer_timer = 0
 
     def _build_transfer_button(self):
+        self.transfer_queue.set_mode(self.file_preferences.get('transfer_mode', 'queue'))
         self.transfer_button = Gtk.Button()
         box = Gtk.Box(spacing=6)
         box.append(Gtk.Image.new_from_icon_name('folder-download-symbolic'))
@@ -172,6 +176,20 @@ class TransferUI:
             window.set_hide_on_close(True)
             header = Gtk.HeaderBar()
             header.set_title_widget(Gtk.Label(label='Transfers'))
+            modes = Gtk.Box(spacing=2)
+            self.transfer_mode_buttons = {}
+            for mode, title, hint in (
+                    ('queue', 'Queue', 'Run transfers one at a time'),
+                    ('all', 'All', 'Run independent transfers together, up to 3 at a time')):
+                control = Gtk.ToggleButton(label=title)
+                control.set_tooltip_text(hint)
+                if self.transfer_mode_buttons:
+                    control.set_group(self.transfer_mode_buttons['queue'])
+                self.transfer_mode_buttons[mode] = control
+                control.connect('toggled', lambda button, value=mode: self._set_transfer_mode(value)
+                                if button.get_active() and value != self.transfer_queue.mode else None)
+                modes.append(control)
+            header.pack_start(modes)
             window.set_titlebar(header)
             root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
             window.set_child(root)
@@ -231,12 +249,19 @@ class TransferUI:
         self.transfer_queue.clear_finished()
         self._poll_transfers()
 
+    def _set_transfer_mode(self, mode):
+        if self.transfer_cancel_close:
+            return
+        self.transfer_queue.set_mode(mode)
+        self._set_file_preference('transfer_mode', mode, reload=False)
+        self._poll_transfers()
+
     def _poll_transfers(self):
         queue = self.transfer_queue
         with queue.lock:
             jobs = list(queue.jobs)
-            active_at_snapshot = queue.active
-            states = {job.id: ('running' if job is active_at_snapshot and job.state not in BUSY else job.state)
+            active_at_snapshot = set(queue.active_jobs)
+            states = {job.id: ('running' if job in active_at_snapshot and job.state not in BUSY else job.state)
                       for job in jobs}
             completed_events = queue.completed_events()
         # Preserve actual commit order even when individual Start controls run
@@ -283,12 +308,29 @@ class TransferUI:
                     self.transfer_rows[job.id] = row
                     self.transfer_list.append(row)
                 self.transfer_rows[job.id].update()
-            active = queue.active
-            self.transfer_summary.set_text('Queue paused' if queue.held else 'One at a time' if active else
-                                           f'{count} ready or waiting' if count else 'All finished' if jobs else 'Your queue is empty')
-            self.transfer_start.set_sensitive(any(job.state in {'queued', 'waiting'} for job in jobs) and not self.transfer_cancel_close)
-            self.transfer_pause.set_visible(active is not None)
-            self.transfer_pause.set_sensitive(active is not None and active.state == 'running')
+            active = tuple(queue.active_jobs)
+            if queue.held:
+                summary = f'Scheduling paused · {len(active)} active' if active else 'Scheduling paused'
+            elif queue.mode == 'queue' and len(active) > 1:
+                summary = f'{len(active)} finishing · then one at a time'
+            elif active:
+                summary = f'{len(active)} running · up to 3 at once' if queue.mode == 'all' else 'One at a time'
+            else:
+                summary = f'{count} ready or waiting' if count else 'All finished' if jobs else 'Your queue is empty'
+            self.transfer_summary.set_text(summary)
+            self.transfer_summary.set_tooltip_text(summary)
+            for mode, control in self.transfer_mode_buttons.items():
+                control.set_active(mode == queue.mode)
+                control.set_sensitive(not self.transfer_cancel_close)
+                control.remove_css_class('flat' if mode == queue.mode else 'transfer-action')
+                control.add_css_class('transfer-action' if mode == queue.mode else 'flat')
+            self.transfer_start.set_label('Start queue' if queue.mode == 'queue' else 'Start all')
+            self.transfer_start.set_tooltip_text('Start queued and waiting transfers. Paused or failed transfers keep their own controls.')
+            self.transfer_start.set_sensitive(any(job.state == 'queued' or (queue.held and job.state == 'waiting')
+                                                  for job in jobs) and not self.transfer_cancel_close)
+            self.transfer_pause.set_label('Pause all' if queue.mode == 'all' or len(active) > 1 else 'Pause')
+            self.transfer_pause.set_visible(bool(active))
+            self.transfer_pause.set_sensitive(any(job.state == 'running' for job in active))
             self.transfer_close_box.set_visible(self.transfer_closing is not None)
             self.transfer_close_label.set_text(
                 'Stopping transfers before closing. Waiting for the current filesystem operation and cleanup…'
@@ -299,7 +341,7 @@ class TransferUI:
             self.transfer_close_confirm.set_sensitive(not self.transfer_cancel_close)
             self.transfer_keep.set_sensitive(not self.transfer_cancel_close)
             self.transfer_leave.set_visible(self.transfer_cleanup_blocked)
-        if self.transfer_cancel_close and active_at_snapshot is None and queue.active is None:
+        if self.transfer_cancel_close and not active_at_snapshot and not queue.active_jobs:
             next_job = next((job for job in jobs if job.state not in TERMINAL), None)
             if next_job is not None:
                 if next_job.state == 'failed' and self.transfer_seen_states.get('cleanup:' + next_job.id):
@@ -341,17 +383,18 @@ class TransferUI:
         self.transfer_seen_states = {k: v for k, v in self.transfer_seen_states.items() if not k.startswith('cleanup:')}
         self.transfer_cancel_close = True
         self.transfer_queue.pause()
-        active = self.transfer_queue.active
-        if active:
+        for active in tuple(self.transfer_queue.active_jobs):
             self.transfer_seen_states['cleanup:' + active.id] = True
             self.transfer_queue.cancel(active)
         self._poll_transfers()
 
     def _leave_partials_and_close(self):
-        if not self.transfer_cleanup_blocked or self.transfer_queue.active is not None:
+        if not self.transfer_cleanup_blocked or self.transfer_queue.active_jobs:
             return
         self.transfer_queue.held = True
         self.transfer_queue.pending.clear()
+        self.transfer_queue.pending_cleanup.clear()
+        self.transfer_queue.operations.clear()
         for job in self.transfer_queue.jobs:
             if job.state not in TERMINAL:
                 job.state = 'cancelled'

@@ -1,4 +1,4 @@
-"""Session-scoped transfer queue and verified, resumable copies.
+"""Session-scoped transfer scheduling and verified, resumable copies.
 
 Only the worker touches the filesystem. Copies live in a private destination
 staging directory until verified, then renameat2 publishes without overwriting.
@@ -544,15 +544,58 @@ class TransferEngine:
 
 
 class TransferQueue:
-    """One worker per Files window. A start request authorizes a fixed set of jobs."""
-    def __init__(self, engine=None):
+    """Queue runs one job; All runs up to three independent jobs per window."""
+    ALL_LIMIT = 3
+
+    def __init__(self, engine=None, *, mode='queue'):
         self.engine = engine or TransferEngine()
         self.jobs = []
         self.pending = []
-        self.active = None
+        self.pending_cleanup = []
+        self.operations = {}
+        self.active_jobs = []
         self.held = False
         self.lock = threading.RLock()
         self.events = SimpleQueue()
+        self.mode = mode if mode in {'queue', 'all'} else 'queue'
+        self.footprints = {}
+
+    @property
+    def active(self):
+        # Compatibility for callers that only ask whether any work is active.
+        with self.lock:
+            return next(iter(self.active_jobs), None)
+
+    @property
+    def limit(self):
+        return self.ALL_LIMIT if self.mode == 'all' else 1
+
+    def set_mode(self, mode):
+        if mode not in {'queue', 'all'}:
+            raise ValueError('Choose Queue or All.')
+        with self.lock:
+            self.mode = mode
+            # A mode change never starts staged jobs or resumes a held queue.
+            # When narrowing to Queue, current workers finish before new starts.
+            self._pump()
+
+    @staticmethod
+    def _footprint(job):
+        # Pure path operations keep mount access out of GTK's scheduling calls.
+        # Atomic publication/source verification remain the authority for alias
+        # paths, external filesystem changes and other Files processes.
+        normalize = lambda path: Path(os.path.normpath(path))
+        reads = {normalize(path) for path in job.sources}
+        writes = {normalize(job.destination / path.name) for path in job.sources}
+        if job.cut:
+            writes.update(reads)
+        ancestors = lambda paths: set().union(*(set(path.parents) | {path} for path in paths))
+        return reads | writes, writes, ancestors(reads | writes), ancestors(writes)
+
+    def _conflicts(self, first, second):
+        a, aw, ancestors_a, ancestors_aw = self.footprints[first]
+        b, bw, ancestors_b, ancestors_bw = self.footprints[second]
+        return bool(aw & ancestors_b or ancestors_aw & b or bw & ancestors_a or ancestors_bw & a)
 
     def add(self, sources, destination, cut=False, *, start=False):
         with self.lock:
@@ -562,6 +605,7 @@ class TransferQueue:
             if not job.sources:
                 raise ValueError('Select at least one item.')
             self.jobs.append(job)
+            self.footprints[job] = self._footprint(job)
             job.on_completed = lambda source, target: self.events.put((job, source, target))
             if start:
                 self.pending.append(job)
@@ -584,12 +628,11 @@ class TransferQueue:
             selected = [job] if job else [j for j in self.jobs if j.state in {'queued', 'waiting'}]
             if not selected:
                 return
-            if self.active is None:
-                self.held = False
+            self.held = False
+            if job is not None and not self.active_jobs:
                 if job in self.pending:
                     self.pending.remove(job)
-                if job is not None:
-                    self.pending.insert(0, job)
+                self.pending.insert(0, job)
             for current in selected:
                 if current not in self.pending:
                     self.pending.append(current)
@@ -597,13 +640,29 @@ class TransferQueue:
             self._pump()
 
     def _pump(self):
-        if self.active is not None or self.held or not self.pending:
+        # Requested cleanup can proceed while scheduling is held, but occupies
+        # the same bounded worker slots as a normal transfer.
+        while self.pending_cleanup and len(self.active_jobs) < self.limit:
+            self._launch(self.pending_cleanup.pop(0), 'cancel')
+        if self.held:
             return
-        job = self.pending.pop(0)
-        self._launch(job, 'run')
+        for job in list(self.pending):
+            if len(self.active_jobs) >= self.limit:
+                break
+            # Keep dependent pending jobs in submission order. Paused/failed
+            # transfers with saved state reserve their paths until resolved.
+            reserved = self.active_jobs + self.pending[:self.pending.index(job)] + [
+                other for other in self.jobs if other is not job and
+                other.state in {'paused', 'failed', 'cancelling'} and
+                (other.items or other.stage_name)]
+            if any(self._conflicts(job, other) for other in reserved):
+                job.phase = 'Waiting for a related transfer'
+                continue
+            self.pending.remove(job)
+            self._launch(job, self.operations.pop(job, 'run'))
 
     def _launch(self, job, operation):
-        self.active = job
+        self.active_jobs.append(job)
         job.stop.clear()
         job.cancel_requested = operation == 'cancel'
         job.state = 'cancelling' if operation == 'cancel' else 'running'
@@ -632,52 +691,60 @@ class TransferQueue:
                 job.restart_required = isinstance(error, RestartRequired)
             finally:
                 with self.lock:
-                    self.active = None
-                    if job.state in {'paused', 'failed'}:
+                    self.active_jobs.remove(job)
+                    if job.state == 'failed' and self.mode == 'queue':
                         self.held = True
                     self._pump()
 
-        # A normal close waits for checkpoints/cleanup. A blocked OS I/O call
-        # must not prevent the UI displaying the still-pending pause/cancel.
         threading.Thread(target=worker, name='file-transfer', daemon=True).start()
 
-    def pause(self):
+    def pause(self, job=None):
         with self.lock:
-            self.held = True
-            if self.active and self.active.state == 'running':
-                self.active.state = 'pausing'
-                self.active.stop.set()
+            if job is None or self.mode == 'queue':
+                self.held = True
+            for current in self.active_jobs:
+                if (job is None or current is job) and current.state == 'running':
+                    current.state = 'pausing'
+                    current.stop.set()
 
     def cancel(self, job):
         with self.lock:
+            if job.state in TERMINAL:
+                return True
             if job in self.pending:
                 self.pending.remove(job)
-            if job is self.active:
+            self.operations.pop(job, None)
+            if job in self.active_jobs:
                 job.cancel_requested = True
                 job.state = 'cancelling'
                 job.stop.set()
-            elif job.state not in TERMINAL:
-                if self.active is not None:
-                    # Untouched queued jobs need no filesystem cleanup.
-                    if job.stage_name:
-                        return False
-                    job.state, job.phase = 'cancelled', 'Cancelled'
+            elif job.state not in TERMINAL and job not in self.pending_cleanup:
+                if not job.stage_name and not any(item.publishing for item in job.items):
+                    job.state, job.phase = 'cancelled', 'Cancelled · completed items kept'
                 else:
-                    self._launch(job, 'cancel')
+                    job.state, job.phase = 'cancelling', 'Waiting to remove partial copies'
+                    self.pending_cleanup.append(job)
+                self._pump()
             return True
 
     def restart(self, job):
         with self.lock:
-            if self.active is None and job.state in {'failed', 'paused'}:
-                if job in self.pending:
-                    self.pending.remove(job)
-                self.held = False
-                self._launch(job, 'restart')
+            if job in self.active_jobs or job.state not in {'failed', 'paused'}:
+                return
+            if job in self.pending:
+                self.pending.remove(job)
+            self.pending.insert(0, job)
+            self.operations[job] = 'restart'
+            job.state, job.phase = 'waiting', 'Waiting to restart unfinished items'
+            self.held = False
+            self._pump()
 
     def clear_finished(self):
         with self.lock:
-            self.jobs[:] = [job for job in self.jobs if job.state not in TERMINAL]
+            self.jobs[:] = [job for job in self.jobs if job.state not in TERMINAL or job in self.active_jobs]
+            self.footprints = {job: paths for job, paths in self.footprints.items() if job in self.jobs}
 
     @property
     def unfinished(self):
-        return any(job.state not in TERMINAL for job in self.jobs)
+        with self.lock:
+            return bool(self.active_jobs or self.pending_cleanup) or any(job.state not in TERMINAL for job in self.jobs)

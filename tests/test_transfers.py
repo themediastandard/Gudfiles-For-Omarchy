@@ -433,5 +433,185 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.queue.jobs, [second])
 
 
+class ParallelEngine:
+    """Keep workers inside real threads until their individual gates open."""
+    def __init__(self):
+        self.calls = []
+        self.gates = {}
+        self.fail = set()
+        self.running = set()
+        self.max_running = 0
+        self.lock = threading.Lock()
+        self.release_all = threading.Event()
+        self.cleaned = []
+
+    def run(self, job):
+        with self.lock:
+            gate = self.gates.setdefault(job.id, threading.Event())
+            self.calls.append(job.id)
+            self.running.add(job.id)
+            self.max_running = max(self.max_running, len(self.running))
+        try:
+            while not gate.wait(.005) and not self.release_all.is_set():
+                job.checkpoint()
+            if job.id in self.fail:
+                raise OSError('fixture failure')
+        finally:
+            with self.lock:
+                self.running.remove(job.id)
+
+    def cleanup(self, job):
+        self.cleaned.append(job.id)
+
+    def release(self, job):
+        self.gates[job.id].set()
+
+
+class TransferModeTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = ParallelEngine()
+        self.queue = TransferQueue(self.engine)
+        def stop():
+            self.queue.pause()
+            self.engine.release_all.set()
+            wait_for(lambda: not self.queue.active_jobs)
+        self.addCleanup(stop)
+
+    def add(self, count=1):
+        return [self.queue.add([Path(f'/fixture/source/clip-{len(self.queue.jobs)}')], Path('/fixture/dest'))
+                for _ in range(count)]
+
+    def test_all_mode_still_requires_start_and_bounds_parallel_workers(self):
+        jobs = self.add(5)
+        self.queue.set_mode('all')
+        self.assertEqual(self.engine.calls, [])
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 3)
+        staged = self.add()[0]
+        self.engine.release(jobs[0])
+        wait_for(lambda: len(self.engine.calls) == 4)
+        self.assertEqual(staged.state, 'queued')
+        self.assertEqual(self.engine.max_running, 3)
+        self.engine.release_all.set()
+        wait_for(lambda: not self.queue.active_jobs)
+        self.assertTrue(all(job.state == 'completed' for job in jobs))
+        self.assertEqual(staged.state, 'queued')
+
+    def test_live_mode_switch_drains_existing_workers_before_queue_starts_more(self):
+        jobs = self.add(5)
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 1)
+        self.queue.set_mode('all')
+        wait_for(lambda: len(self.engine.calls) == 3)
+        self.queue.set_mode('queue')
+        self.assertEqual(len(self.queue.active_jobs), 3)
+        for job in jobs[:2]:
+            self.engine.release(job)
+        wait_for(lambda: len(self.queue.active_jobs) == 1)
+        self.assertEqual(len(self.engine.calls), 3)
+        self.engine.release(jobs[2])
+        wait_for(lambda: len(self.engine.calls) == 4)
+        self.assertEqual(len(self.queue.active_jobs), 1)
+        self.assertEqual(jobs[4].state, 'waiting')
+
+    def test_individual_pause_and_pause_all_are_distinct(self):
+        jobs = self.add(4)
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 3)
+        self.queue.pause(jobs[0])
+        wait_for(lambda: jobs[0].state == 'paused' and len(self.engine.calls) == 4)
+        self.assertFalse(self.queue.held)
+        self.assertTrue(all(job.state == 'running' for job in jobs[1:]))
+        self.queue.pause()
+        wait_for(lambda: not self.queue.active_jobs)
+        self.assertTrue(self.queue.held)
+        self.assertTrue(all(job.state == 'paused' for job in jobs))
+        self.queue.set_mode('queue')
+        self.queue.set_mode('all')
+        self.assertEqual(len(self.engine.calls), 4)
+        self.queue.start(jobs[0])
+        wait_for(lambda: len(self.engine.calls) == 5)
+        self.assertTrue(all(job.state == 'paused' for job in jobs[1:]))
+
+    def test_independent_failure_in_all_mode_does_not_stop_other_transfers(self):
+        jobs = self.add(4)
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 3)
+        self.engine.fail.add(jobs[0].id)
+        self.engine.release(jobs[0])
+        wait_for(lambda: jobs[0].state == 'failed' and len(self.engine.calls) == 4)
+        self.assertFalse(self.queue.held)
+        self.assertTrue(all(job.state == 'running' for job in jobs[1:]))
+
+    def test_cancel_saved_partial_waits_for_a_cleanup_slot(self):
+        jobs = self.add(4)
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 3)
+        jobs[0].stage_name = 'fixture-partial'
+        self.queue.pause(jobs[0])
+        wait_for(lambda: jobs[0].state == 'paused' and len(self.engine.calls) == 4)
+        self.queue.cancel(jobs[0])
+        self.assertEqual(jobs[0].state, 'cancelling')
+        self.assertEqual(self.engine.cleaned, [])
+        self.engine.release(jobs[1])
+        wait_for(lambda: jobs[0].state == 'cancelled')
+        self.assertEqual(self.engine.cleaned, [jobs[0].id])
+
+    def test_conflicting_destinations_wait_while_independent_work_can_start(self):
+        first = self.queue.add([Path('/source-one/clip.mov')], Path('/target'))
+        second = self.queue.add([Path('/source-two/clip.mov')], Path('/target'))
+        third = self.queue.add([Path('/source-three/other.mov')], Path('/target'))
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 2)
+        self.assertEqual(set(self.engine.calls), {first.id, third.id})
+        self.assertEqual(second.phase, 'Waiting for a related transfer')
+        self.engine.release(first)
+        wait_for(lambda: second.id in self.engine.calls)
+
+    def test_pending_dependencies_cannot_overtake_a_blocked_transfer(self):
+        first = self.queue.add([Path('/a/clip.mov')], Path('/b'), cut=True)
+        second = self.queue.add([Path('/b/clip.mov')], Path('/c'), cut=True)
+        third = self.queue.add([Path('/c/clip.mov')], Path('/d'), cut=True)
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 1)
+        self.assertEqual(self.engine.calls, [first.id])
+        self.engine.release(first)
+        wait_for(lambda: len(self.engine.calls) == 2)
+        self.assertEqual(self.engine.calls, [first.id, second.id])
+        self.engine.release(second)
+        wait_for(lambda: len(self.engine.calls) == 3)
+        self.assertEqual(self.engine.calls, [first.id, second.id, third.id])
+
+    def test_nested_move_waits_for_a_copy_reading_its_contents(self):
+        first = self.queue.add([Path('/source/folder/clip.mov')], Path('/copy'))
+        second = self.queue.add([Path('/source/folder')], Path('/moved'), cut=True)
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 1)
+        self.assertEqual(self.engine.calls, [first.id])
+        self.engine.release(first)
+        wait_for(lambda: second.id in self.engine.calls)
+
+    def test_same_source_copies_to_different_destinations_can_run_together(self):
+        first = self.queue.add([Path('/source/clip.mov')], Path('/dest-one'))
+        second = self.queue.add([Path('/source/clip.mov')], Path('/dest-two'))
+        self.queue.set_mode('all')
+        self.queue.start()
+        wait_for(lambda: len(self.engine.calls) == 2)
+        self.assertEqual(set(self.engine.calls), {first.id, second.id})
+
+    def test_invalid_mode_is_rejected_without_starting_work(self):
+        self.add()
+        with self.assertRaises(ValueError):
+            self.queue.set_mode('anything')
+        self.assertEqual(self.queue.mode, 'queue')
+        self.assertEqual(self.engine.calls, [])
+
+
 if __name__ == '__main__':
     unittest.main()

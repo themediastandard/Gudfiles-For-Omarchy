@@ -73,11 +73,17 @@ as the desktop's XDG FileChooser portal backend.
 - A compact Omarchy-themed Transfers window is accessible from the header.
   Ctrl+V starts that clipboard batch; Ctrl+Shift+V / Add to Transfer Queue stages
   it without starting. Start runs one chosen batch, Start queue authorizes the
-  current waiting/staged batches, and one worker executes them sequentially.
-  Newly staged batches remain staged even while an earlier queue is draining.
+  current waiting/staged batches. A Queue / All toggle chooses one transfer at a
+  time or up to three independent transfers together; All uses a Start all action.
+  The choice is remembered in display preferences. Newly staged batches remain
+  staged when the mode changes or an earlier queue is draining. Switching from
+  All to Queue lets active workers finish, then starts only one at a time, with
+  that transition stated in the transfer summary.
 - Transfers show current file, bytes, transfer rate, progress and inline errors,
   with Start, Pause, Resume/Continue, Retry, Restart unfinished and Cancel controls.
-  Pause/failure holds scheduling. Completed items remain at their destinations.
+  Queue mode holds scheduling on pause/failure. In All mode, a row Pause/failure
+  leaves independent transfers running; Pause all holds scheduling and pauses
+  every active worker. Completed items remain at their destinations.
   The separate window scrolls its rows without resizing the Files browser.
 - Copy resume checks every retained byte against an unchanged source and verifies
   the completed data before publication. Changed sources/corrupt partials refuse
@@ -140,7 +146,7 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/file_actions.py` — filesystem operations and sorting.
 - `omarchy_file_picker/file_management.py` — file dialogs, clipboard, shared
   GTK bookmarks and persisted display preferences.
-- `omarchy_file_picker/transfers.py` — single-worker session queue, resumable
+- `omarchy_file_picker/transfers.py` — bounded Queue/All scheduling, resumable
   copies, checked staging ownership, atomic publication and cancellation cleanup.
 - `omarchy_file_picker/transfer_ui.py` — native transfer window, progress/actions,
   ordered move receipts, clipboard ownership and Files/picker close guard.
@@ -168,6 +174,7 @@ as the desktop's XDG FileChooser portal backend.
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
+PYTHONPATH=. python tests/ui_transfer_modes.py
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_image_zoom.py
@@ -248,6 +255,15 @@ gdbus introspect --session \
   sparse allocation and hard-link relationships are not archived. Special files
   are rejected. Pause/cancel wait for the current OS call; they cannot interrupt
   an atomic rename or a blocked filesystem syscall. Queue ordering is per window.
+- All mode reserves normalized source/target paths to serialize conflicting
+  writes and nested move/copy dependencies, while read-only copies of the same
+  source to different destinations can overlap. Dependent pending jobs cannot
+  overtake blocked jobs. Saved partials reserve their paths until resolved or
+  cancelled. Path comparisons do not perform filesystem I/O on GTK's thread;
+  symlink/bind aliases and external processes still rely on the engine's source
+  verification and atomic no-overwrite publication and can fail safely.
+  Cleanup occupies the same bounded worker slots. Closing waits for every
+  worker, drains move receipts and preserves the previous explicit cleanup exit.
 - Move receipts reach GTK in actual commit order, even when individually started
   jobs run out of visible order. Confirmed partial moves migrate ratings and
   remove only those sources from an owned cut clipboard; full completion changes
@@ -263,6 +279,12 @@ gdbus introspect --session \
   I/O close handling and cleanup failure/leave-partials behavior. Only its own
   windows are floated. `TRANSFERS_QA_SCREENSHOT=/tmp/transfers.png` captures the
   native manager and a `-paused.png` companion; both layouts were visually checked.
+- Mode QA verifies overlapping real fixture copies, the three-worker limit,
+  live Queue/All transitions, individual pause and verified resume, all-worker
+  cancellation before close, stable geometry and preference restoration.
+  `TRANSFER_MODES_QA_SCREENSHOT=/tmp/transfer-modes.png` captures the native All
+  mode layout. Scheduler tests cover failure isolation, related paths, dependent
+  ordering, cancellation cleanup slots and mode changes while scheduling is held.
 - Portal routing changes are user-local and backed up before replacement.
 - The stock GTK portal remains the fallback for all non-FileChooser interfaces.
 - Context popovers are parented to the stable browser stack, not replaceable
@@ -337,7 +359,7 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
-- Transfer verification: 115 unit tests and the native transfer/file-management,
+- Transfer verification: 125 unit tests and the native transfer-mode/transfer/file-management,
   columns, selection, drag selection, layout, preview geometry, Quick Look,
   sidebar/menu, active filters, breadcrumbs, explorer and selection-summary
   suites passed. Live NAS transfer failure/recovery and real user media remain
