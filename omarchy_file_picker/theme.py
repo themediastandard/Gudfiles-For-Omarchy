@@ -48,6 +48,35 @@ def build_css(colors: dict[str, str]) -> str:
       border-bottom: 1px solid {colors['darker_background']};
       box-shadow: none;
     }}
+    .transfer-launcher {{
+      background: transparent; background-image: none; border: 1px solid {colors['darker_background']};
+      min-height: 30px; padding: 0 10px;
+    }}
+    .transfer-launcher.active {{ color: {colors['accent']}; border-color: alpha({colors['accent']}, 0.4); }}
+    .transfer-window .transfer-toolbar {{ padding: 14px 16px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .transfer-window .transfer-row {{
+      background: alpha({colors['foreground']}, 0.025); border: 1px solid {colors['darker_background']};
+      padding: 14px; border-radius: 10px;
+    }}
+    .transfer-window .transfer-title {{ font-size: 14px; font-weight: 650; }}
+    .transfer-window .transfer-subtitle {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .transfer-window .transfer-icon, .transfer-window .transfer-status.running {{ color: {colors['accent']}; }}
+    .transfer-window .transfer-status {{ color: {colors['light_foreground']}; font-size: 10px; font-weight: 700; }}
+    .transfer-window .transfer-status.failed {{ color: {colors['red']}; }}
+    .transfer-window .transfer-status.completed {{ color: {colors['accent']}; }}
+    .transfer-window button {{ min-height: 28px; padding: 2px 10px; background-image: none; box-shadow: none; text-shadow: none; }}
+    .transfer-window button.flat {{ background: transparent; border: 1px solid transparent; }}
+    .transfer-window button.flat:hover {{ background: alpha({colors['foreground']}, 0.07); }}
+    .transfer-window button.transfer-action {{
+      background: alpha({colors['accent']}, 0.12); color: {colors['accent']};
+      border: 1px solid alpha({colors['accent']}, 0.25);
+    }}
+    .transfer-window button.transfer-action:hover {{ background: alpha({colors['accent']}, 0.22); }}
+    .transfer-window button:disabled {{ opacity: 0.45; }}
+    .transfer-window progressbar trough {{ min-width: 0; min-height: 4px; padding: 0; background: {colors['darker_background']}; border: 0; border-radius: 3px; }}
+    .transfer-window progressbar progress {{ min-width: 0; min-height: 4px; margin: 0; padding: 0; background: {colors['accent']}; border: 0; border-radius: 3px; }}
+    .transfer-window .transfer-footer {{ padding: 12px 16px; border-top: 1px solid {colors['darker_background']}; }}
+    .transfer-window .transfer-close-box {{ padding: 14px 16px; background: alpha({colors['accent']}, 0.07); border-top: 1px solid {colors['darker_background']}; }}
     .toolbar, .footer, .metadata-strip {{
       background: {colors['background']};
     }}

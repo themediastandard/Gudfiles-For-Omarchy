@@ -9,13 +9,14 @@ from pathlib import Path
 from gi.repository import Gdk, Gio, GLib, Gtk
 
 from .file_actions import parse_file_clipboard, remove_items, rename_item, transfer_items
+from .transfer_ui import TransferUI
 
 SIDEBAR_MIN_WIDTH = 280
 SIDEBAR_DEFAULT_WIDTH = 300
 from .model import file_type, format_size
 
 
-class FileManagement:
+class FileManagement(TransferUI):
     """Native dialogs and actions shared by keyboard and context menus."""
 
     @staticmethod
@@ -28,6 +29,7 @@ class FileManagement:
 
     def _init_file_management(self):
         self.file_job_active = False
+        self._init_transfers()
         self.preferences_path = Path.home() / '.config/omarchy-file-picker/preferences.json'
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
@@ -199,7 +201,7 @@ class FileManagement:
         return self.special_mode is None and os.access(self.current_dir, os.W_OK) and any(
             formats.contain_mime_type(m) for m in ('x-special/gnome-copied-files', 'text/uri-list'))
 
-    def _paste_files(self):
+    def _paste_files(self, *, queued=False):
         if not self._can_paste(): return
         destination = self.current_dir
         clipboard = self.get_clipboard()
@@ -220,11 +222,18 @@ class FileManagement:
                     source.close(None)
                     paths, cut = parse_file_clipboard(chunks.decode(), mime)
                     if not paths: raise ValueError('The clipboard does not contain local files.')
-                    self._run_file_job('Moving files' if cut else 'Copying files',
-                        lambda: self._transfer_files(paths, destination, cut),
-                        # Convert a completed cut to copy without clearing unrelated newer clipboard data.
-                        lambda: self._copy_files([destination / p.name for p in paths])
-                        if cut and original_provider is not None and clip.get_content() == original_provider else None)
+                    job = self.transfer_queue.add(paths, destination, cut, start=not queued)
+                    # Track our provider through partial moves too. Never alter
+                    # newer clipboard contents, including copies made elsewhere.
+                    provider = [original_provider]
+                    def moved(mapping):
+                        if not cut or provider[0] is None or clip.get_content() != provider[0]:
+                            return
+                        remaining = [p for p in paths if p not in mapping]
+                        self._copy_files(remaining or list(mapping.values()), cut=bool(remaining))
+                        provider[0] = clip.get_content()
+                    self.transfer_callbacks[job.id] = moved
+                    self._show_transfers()
                 except (GLib.Error, ValueError) as error:
                     source.close(None)
                     self._show_error('Could not paste', str(error))
@@ -314,6 +323,8 @@ class FileManagement:
             action('Cut', lambda: self._copy_files(paths, True), 'edit-cut-symbolic', detail='Ctrl+X')
             action('Copy', lambda: self._copy_files(paths), 'edit-copy-symbolic', detail='Ctrl+C')
         action('Paste', self._paste_files, 'edit-paste-symbolic', self._can_paste(), 'Ctrl+V')
+        action('Add to Transfer Queue', lambda: self._paste_files(queued=True),
+               'folder-download-symbolic', self._can_paste(), 'Ctrl+Shift+V')
         if not background:
             action('Copy Location', lambda: self._copy_location(paths), 'edit-copy-symbolic')
             folder = paths[0] if len(paths) == 1 and paths[0].is_dir() else paths[0].parent

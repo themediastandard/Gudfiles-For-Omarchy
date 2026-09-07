@@ -211,6 +211,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         title_box.append(title_label)
         title_box.append(subtitle)
         header.set_title_widget(title_box)
+        header.pack_end(self._build_transfer_button())
         self.set_titlebar(header)
 
     def _build_content(self) -> None:
@@ -629,7 +630,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                     self._copy_files(selected, cut=keyval in (Gdk.KEY_x, Gdk.KEY_X))
                 return Gdk.EVENT_STOP
             if control and keyval in (Gdk.KEY_v, Gdk.KEY_V):
-                self._paste_files()
+                self._paste_files(queued=shift)
                 return Gdk.EVENT_STOP
             if control and shift and keyval in (Gdk.KEY_n, Gdk.KEY_N):
                 if self.special_mode is None: self._show_create_dialog('folder')
@@ -1565,6 +1566,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         return results
 
     def _finish(self, *, cancelled: bool = False, paths: list[Path] | None = None) -> None:
+        if self._guard_transfer_close(lambda: self._finish(cancelled=cancelled, paths=paths)):
+            return
         if self.file_job_active:
             self._show_error('File operation in progress', 'Wait for the operation to finish before closing the picker.')
             return

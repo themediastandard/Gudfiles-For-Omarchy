@@ -59,6 +59,25 @@ as the desktop's XDG FileChooser portal backend.
 - File and background menus include rename, clipboard file operations,
   confirmed trash/permanent deletion, properties, bookmarks, view and sort.
   NAS connection is sidebar-only. Rename and paste never overwrite collisions.
+- A compact Omarchy-themed Transfers window is accessible from the header.
+  Ctrl+V starts that clipboard batch; Ctrl+Shift+V / Add to Transfer Queue stages
+  it without starting. Start runs one chosen batch, Start queue authorizes the
+  current waiting/staged batches, and one worker executes them sequentially.
+  Newly staged batches remain staged even while an earlier queue is draining.
+- Transfers show current file, bytes, transfer rate, progress and inline errors,
+  with Start, Pause, Resume/Continue, Retry, Restart unfinished and Cancel controls.
+  Pause/failure holds scheduling. Completed items remain at their destinations.
+  The separate window scrolls its rows without resizing the Files browser.
+- Copy resume checks every retained byte against an unchanged source and verifies
+  the completed data before publication. Changed sources/corrupt partials refuse
+  resume and require an explicit restart of unfinished items. Same-volume moves
+  use atomic no-overwrite renames; cross-volume moves stop without copying or
+  deleting their sources, explaining how to use Copy instead.
+- Queues belong to the open Files session. Closing the transfer panel hides it;
+  closing Files/finishing a picker pauses scheduling and asks whether to keep the
+  session or cancel unfinished work. It waits for active I/O/cleanup to stop.
+  Failed cleanup offers an explicit leave-partials exit. No automatic reconnect,
+  credentials, persisted queue, background service or restart recovery is added.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
   prompts; mounted shares are refreshed into the Devices sidebar.
 - Reads the active Omarchy `colors.toml` on every launch.
@@ -110,6 +129,10 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/file_actions.py` — filesystem operations and sorting.
 - `omarchy_file_picker/file_management.py` — file dialogs, clipboard, shared
   GTK bookmarks and persisted display preferences.
+- `omarchy_file_picker/transfers.py` — single-worker session queue, resumable
+  copies, checked staging ownership, atomic publication and cancellation cleanup.
+- `omarchy_file_picker/transfer_ui.py` — native transfer window, progress/actions,
+  ordered move receipts, clipboard ownership and Files/picker close guard.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
 - `omarchy_file_picker/image_preview.py` — clipped image zoom and pan controllers.
@@ -130,6 +153,7 @@ as the desktop's XDG FileChooser portal backend.
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_transfers.py
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_image_zoom.py
@@ -191,6 +215,40 @@ gdbus introspect --session \
   `renameat2(RENAME_NOREPLACE)` is required, with no overwrite-prone fallback.
   Duplicate/existing targets and swaps are rejected; failure/cancel stops and
   reports completed items instead of implying transactional rollback.
+- The transfer engine copies into private `.omarchy-transfer-<id>` directories
+  beside the final outputs. It uses directory descriptors, no-follow opens,
+  exclusive file creation, inode ownership checks, SHA-256 verification and
+  Linux `renameat2(RENAME_NOREPLACE)`. Unsupported destination publication fails
+  closed, without an overwrite-prone fallback. See the
+  [Linux rename documentation](https://man7.org/linux/man-pages/man2/rename.2.html).
+  Each selected top-level copy appears only after its entire tree is verified.
+  Resume rechecks source device/inode, mode, size, mtime and ctime, compares saved
+  bytes, and rescans folder membership before publication. An ambiguous rename
+  receipt can be reconciled only against the exact owned inode. Cancellation and
+  restart never remove final outputs or unknown/replaced staging entries.
+- Transfer batches support regular files, directories and symlinks, capped at
+  100,000 entries per batch and 100 visible jobs per window. Staging/scanning and
+  filesystem I/O run off GTK's main thread; scanning starts when a job starts.
+  File data, links, basic mode bits and mtime are copied; owner read/write (and
+  folder traversal) remain enabled for recovery. ACLs, xattrs, original ownership,
+  sparse allocation and hard-link relationships are not archived. Special files
+  are rejected. Pause/cancel wait for the current OS call; they cannot interrupt
+  an atomic rename or a blocked filesystem syscall. Queue ordering is per window.
+- Move receipts reach GTK in actual commit order, even when individually started
+  jobs run out of visible order. Confirmed partial moves migrate ratings and
+  remove only those sources from an owned cut clipboard; full completion changes
+  that clipboard to destination copies. Newer clipboard contents are preserved.
+  Closing Files drains final receipts before returning a picker result/quitting.
+  Failed/paused transfers with no completed outputs do not trigger automatic
+  directory reloads, avoiding an unnecessary read of an unavailable destination.
+- Transfer QA uses disposable generated data and injected short writes, full-disk
+  errors, corrupted partials, changed sources/destinations, racing collisions,
+  publication receipts and move-source replacement. Native QA emits real GTK
+  signals for staging/start/pause/resume/restart/cancel, checks three-view browsing,
+  partial move labels/clipboard, sequential execution, bounded geometry, blocked
+  I/O close handling and cleanup failure/leave-partials behavior. Only its own
+  windows are floated. `TRANSFERS_QA_SCREENSHOT=/tmp/transfers.png` captures the
+  native manager and a `-paused.png` companion; both layouts were visually checked.
 - Portal routing changes are user-local and backed up before replacement.
 - The stock GTK portal remains the fallback for all non-FileChooser interfaces.
 - Context popovers are parented to the stable browser stack, not replaceable
@@ -259,6 +317,23 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- Transfer verification: 115 unit tests and the native transfer/file-management,
+  columns, selection, drag selection, layout, preview geometry, Quick Look,
+  sidebar/menu, active filters, breadcrumbs, explorer and selection-summary
+  suites passed. Live NAS transfer failure/recovery and real user media remain
+  unverified. Resume after reconnect requires stable identities; it deliberately
+  refuses to trust an unrelated replacement mount/source/partial file.
+  A real disposable cross-filesystem copy and move refusal were also verified
+  between the local fixture filesystem and `/dev/shm`.
+  The changed Python modules were installed locally; transfer, file-management
+  and explorer/picker-mode QA passed against that installed package. Installed
+  modules match the source, including the concurrent selection-summary updates.
+- Transfer queues and recovery metadata are in memory. An app crash/forced exit
+  can leave hidden partial folders and does not restore the queue on relaunch.
+  Normal close guards against losing it. Cross-volume copy works when the mounted
+  filesystem supports the required safe publication; cross-volume move is an
+  explicit limitation of this first version. A later milestone can add a durable
+  journal and separately verified copy-and-delete moves.
 - Apps that bypass XDG portals keep their toolkit-native chooser.
 - A NAS must be reachable and provide valid credentials for a live mount test;
   live passive discovery is verified, while authenticated share browsing and

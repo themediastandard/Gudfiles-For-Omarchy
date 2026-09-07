@@ -1,5 +1,6 @@
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -89,6 +90,32 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertTrue(all(path.exists() for path in self.paths))
         self.assertTrue(all(self.store.get(path) == (4, 'blue', False) for path in self.paths))
+
+    def test_queue_migrates_in_actual_commit_order_when_jobs_start_out_of_order(self):
+        self.owner._init_transfers()
+        self.owner.current_dir = self.root
+        self.owner._refresh_files = lambda: None
+        queue = self.owner.transfer_queue
+        middle = self.root / 'middle'
+        middle.mkdir()
+        source = self.paths[0]
+        onward = queue.add([middle / source.name], self.destination, cut=True)
+        initial = queue.add([source], middle, cut=True)
+        for job in (initial, onward):
+            queue.start(job)
+            deadline = time.monotonic() + 4
+            while queue.active is not None and time.monotonic() < deadline:
+                time.sleep(.005)
+            self.assertEqual(job.state, 'completed', job.error)
+        # Both events arrive before the GTK loop gets to process them.
+        self.assertFalse(self.owner._guard_transfer_close(lambda: None))
+        self.assertEqual([call[0] for call in self.calls], [
+            {source: middle / source.name},
+            {middle / source.name: self.destination / source.name},
+        ])
+        self.store.refresh([source, middle / source.name, self.destination / source.name])
+        self.assertEqual(self.store.get(self.destination / source.name), (4, 'blue', False))
+        self.assertEqual(self.store.get(middle / source.name), EMPTY)
 
 
 if __name__ == '__main__':

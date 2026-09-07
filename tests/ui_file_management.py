@@ -96,7 +96,7 @@ def start():
     return False
 
 def copied():
-    if not (dest/'renamed.txt').exists() or w.file_job_active:return True
+    if dest/'renamed.txt' not in w.children_by_path or w.transfer_queue.active:return True
     assert not errors, errors
     assert (source/'renamed.txt').exists()
     w._copy_files([source/'b.txt'],cut=True)
@@ -105,7 +105,7 @@ def copied():
     return False
 
 def moved():
-    if not (dest/'b.txt').exists() or w.file_job_active:return True
+    if dest/'b.txt' not in w.children_by_path or w.transfer_queue.active:return True
     assert not errors, errors
     assert not (source/'b.txt').exists()
     w.flow.select_child(w.children_by_path[dest/'b.txt'])
