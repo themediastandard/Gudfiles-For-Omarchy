@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-') as temp:
     settle()
     try:
         assert window.flow.get_selection_mode() == Gtk.SelectionMode.MULTIPLE
-        for mode in ('grid', 'list'):
+        for mode in ('grid', 'list', 'columns'):
             window._set_view(mode)
             settle()
             flow = window.flow

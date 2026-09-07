@@ -170,14 +170,17 @@ class QuickLook(Gtk.Widget):
     def _animation_done(self):
         self.queue_draw()
         if self.target == 0:
+            # Restoring sensitivity can temporarily focus the first column.
+            # Resolve the intended target before GTK performs that traversal.
+            child = self.owner.children_by_path.get(self.path)
+            flow = self.owner.flow
             self.set_visible(False)
             self._clear_content()
             self.owner.preview_overlay.get_child().set_sensitive(True)
-            child = self.owner.children_by_path.get(self.path)
             if child:
                 child.grab_focus()
             else:
-                self.owner.flow.grab_focus()
+                flow.grab_focus()
 
     def _source_rect(self, path):
         child = self.owner.children_by_path.get(path)

@@ -37,6 +37,8 @@ class BackgroundSelection(Gtk.DrawingArea):
         if not self.owner.request.multiple or self.owner.context_popover:
             gesture.set_state(Gtk.EventSequenceState.DENIED)
             return
+        if self.owner.view_mode == 'columns':
+            self.owner.columns.activate_at(self.owner.browser_stack, x, y)
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
         self.original = set(self.owner._selected_paths())
         self.modifiers = gesture.get_current_event_state()
@@ -128,6 +130,9 @@ class BackgroundSelection(Gtk.DrawingArea):
             return
         self._update(gesture, dx, dy)
         self._stop()
+
+        if self.owner.view_mode == 'columns':
+            self.owner.columns.schedule_open()
 
     def cancel(self):
         if self.active:

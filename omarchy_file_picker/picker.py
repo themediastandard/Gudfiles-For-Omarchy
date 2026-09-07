@@ -44,6 +44,7 @@ from .creative import CreativeTools
 from .hover_scrub import HoverScrub
 from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
+from .columns import ColumnBrowser
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -253,6 +254,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         browser.append(self._build_active_filters())
 
         self.browser_stack = Gtk.Stack()
+        self.browser_stack.set_hhomogeneous(False)
+        self.browser_stack.set_vhomogeneous(False)
         self.browser_stack.set_vexpand(True)
         self.browser_stack.set_hexpand(True)
         self.browser_overlay = Gtk.Overlay()
@@ -282,6 +285,11 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         scroller.set_child(self.flow)
         self.file_scroller = scroller
         self.browser_stack.add_named(scroller, "files")
+        self.standard_flow = self.flow
+        self.standard_scroller = scroller
+        self.standard_selection_handler = self.selection_changed_handler
+        self.columns = ColumnBrowser(self)
+        self.browser_stack.add_named(self.columns, 'columns')
         self.drag_selection = BackgroundSelection(self)
         self.browser_overlay.add_overlay(self.drag_selection)
         self.browser_overlay.set_measure_overlay(self.drag_selection, False)
@@ -461,8 +469,13 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.toolbar.append(self.hidden_button)
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
-        self.toolbar.append(self.list_button)
-        self.toolbar.append(self.grid_button)
+        self.columns_button = self._icon_button('view-dual-symbolic', 'Column view', lambda _b: self._set_view('columns'))
+        views = Gtk.Box()
+        views.add_css_class('view-switcher')
+        for button in (self.grid_button, self.list_button, self.columns_button):
+            views.append(button)
+        self.toolbar.append(views)
+        self.grid_button.add_css_class('active')
 
     def _build_footer(self) -> None:
         if self.request.choices:
@@ -543,6 +556,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.add_controller(keys)
 
     def _on_preview_key(self, _controller, keyval, _keycode, state):
+        if self.view_mode == 'columns' and not self.quicklook.get_visible():
+            self.columns.activate_focused()
         if self.drag_selection.active:
             if keyval == Gdk.KEY_Escape:
                 self.drag_selection.cancel()
@@ -660,6 +675,13 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             return self.request.filters[index]
         return None
 
+    def _directory_entries(self, path):
+        entries = list_directory(path, show_hidden=self.show_hidden,
+            active_filter=self._active_filter(), query=self.search.get_text(),
+            directories_only=self.request.directory)
+        return sort_entries(self._creative_entries(entries), self.file_preferences['sort_key'],
+                            self.file_preferences['descending'], self.file_preferences['folders_first'])
+
     def _load(self) -> None:
         self._update_active_filters()
         query = self.search.get_text() if hasattr(self, "search") else ""
@@ -692,6 +714,12 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def _rebuild_files(self) -> None:
         self.drag_selection.cancel()
         self._close_context_menu()
+        if self.view_mode == 'columns':
+            self.columns.rebuild()
+            self.browser_stack.set_visible_child_name('columns')
+            self._clear_metadata()
+            self._update_accept_state()
+            return
         for child in list(self.children_by_path.values()):
             self.flow.remove(child)
         self.children_by_path.clear()
@@ -902,6 +930,9 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             self._accept()
 
     def _on_context_pressed(self, _gesture: Gtk.GestureClick, _presses: int, x: float, y: float) -> None:
+        if self.view_mode == 'columns':
+            self.columns.activate_at(self.browser_stack, x, y)
+            self.columns.cancel_pending()
         picked = self.browser_stack.pick(x, y, Gtk.PickFlags.DEFAULT)
         child: Gtk.Widget | None = picked
         while child and child is not self.browser_stack and not isinstance(child, Gtk.FlowBoxChild):
@@ -1145,6 +1176,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
     def _on_context_closed(self, popover: Gtk.Popover) -> None:
         if self.context_popover is popover:
+            if self.view_mode == 'columns' and self.columns.active:
+                self.columns.focus_column(self.columns.active)
             self.context_popover = None
         GLib.idle_add(self._unparent_popover, popover)
 
@@ -1604,9 +1637,27 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self._refresh_files()
 
     def _set_view(self, mode: str) -> None:
-        if self.view_mode == mode:
+        if self.view_mode == mode or mode not in ('grid', 'list', 'columns'):
             return
+        selected = self._selected_paths()
+        self.drag_selection.cancel()
+        if self.view_mode == 'columns':
+            self.columns.reset()
+            self.flow = self.standard_flow
+            self.file_scroller = self.standard_scroller
+            self.selection_changed_handler = self.standard_selection_handler
+            self.children_by_path = {}
         self.view_mode = mode
+        for name, button in (('grid', self.grid_button), ('list', self.list_button), ('columns', self.columns_button)):
+            (button.add_css_class if name == mode else button.remove_css_class)('active')
+        if mode == 'columns':
+            # Hidden standard rows must not retain stale selections or badges.
+            self.flow.remove_all()
+            self.children_by_path = {}
+            self._refresh_files(selected)
+            return
+        self.flow.remove_all()
+        self.children_by_path = {}
         self.flow.set_homogeneous(False)
         self.flow.set_max_children_per_line(6 if mode == "grid" else 1)
         self.flow.set_row_spacing(12 if mode == "grid" else 0)
@@ -1615,7 +1666,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             self.flow.add_css_class('file-list')
         else:
             self.flow.remove_css_class('file-list')
-        self._rebuild_files()
+        self._refresh_files(selected)
 
     def _select_first_file(self) -> bool:
         for path in self.entries:

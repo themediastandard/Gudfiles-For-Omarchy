@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix='picker-drag-') as temp:
     drag = window.drag_selection
     paths = list(window.entries)
     try:
-        for mode in ('grid', 'list'):
+        for mode in ('grid', 'list', 'columns'):
             window._set_view(mode)
             settle()
             geometry = window.get_width(), window.get_height()

@@ -193,6 +193,15 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 10px; }}
+    .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent']}; }}
+    .view-switcher {{ background: {colors['dark_background']}; border-radius: 8px; }}
+    .browser-column {{ background: {colors['background']}; border-right: 1px solid {colors['lighter_background']}; }}
+    .browser-column:not(.active-column) flowboxchild:selected {{ background: alpha({colors['foreground']}, 0.06); border-color: transparent; }}
+    .column-heading {{ padding: 10px 14px; font-size: 12px; font-weight: 600; color: {colors['muted']}; border-bottom: 1px solid {colors['lighter_background']}; }}
+    .active-column .column-heading {{ color: {colors['accent']}; }}
+    .column-empty {{ padding: 22px 14px; color: {colors['muted']}; }}
+    flowbox.column-files {{ padding: 6px; }}
+    .column-files .rating-badge {{ padding: 0; }}
     flowbox.file-list > flowboxchild {{
       padding: 1px 6px;
       border-radius: 4px;

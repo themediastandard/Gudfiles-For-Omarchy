@@ -7,7 +7,14 @@ as the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
-- Native GTK 4 picker with grid and list layouts.
+- Native GTK 4 picker with grid, list and Finder-style column layouts, selected
+  through a compact three-button toolbar group or the View context submenu.
+- Column view opens a selected folder into an adjacent column, retains the
+  ancestor trail, and scrolls horizontally without growing the window. Left/
+  Right move between columns; each column has independent vertical scrolling.
+  The active column owns selection, current-directory actions and metadata;
+  ancestor selections are muted. Multi-select, rubber-band selection, labels,
+  filters, file operations and Space preview use the shared interaction paths.
 - Standalone browsing runs in explorer mode: footer hidden, normal default-app
   file opening without quitting, and Escape clears selection. The preview strip
   remains. Portal requests, CLI `--result`, folder picking and Save modes retain
@@ -17,7 +24,7 @@ as the desktop's XDG FileChooser portal backend.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
-- Blank-background drags select intersecting files in grid/list views with a
+- Blank-background drags select intersecting files in all three views with a
   theme-colored rectangle, Shift-add, Ctrl-toggle, edge scrolling and Escape
   restoration. File-origin click gestures remain native GTK.
 - Image and cached video thumbnails, selection metadata, search, file filters,
@@ -103,6 +110,7 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/ratings.py` / `creative.py` — local annotation store and controls.
 - `omarchy_file_picker/batch_rename.py` — preview planning, no-overwrite apply and dialog.
 - `omarchy_file_picker/breadcrumbs.py` — chevron drawing/allocation and wheel handling.
+- `omarchy_file_picker/columns.py` — adjacent directory columns and active selection/focus.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
@@ -122,6 +130,7 @@ PYTHONPATH=. python tests/ui_creative.py
 PYTHONPATH=. python tests/ui_label_colors.py
 PYTHONPATH=. python tests/ui_active_filters.py
 PYTHONPATH=. python tests/ui_breadcrumbs.py
+PYTHONPATH=. python tests/ui_columns.py
 PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
@@ -211,7 +220,14 @@ gdbus introspect --session \
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in
-  both views, not injected mouse events; reuse native FlowBox pointer handling.
+  all three views, not injected mouse events; reuse native FlowBox pointer handling.
+- Column QA verifies hierarchy expansion, overflow, native selection, preview
+  focus, hidden-file refresh, background-context creation destinations, empty
+  folders, history, view switching, single/folder-only constraints and stable
+  geometry. `COLUMNS_QA_SCREENSHOT=/tmp/columns.png` captures an isolated fixture.
+  Newly built column focus is restored on the frame clock after mapping; menu
+  close likewise guards against GTK focusing/selecting the first ancestor.
+  Keep each column's FlowBox, scroller, entries and child map bound together.
 - Background-drag tests invoke the gesture handlers against actual GTK bounds
   and hit testing, including scrolling and cancellation; no physical pointer
   injection. Overlays are excluded from size requests. Conversion-notice QA

@@ -345,6 +345,7 @@ class FileManagement:
         options = [
             ('Grid View', '', 'view-grid-symbolic', lambda: self._set_view('grid')),
             ('List View', '', 'view-list-symbolic', lambda: self._set_view('list')),
+            ('Column View', '', 'view-dual-symbolic', lambda: self._set_view('columns')),
             ('Hide Hidden Files' if self.show_hidden else 'Show Hidden Files', 'Ctrl+H',
              'view-reveal-symbolic', lambda: self._toggle_hidden(None)),
         ]
