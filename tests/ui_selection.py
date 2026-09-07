@@ -30,6 +30,14 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-') as temp:
             window._set_view(mode)
             settle()
             flow = window.flow
+            if mode == 'list':
+                first = window.children_by_path[paths[0]]
+                second = window.children_by_path[paths[1]]
+                _, first_bounds = first.compute_bounds(flow)
+                _, second_bounds = second.compute_bounds(flow)
+                pitch = second_bounds.get_y() - first_bounds.get_y()
+                assert 28 <= pitch <= 34, pitch
+                print('PASS: compact list row pitch', pitch)
             flow.grab_focus()
             # The same GTK selection engine used by its native click gesture:
             # plain movement replaces, Shift extends, Ctrl moves without clearing.

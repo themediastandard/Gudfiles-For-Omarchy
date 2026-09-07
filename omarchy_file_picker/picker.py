@@ -7,6 +7,7 @@ import mimetypes
 import os
 import subprocess
 import sys
+import threading
 from urllib.parse import urlsplit
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +34,7 @@ from .file_management import FileManagement
 from .file_actions import create_untitled_text, sort_entries
 from .quicklook import QuickLook
 from .network_ui import NetworkBrowser
-from .network import NetworkLocation, safe_network_uri
+from .network import NetworkLocation, safe_network_uri, mounted_local_path
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -327,7 +328,8 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             seen.add(root)
             path = Path(root)
             button = self._sidebar_button(
-                mount.get_name(), "drive-harddisk-symbolic", lambda _b, p=path: self.navigate(p)
+                mount.get_name(), "drive-harddisk-symbolic",
+                lambda _b, uri=mount.get_root().get_uri(): self._open_mounted_location(uri)
             )
             button._picker_path = path  # type: ignore[attr-defined]
             self.sidebar.append(button)
@@ -653,10 +655,10 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         return item
 
     def _list_item(self, path: Path) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        row.set_size_request(-1, 42)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row.set_size_request(-1, 28)
         image = Gtk.Image.new_from_gicon(icon_for(path))
-        image.set_pixel_size(24)
+        image.set_pixel_size(18)
         row.append(image)
         name = label(path.name, "filename")
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
@@ -1257,7 +1259,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             entry.set_sensitive(False)
             discovery.set_sensitive(False)
             target = Gio.File.new_for_uri(uri)
-            mount_operation = Gtk.MountOperation.new(self)
+            mount_operation = Gtk.MountOperation.new(dialog)
 
             def on_mounted(source: Gio.File, result) -> None:
                 nonlocal mounting
@@ -1283,9 +1285,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                     return
                 self._dismiss_dialog(dialog)
                 self._refresh_sidebar()
-                mounted_path = self._path_for_mount_uri(uri)
-                if mounted_path:
-                    self.navigate(mounted_path)
+                self._open_mounted_location(uri)
                 self._notify("NAS connected", uri)
 
             target.mount_enclosing_volume(
@@ -1300,15 +1300,26 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         dialog.present()
         entry.grab_focus()
 
-    def _path_for_mount_uri(self, uri: str) -> Path | None:
-        for mount in self.volume_monitor.get_mounts():
-            root = mount.get_root()
-            root_uri = root.get_uri().rstrip("/")
-            if uri.rstrip("/").startswith(root_uri) or root_uri.startswith(uri.rstrip("/")):
-                local_path = root.get_path()
-                if local_path:
-                    return Path(local_path)
-        return None
+    def _open_mounted_location(self, uri: str) -> None:
+        # Repair the local bridge off the GTK thread; a GFile path alone does
+        # not prove that GVfs has exposed the share to ordinary filesystem APIs.
+        token = getattr(self, '_mount_open_generation', 0) + 1
+        self._mount_open_generation = token
+        def complete(path, error):
+            if not self.get_visible() or token != self._mount_open_generation:
+                return False
+            if error:
+                self._show_error('Could not open mounted folder', error)
+            else:
+                self.navigate(path)
+            return False
+        def worker():
+            try:
+                path, error = mounted_local_path(uri), None
+            except (OSError, RuntimeError, GLib.Error) as exc:
+                path, error = None, str(exc)
+            GLib.idle_add(complete, path, error)
+        threading.Thread(target=worker, daemon=True).start()
 
     def _selected_paths(self) -> list[Path]:
         return [child._picker_path for child in self.flow.get_selected_children()]  # type: ignore[attr-defined]
@@ -1387,6 +1398,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.get_application().quit()
 
     def navigate(self, path: Path, *, record: bool = True) -> None:
+        self._mount_open_generation = getattr(self, '_mount_open_generation', 0) + 1
         path = path.expanduser()
         if not path.is_dir():
             return
@@ -1445,6 +1457,12 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.view_mode = mode
         self.flow.set_homogeneous(False)
         self.flow.set_max_children_per_line(6 if mode == "grid" else 1)
+        self.flow.set_row_spacing(12 if mode == "grid" else 0)
+        self.flow.set_column_spacing(12 if mode == "grid" else 0)
+        if mode == "list":
+            self.flow.add_css_class('file-list')
+        else:
+            self.flow.remove_css_class('file-list')
         self._rebuild_files()
 
     def _select_first_file(self) -> bool:

@@ -1,6 +1,7 @@
 import unittest
-from unittest.mock import patch
-from omarchy_file_picker.network import NetworkLocation, discover_network, parse_avahi, safe_network_uri
+from pathlib import Path
+from unittest.mock import patch, Mock
+from omarchy_file_picker.network import NetworkLocation, discover_network, parse_avahi, safe_network_uri, mounted_local_path
 
 
 class NetworkTests(unittest.TestCase):
@@ -13,6 +14,43 @@ class NetworkTests(unittest.TestCase):
         data = '+;eth0;IPv4;Studio;_smb._tcp;local\n=;eth0;IPv4;Studio\\032NAS;_smb._tcp;local;studio.local;192.0.2.2;445;\n'
         result = parse_avahi(data, 'smb')
         self.assertEqual(result, [NetworkLocation('Studio NAS', 'smb://studio.local/', 'SMB server · 192.0.2.2', True)])
+
+    def test_mounted_local_path_no_repair_when_accessible(self):
+        with patch('gi.repository.Gio.File.new_for_uri') as file, \
+             patch.object(Path, 'is_dir', return_value=True), patch('subprocess.run') as run:
+            file.return_value.get_path.return_value = '/run/user/1000/gvfs/share'
+            self.assertEqual(mounted_local_path('smb://nas/media'), Path('/run/user/1000/gvfs/share'))
+            run.assert_not_called()
+
+    def test_mounted_local_path_repairs_missing_bridge(self):
+        with patch('gi.repository.Gio.File.new_for_uri') as file, \
+             patch('gi.repository.GLib.get_user_runtime_dir', return_value='/run/user/1000'), \
+             patch.object(Path, 'is_dir', side_effect=[False, True]), \
+             patch.object(Path, 'is_file', return_value=True), patch.object(Path, 'mkdir'), \
+             patch('os.path.ismount', return_value=False), \
+             patch('subprocess.run', return_value=Mock(returncode=0)) as run:
+            file.return_value.get_path.return_value = '/run/user/1000/gvfs/share'
+            self.assertEqual(mounted_local_path('smb://nas/media'), Path('/run/user/1000/gvfs/share'))
+            self.assertEqual(run.call_args.args[0], ['/usr/lib/gvfsd-fuse', '/run/user/1000/gvfs'])
+
+    def test_unavailable_local_mount_does_not_start_network_bridge(self):
+        with patch('gi.repository.Gio.File.new_for_uri') as file, \
+             patch.object(Path, 'is_dir', return_value=False), patch('subprocess.run') as run:
+            file.return_value.get_path.return_value = '/media/unavailable'
+            with self.assertRaisesRegex(RuntimeError, 'unavailable'):
+                mounted_local_path('file:///media/unavailable')
+            run.assert_not_called()
+
+    def test_bridge_start_failure_is_reported(self):
+        with patch('gi.repository.Gio.File.new_for_uri') as file, \
+             patch('gi.repository.GLib.get_user_runtime_dir', return_value='/run/user/1000'), \
+             patch.object(Path, 'is_dir', return_value=False), \
+             patch.object(Path, 'is_file', return_value=True), patch.object(Path, 'mkdir'), \
+             patch('os.path.ismount', return_value=False), \
+             patch('subprocess.run', return_value=Mock(returncode=1, stderr='FUSE unavailable')):
+            file.return_value.get_path.return_value = '/run/user/1000/gvfs/share'
+            with self.assertRaisesRegex(RuntimeError, 'FUSE unavailable'):
+                mounted_local_path('smb://nas/media')
 
     def test_saved_credentials_are_not_propagated(self):
         self.assertEqual(safe_network_uri('smb://user:password@nas.local/media'), 'smb://nas.local/media')

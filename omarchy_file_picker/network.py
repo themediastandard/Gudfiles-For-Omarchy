@@ -3,6 +3,9 @@ from dataclasses import dataclass
 import re
 import shutil
 import subprocess
+import os
+import time
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -12,6 +15,36 @@ class NetworkLocation:
     uri: str
     detail: str
     server: bool = False
+
+
+def mounted_local_path(uri):
+    """Resolve an already-mounted location, repairing a missing GVfs bridge.
+
+    Run on a worker thread. This does not authenticate or mount a new server.
+    """
+    from gi.repository import Gio, GLib
+    file = Gio.File.new_for_uri(uri)
+    local = file.get_path()
+    if local and Path(local).is_dir():
+        return Path(local)
+    bridge = Path(GLib.get_user_runtime_dir()) / 'gvfs'
+    if local and bridge in Path(local).parents and not os.path.ismount(bridge):
+        executable = Path('/usr/lib/gvfsd-fuse')
+        if not executable.is_file():
+            raise RuntimeError('The GVfs filesystem bridge is missing. Install GVfs FUSE support to browse NAS folders.')
+        bridge.mkdir(mode=0o700, exist_ok=True)
+        try:
+            result = subprocess.run([str(executable), str(bridge)], capture_output=True, text=True, timeout=5)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError('The GVfs filesystem bridge did not start in time. Try connecting again.') from exc
+        if result.returncode and not os.path.ismount(bridge):
+            raise RuntimeError('Could not start the GVfs filesystem bridge: ' + result.stderr.strip())
+        for _ in range(20):
+            local = file.get_path()
+            if local and Path(local).is_dir():
+                return Path(local)
+            time.sleep(0.1)
+    raise RuntimeError('This mounted folder is unavailable. Check the NAS connection and reconnect using Connect to NAS.')
 
 
 def safe_network_uri(uri):

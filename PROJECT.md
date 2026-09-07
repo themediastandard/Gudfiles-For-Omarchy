@@ -8,6 +8,8 @@ as the desktop's XDG FileChooser portal backend.
 ## Current state
 
 - Native GTK 4 picker with grid and list layouts.
+- List view uses compact 32-pixel rows with no inter-row gap; grid spacing is
+  unchanged. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
@@ -35,6 +37,9 @@ as the desktop's XDG FileChooser portal backend.
 - NAS dialog uses flat theme-colored controls, automatically searches Avahi/
   GVfs network advertisements, and offers explicit SMB share browsing, Refresh,
   saved/mounted locations, inline errors and cancellable mounting.
+- Mounted-device clicks and successful NAS connections verify the local path
+  on a worker thread, recover a missing GVfs FUSE bridge when available, and
+  report unavailable folders. Credential prompts belong to the NAS dialog.
 
 ## Architecture
 
@@ -62,6 +67,7 @@ PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
+PYTHONPATH=. python tests/ui_mounts.py
 ./bin/omarchy-file-picker --demo ~/Pictures
 ./install.sh
 ```
@@ -97,6 +103,13 @@ gdbus introspect --session \
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in
   both views, not injected mouse events; reuse native FlowBox pointer handling.
+- A GVfs mount and `GFile.get_path()` can exist without a running FUSE bridge.
+  Verify local directory accessibility before navigation; never treat a path
+  string as proof of a working mount. Start only the existing user bridge, not
+  a new server connection, when recovering this condition.
+- `PICKER_QA_LIVE_MOUNT=1 PYTHONPATH=. python tests/ui_mounts.py` additionally
+  exercises an already-mounted NAS sidebar button, subfolder activation and
+  Back read-only. It does not request credentials or mount a new share.
 - For unobstructed NAS visual QA, set `NAS_QA_SCREENSHOT=/tmp/nas-qa.png` when
   running `tests/ui_nas.py`; it snapshots the native dialog via GTK's renderer,
   excluding other desktop windows and authentication overlays.
@@ -107,6 +120,7 @@ gdbus introspect --session \
 - A NAS must be reachable and provide valid credentials for a live mount test;
   live passive discovery is verified, while authenticated share browsing and
   mounting require a user-selected server/login and remain unverified here.
+  Browsing an existing authenticated mount and entering a subfolder are verified.
 - This machine lacks `gst-plugins-good` and `gst-libav`; playback currently
   shows a codec explanation. Installing them requires administrator approval.
 - Sandboxed-app and native-app Open/Save flows must both be smoke-tested after

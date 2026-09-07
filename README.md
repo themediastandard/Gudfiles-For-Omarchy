@@ -6,6 +6,7 @@ and serves as an XDG desktop portal backend.
 ## Features
 
 - Thumbnail-first grid and compact list views
+- Dense list rows with no gaps between files
 - Image previews and freedesktop video thumbnail cache support
 - Pinned folders, recent files, and mounted volumes
 - Compact, icon-led right-click menu with grouped media submenus
@@ -50,6 +51,9 @@ bookmarks. It does not port-scan the subnet or connect to servers automatically.
 Selecting a server explicitly browses shares and may prompt for credentials;
 selecting a share fills the address for Connect. Non-advertising servers may
 still require a typed address. No passwords are saved by the picker.
+Mounted shares need GVfs's local filesystem bridge. The picker checks it when
+opening a mounted device and starts the installed bridge if missing, without
+reconnecting or changing NAS credentials. Unavailable folders show an error.
 
 Rename and paste refuse filename collisions instead of overwriting existing
 files. Trash and permanent deletion both require confirmation. Clipboard file

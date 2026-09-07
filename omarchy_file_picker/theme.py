@@ -165,6 +165,11 @@ def build_css(colors: dict[str, str]) -> str:
       border: 1px solid transparent;
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
+    flowbox.file-list {{ padding: 6px 10px; }}
+    flowbox.file-list > flowboxchild {{
+      padding: 1px 6px;
+      border-radius: 4px;
+    }}
     flowboxchild:selected {{
       background: alpha({colors['accent']}, 0.10);
       border-color: {colors['accent']};
