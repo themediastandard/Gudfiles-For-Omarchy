@@ -28,6 +28,8 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 - Background right-click works in blank areas and empty folders
 - Mouse context menus anchor at the click; keyboard menus anchor at the selected file
 - Rename, Cut/Copy/Paste, Copy Location, Properties, and confirmed Trash/Delete
+- Consistent, theme-aware dialogs with file summaries, labeled fields and inline
+  validation; readable Properties cards with permissions and combined file sizes
 - GTK-shared bookmarks, hidden files, configurable list details, and sorting
 - Non-destructive image resizing: Small (1080 px), Medium (2160 px), Large (3160 px)
 - Image conversion to JPEG, PNG, WebP, and AVIF

@@ -131,36 +131,24 @@ def execute_rename(plan, cancelled=None) -> RenameResult:
 
 # Keep GTK out of imports used by backend/unit tests.
 def _dialog_class():
-    from gi.repository import Gdk, GLib, Gtk, Pango
+    from gi.repository import GLib, Gtk, Pango
+    from .dialogs import PickerDialog, entry_field
 
-    class BatchRenameDialog(Gtk.Window):
+    class BatchRenameDialog(PickerDialog):
         def __init__(self, owner, paths):
-            super().__init__(title='Batch Rename', transient_for=owner, modal=True)
+            super().__init__(owner, 'Batch Rename', subtitle=f'{len(paths):,} items selected · File extensions are preserved', width=680)
             self.owner, self.paths = owner, list(paths)
             self.active, self.plan, self.cancelled = False, [], threading.Event()
             self.alive, self.preview_running = True, False
             self.preview_generation, self.preview_timer, self.preview_pending = 0, 0, None
-            self.set_default_size(660, 550)
-            self.add_css_class('picker-dialog')
+            self.set_default_size(680, 640)
+            self.set_resizable(True)
             self.add_css_class('batch-rename-dialog')
-            outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-            for edge in ('top', 'bottom', 'start', 'end'):
-                getattr(outer, 'set_margin_' + edge)(22)
-            self.set_child(outer)
-            header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            header.add_css_class('rename-header')
-            title = Gtk.Label(label='Rename your selection', xalign=0)
-            title.add_css_class('title-2')
-            header.append(title)
-            description = Gtk.Label(label=f'{len(paths)} items · Extensions stay intact · Originals are never overwritten',
-                                    xalign=0, wrap=True)
-            description.add_css_class('rename-description')
-            description.add_css_class('muted')
-            header.append(description)
-            outer.append(header)
+            outer = self.body
             self.fields = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
             self.fields.add_css_class('rename-fields')
             self.stack = Gtk.Stack()
+            self.stack.set_vhomogeneous(False)
             self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
             switcher = Gtk.StackSwitcher(stack=self.stack, halign=Gtk.Align.START)
             self.fields.append(switcher)
@@ -168,7 +156,7 @@ def _dialog_class():
             self.pattern = Gtk.Entry(text='{name}_{n}', hexpand=True)
             self.pattern.set_placeholder_text('Project_{n}')
             self.pattern.set_tooltip_text('Example: Project_{n} → Project_001.jpg')
-            pattern_box.append(self.pattern)
+            pattern_box.append(entry_field('Naming pattern', self.pattern))
             hint = Gtk.Label(label='{name} Original name    {n} Sequence    {date} Modified date', xalign=0, wrap=True)
             hint.add_css_class('muted')
             pattern_box.append(hint)
@@ -187,8 +175,8 @@ def _dialog_class():
             replace_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             self.find = Gtk.Entry(placeholder_text='Find in original names', hexpand=True)
             self.replace = Gtk.Entry(placeholder_text='Replace with (leave empty to remove)', hexpand=True)
-            replace_box.append(self.find)
-            replace_box.append(self.replace)
+            replace_box.append(entry_field('Find', self.find))
+            replace_box.append(entry_field('Replace with', self.replace))
             note = Gtk.Label(label='Matches exact text, including capitalization. File extensions are excluded.',
                              xalign=0, wrap=True)
             note.add_css_class('muted')
@@ -201,8 +189,8 @@ def _dialog_class():
             preview.add_css_class('rename-preview')
             heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
             heading.add_css_class('rename-preview-heading')
-            heading.append(Gtk.Label(label='BEFORE', xalign=0))
-            heading.append(Gtk.Label(label='AFTER', xalign=0))
+            heading.append(Gtk.Label(label='CURRENT NAME', xalign=0))
+            heading.append(Gtk.Label(label='NEW NAME', xalign=0))
             preview.append(heading)
             self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
             scroller = Gtk.ScrolledWindow(vexpand=True)
@@ -214,26 +202,16 @@ def _dialog_class():
             self.status = Gtk.Label(xalign=0, wrap=True, max_width_chars=65)
             self.status.add_css_class('rename-status')
             outer.append(self.status)
-            footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.END)
-            footer.add_css_class('rename-footer')
-            self.cancel_button = Gtk.Button(label='Cancel')
-            self.cancel_button.add_css_class('secondary-action')
-            self.cancel_button.connect('clicked', lambda *_: self._close())
-            self.apply_button = Gtk.Button(label=f'Rename {len(paths)} items')
-            self.apply_button.add_css_class('suggested-action')
-            self.apply_button.connect('clicked', lambda *_: self._apply())
-            footer.append(self.cancel_button)
-            footer.append(self.apply_button)
-            outer.append(footer)
+            self.cancel_button = self.add_action('Cancel', Gtk.ResponseType.CANCEL)
+            self.apply_button = self.add_action(f'Rename {len(paths)} items', Gtk.ResponseType.ACCEPT,
+                                                role='suggested-action', default=True)
+            self.connect('response', lambda _d, code: self._apply() if code == Gtk.ResponseType.ACCEPT else self._close())
             for entry in (self.pattern, self.find, self.replace):
+                entry.set_activates_default(True)
                 entry.connect('changed', lambda *_: self._update())
             for spin in (self.start, self.padding):
                 spin.connect('value-changed', lambda *_: self._update())
             self.stack.connect('notify::visible-child-name', lambda *_: self._update())
-            self.connect('close-request', lambda *_: self._close() or True)
-            keys = Gtk.EventControllerKey()
-            keys.connect('key-pressed', lambda _c, key, *_: self._close() or True if key == Gdk.KEY_Escape else False)
-            self.add_controller(keys)
             self._update()
 
         def _options(self):

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import stat as stat_module
 import threading
 from datetime import datetime
 from pathlib import Path
 
 from gi.repository import Gdk, Gio, GLib, Gtk
+
+from .dialogs import PickerDialog, confirmation, detail_card, entry_field, file_summary, path_list, section
 
 from .file_actions import parse_file_clipboard, remove_items, rename_item, transfer_items
 from .transfer_ui import TransferUI
@@ -125,18 +128,18 @@ class FileManagement(TransferUI):
             if child: self.flow.select_child(child)
 
     def _show_rename_dialog(self, path):
-        dialog = Gtk.Dialog(title='Rename', transient_for=self, modal=True)
-        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
-        dialog.add_button('Rename', Gtk.ResponseType.ACCEPT)
-        dialog.set_default_response(Gtk.ResponseType.ACCEPT)
-        box = dialog.get_content_area()
-        for edge in ('top', 'bottom', 'start', 'end'): getattr(box, 'set_margin_' + edge)(18)
-        box.set_spacing(8)
-        entry = Gtk.Entry(text=path.name, activates_default=True, width_chars=38)
-        error_label = Gtk.Label(xalign=0, wrap=True)
-        error_label.add_css_class('error')
-        box.append(entry)
-        box.append(error_label)
+        dialog = PickerDialog(self, 'Rename', subtitle='Choose a new name for this item.')
+        dialog.body.append(file_summary(path))
+        entry = Gtk.Entry(text=path.name, activates_default=True)
+        hint = f'Keep {path.suffix} to preserve the file type.' if path.is_file() and path.suffix else ''
+        dialog.body.append(entry_field('New name', entry, hint))
+        dialog.add_action('Cancel', Gtk.ResponseType.CANCEL)
+        rename = dialog.add_action('Rename', Gtk.ResponseType.ACCEPT, role='suggested-action', default=True)
+        rename.set_sensitive(False)
+        def changed(*_):
+            dialog.clear_error()
+            rename.set_sensitive(bool(entry.get_text().strip()) and entry.get_text().strip() != path.name)
+        entry.connect('changed', changed)
         def response(_dialog, code):
             if code != Gtk.ResponseType.ACCEPT:
                 self._dismiss_dialog(dialog)
@@ -144,7 +147,16 @@ class FileManagement(TransferUI):
             try:
                 target = rename_item(path, entry.get_text())
             except (ValueError, OSError, GLib.Error) as error:
-                error_label.set_text(str(error))
+                message = str(error)
+                if isinstance(error, GLib.Error):
+                    message = error.message
+                    if error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.EXISTS):
+                        message = f'An item named “{entry.get_text().strip()}” already exists in this folder.'
+                    elif error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.PERMISSION_DENIED):
+                        message = 'You don’t have permission to rename this item.'
+                    elif error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_FOUND):
+                        message = 'This item is no longer in this folder.'
+                dialog.set_error(message, entry)
                 return
             self._dismiss_dialog(dialog)
             migrate = getattr(self, '_creative_paths_renamed', None)
@@ -155,6 +167,7 @@ class FileManagement(TransferUI):
         dialog.present()
         entry.grab_focus()
         entry.select_region(0, len(path.stem) if path.is_file() else -1)
+        return dialog
 
     def _show_batch_rename_dialog(self, paths):
         if not paths or self.file_job_active:
@@ -168,19 +181,10 @@ class FileManagement(TransferUI):
     def _confirm_remove(self, paths, permanent=False):
         if not paths: return
         action = 'Delete permanently' if permanent else 'Move to Trash'
-        names = '\n'.join(p.name for p in paths[:6])
-        if len(paths) > 6: names += f'\n…and {len(paths) - 6} more'
         detail = ('This cannot be undone.' if permanent else 'You can restore these items from Trash.')
-        dialog = Gtk.AlertDialog(message=f'{action}?', detail=f'{names}\n\n{detail}')
-        dialog.set_buttons(['Cancel', action])
-        dialog.set_cancel_button(0)
-        dialog.set_default_button(0)
-        def chosen(alert, result):
-            try:
-                if alert.choose_finish(result) == 1:
-                    self._run_file_job(action, lambda: remove_items(paths, permanent))
-            except GLib.Error: pass
-        dialog.choose(self, None, chosen)
+        return confirmation(self, f'{action}?', detail, action, paths,
+                            lambda: self._run_file_job(action, lambda: remove_items(paths, permanent)),
+                            destructive=permanent)
 
     def _copy_location(self, paths):
         self.get_clipboard().set('\n'.join(str(p.absolute()) for p in paths))
@@ -270,35 +274,63 @@ class FileManagement(TransferUI):
 
     def _show_properties(self, paths):
         if not paths: return
-        rows = [('Name', paths[0].name), ('Location', str(paths[0].parent))]
+        if len(paths) == 1:
+            try:
+                stat = paths[0].lstat()
+                link_target = os.readlink(paths[0]) if paths[0].is_symlink() else None
+            except OSError as error:
+                self._show_error('Could not read properties', str(error))
+                return
+        dialog = PickerDialog(self, 'Properties', width=560)
+        general, access = [], []
         if len(paths) == 1:
             p = paths[0]
-            try:
-                stat = p.lstat()
-                rows.extend([('Type', 'Symbolic link' if p.is_symlink() else file_type(p)),
-                    ('Size', format_size(stat.st_size)),
-                    ('Modified', datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')),
-                    ('Permissions', oct(stat.st_mode & 0o777)),
-                    ('Readable / writable', f'{os.access(p, os.R_OK)} / {os.access(p, os.W_OK)}')])
-                if p.is_symlink(): rows.append(('Target', os.readlink(p)))
-            except OSError as error:
-                self._show_error('Could not read properties', str(error)); return
+            kind = 'Symbolic link' if p.is_symlink() else file_type(p)
+            dialog.body.append(file_summary(p, detail=kind))
+            general.append(('Location', str(p.parent)))
+            if not stat_module.S_ISDIR(stat.st_mode):
+                size = format_size(stat.st_size)
+                if stat.st_size >= 1024: size += f'  ·  {stat.st_size:,} bytes'
+                general.append(('Size', size))
+            general.append(('Modified', datetime.fromtimestamp(stat.st_mtime).strftime('%b %-d, %Y at %-I:%M %p')))
+            readable, writable = os.access(p, os.R_OK), os.access(p, os.W_OK)
+            access_text = ('Read and write' if readable and writable else 'Read only' if readable
+                           else 'Write only' if writable else 'No access')
+            access = [('Your access', access_text),
+                      ('Permissions', f'{stat_module.filemode(stat.st_mode)[1:]}  ·  {stat.st_mode & 0o7777:04o}')]
+            if link_target is not None: general.append(('Link target', link_target))
         else:
-            names = '\n'.join(p.name for p in paths[:20])
-            if len(paths) > 20:
-                names += f'\n…and {len(paths) - 20} more'
-            rows = [('Selection', f'{len(paths)} items'), ('Names', names)]
-        dialog = Gtk.Dialog(title='Properties', transient_for=self, modal=True)
-        dialog.add_button('Close', Gtk.ResponseType.CLOSE)
-        box = dialog.get_content_area()
-        for edge in ('top', 'bottom', 'start', 'end'): getattr(box, 'set_margin_' + edge)(18)
-        box.set_spacing(10)
-        for title, value in rows:
-            text = Gtk.Label(label=f'{title}\n{value}', xalign=0, selectable=True, wrap=True)
-            text.set_max_width_chars(65)
-            box.append(text)
-        dialog.connect('response', lambda *_: dialog.destroy())
+            from .selection_summary import selection_totals
+            folders, files, total, unavailable = selection_totals(paths)
+            parts = []
+            if folders: parts.append(f'{folders:,} ' + ('folder' if folders == 1 else 'folders'))
+            if files: parts.append(f'{files:,} ' + ('file' if files == 1 else 'files'))
+            dialog.body.append(file_summary(title=f'{len(paths):,} items selected', detail=' · '.join(parts)))
+            parents = {str(p.parent) for p in paths}
+            general = [('Location', next(iter(parents)) if len(parents) == 1 else 'Multiple locations')]
+            if files:
+                size = 'Unavailable' if unavailable == files else format_size(total) + (' known' if unavailable else '')
+                if folders: size += ' · Folder contents excluded'
+                if unavailable: size += f' · {unavailable:,} unavailable'
+                general.append(('Combined size', size))
+        dialog.body.append(section('GENERAL', detail_card(general)))
+        if access:
+            dialog.body.append(section('ACCESS', detail_card(access)))
+        if len(paths) > 1:
+            dialog.body.append(section('SELECTED ITEMS', path_list(paths)))
+        dialog.scroll_body()
+        copy = dialog.add_action('Copy location' if len(paths) == 1 else 'Copy locations', Gtk.ResponseType.APPLY)
+        close = dialog.add_action('Done', Gtk.ResponseType.CLOSE, role='suggested-action', default=True)
+        def response(_dialog, code):
+            if code == Gtk.ResponseType.APPLY:
+                self._copy_location(paths)
+                copy.set_label('Copied')
+            else:
+                self._dismiss_dialog(dialog)
+        dialog.connect('response', response)
         dialog.present()
+        close.grab_focus()
+        return dialog
 
     def _append_common_context(self, menu, paths, *, background, qa):
         def action(text, callback, icon, enabled=True, detail=''):

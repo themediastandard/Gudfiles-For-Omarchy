@@ -16,7 +16,7 @@ class NetworkBrowser(Gtk.Box):
         self.alive = True
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         title = Gtk.Label(label='Discovered on your network', xalign=0, hexpand=True)
-        title.add_css_class('metadata-title')
+        title.add_css_class('network-heading')
         row.append(title)
         self.refresh = Gtk.Button.new_from_icon_name('view-refresh-symbolic')
         self.refresh.add_css_class('flat')

@@ -7,6 +7,17 @@ as the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Shared native dialog design for Rename, Properties, New Folder, Batch Rename,
+  NAS, errors, Trash/Delete and Save replacement: draggable in-window headings,
+  consistent file cards, labeled fields, inline errors and a fixed action footer.
+  Accent/destructive buttons choose legible dark or light text from the palette.
+- Properties uses aligned, selectable detail rows, human-readable access,
+  symbolic/octal permissions and Copy Location. Multiple selections show combined
+  file size with explicit exclusions/unavailable entries and a bounded item list.
+  Long paths scroll within the body; directory-entry bytes are not shown as
+  folder-content size. Rename selects the stem and reports collisions inline.
+  Destructive and replacement confirmations default to Cancel; Enter activates
+  ready form actions and Escape/titlebar close share the cancellation path.
 - Native GTK 4 picker with grid, list and Finder-style column layouts, selected
   through a compact three-button toolbar group or the View context submenu.
 - Column view opens a selected folder into an adjacent column, retains the
@@ -134,6 +145,8 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/transfer_ui.py` — native transfer window, progress/actions,
   ordered move receipts, clipboard ownership and Files/picker close guard.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
+- `omarchy_file_picker/dialogs.py` — shared dialog shell, fields, file summaries,
+  detail cards, bounded lists and explicit confirmation actions.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
 - `omarchy_file_picker/image_preview.py` — clipped image zoom and pan controllers.
 - `omarchy_file_picker/hover_scrub.py` — bounded silent thumbnail extraction/cache.
@@ -153,6 +166,7 @@ as the desktop's XDG FileChooser portal backend.
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
@@ -287,6 +301,12 @@ gdbus introspect --session \
   surface visible for capture. Screenshots are separate from behavior QA.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
+- Dialog QA exercises light/active palettes, bounded long paths and names,
+  zero-size files, folders, broken symlinks, mixed totals, collision recovery,
+  Return/Escape, titlebar close, confirmed fixture deletion and Save replacement
+  result semantics. `DIALOG_QA_SCREENSHOTS=/tmp/dialogs` saves native captures.
+  To exercise Return, emit `activate` on the entry's native Gtk.Text child;
+  emitting only Gtk.Entry's forwarding signal does not run the default action.
 - Selection smoke tests exercise GTK's native range/toggle action signals in
   all three views, not injected mouse events; reuse native FlowBox pointer handling.
 - Selection-summary QA checks folder/file/mixed stacks and counts, group labels,

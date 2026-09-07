@@ -36,6 +36,7 @@ from .model import PickerRequest, file_type, format_size, list_directory, recent
 from .theme import build_css, load_colors
 from .file_management import FileManagement, SIDEBAR_MIN_WIDTH
 from .file_actions import create_untitled_text, sort_entries
+from .dialogs import PickerDialog, confirmation, entry_field, file_summary, text_label
 from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
 from .network_ui import NetworkBrowser
@@ -1204,35 +1205,34 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             if child:
                 child.grab_focus()
             return
-        dialog = Gtk.Dialog(title="New Folder", transient_for=self, modal=True)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Create", Gtk.ResponseType.ACCEPT)
-        dialog.set_default_response(Gtk.ResponseType.ACCEPT)
-        content = dialog.get_content_area()
-        content.set_spacing(10)
-        content.set_margin_top(18)
-        content.set_margin_bottom(18)
-        content.set_margin_start(18)
-        content.set_margin_end(18)
-        content.append(label(f"Create in {self.current_dir}", "muted"))
+        directory = self.current_dir
+        dialog = PickerDialog(self, 'New Folder', subtitle='Create a folder in the current location.')
+        dialog.body.append(file_summary(directory, detail='Create inside this folder'))
         entry = Gtk.Entry(placeholder_text="Folder name")
         entry.set_activates_default(True)
-        content.append(entry)
+        dialog.body.append(entry_field('Folder name', entry))
+        dialog.add_action('Cancel', Gtk.ResponseType.CANCEL)
+        create = dialog.add_action('Create folder', Gtk.ResponseType.ACCEPT, role='suggested-action', default=True)
+        create.set_sensitive(False)
+        def changed(*_):
+            dialog.clear_error()
+            create.set_sensitive(bool(entry.get_text().strip()))
+        entry.connect('changed', changed)
 
         def on_response(_dialog: Gtk.Dialog, response: int) -> None:
             if response != Gtk.ResponseType.ACCEPT:
                 self._dismiss_dialog(dialog)
                 return
             name = entry.get_text().strip()
-            if not name or name in {".", ".."} or Path(name).name != name:
-                entry.add_css_class("error")
+            if not name or name in {".", ".."} or '/' in name or '\0' in name:
+                dialog.set_error('Enter a folder name without slashes.', entry)
                 return
-            destination = self.current_dir / name
+            destination = directory / name
             try:
                 destination.mkdir()
             except OSError as error:
-                entry.add_css_class("error")
-                entry.set_tooltip_text(str(error))
+                message = 'An item with this name already exists.' if isinstance(error, FileExistsError) else str(error)
+                dialog.set_error(message, entry)
                 return
             self._dismiss_dialog(dialog)
             self._load()
@@ -1244,6 +1244,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         dialog.connect("response", on_response)
         dialog.present()
         entry.grab_focus()
+        return dialog
 
     def _resize_image(self, path: Path, size: str) -> None:
         try:
@@ -1364,47 +1365,38 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                 pass
 
     def _show_error(self, message: str, detail: str) -> None:
-        alert = Gtk.AlertDialog(message=message, detail=detail)
-        alert.show(self)
+        dialog = PickerDialog(self, message, width=520)
+        detail_label = text_label(detail, 'error-detail', selectable=True)
+        card = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                  vscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
+                                  propagate_natural_height=True, max_content_height=240)
+        card.add_css_class('dialog-detail-card')
+        card.set_child(detail_label)
+        dialog.body.append(card)
+        done = dialog.add_action('Close', Gtk.ResponseType.CLOSE, role='suggested-action', default=True)
+        dialog.connect('response', lambda *_: self._dismiss_dialog(dialog))
+        dialog.present()
+        done.grab_focus()
+        return dialog
 
     def _show_nas_dialog(self, _button) -> None:
-        dialog = Gtk.Dialog(title="Connect to NAS", transient_for=self, modal=True)
-        dialog.add_css_class('picker-dialog')
-        dialog.set_default_size(540, -1)
-        header = Gtk.HeaderBar()
-        header.set_title_widget(label('Connect to NAS', 'metadata-title'))
-        dialog.set_titlebar(header)
-        content = dialog.get_content_area()
-        content.set_spacing(12)
-        for edge in ('top', 'bottom', 'start', 'end'):
-            getattr(content, 'set_margin_' + edge)(24)
-        description = label('Browse a shared folder on your network.', 'muted')
-        content.append(description)
+        dialog = PickerDialog(self, 'Connect to NAS', subtitle='Browse shared folders on your network.', width=560)
+        content = dialog.body
         entry = Gtk.Entry(placeholder_text="smb://server/share")
         discovery = NetworkBrowser(self, dialog, entry)
         content.append(discovery)
-        content.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        content.append(label('Server or share address', 'metadata-title'))
-        entry.set_width_chars(36)
         entry.set_activates_default(True)
-        content.append(entry)
-        content.append(label('SMB  smb://nas/media     ·     NFS  nfs://nas/archive', 'muted'))
-        error_label = Gtk.Label(xalign=0, wrap=True, max_width_chars=48)
-        error_label.add_css_class('error')
-        error_label.set_visible(False)
-        content.append(error_label)
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.END)
-        footer.set_margin_top(12)
-        cancel = Gtk.Button(label='Cancel')
-        cancel.add_css_class('secondary-action')
-        cancel.connect('clicked', lambda *_: dialog.response(Gtk.ResponseType.CANCEL))
-        connect = Gtk.Button(label='Connect')
-        connect.add_css_class('suggested-action')
-        connect.connect('clicked', lambda *_: dialog.response(Gtk.ResponseType.ACCEPT))
-        footer.append(cancel)
-        footer.append(connect)
-        content.append(footer)
-        dialog.set_default_widget(connect)
+        content.append(entry_field('Server or share address', entry,
+                                   'SMB  smb://nas/media     ·     NFS  nfs://nas/archive'))
+        error_label = dialog.error_label
+        cancel = dialog.add_action('Cancel', Gtk.ResponseType.CANCEL)
+        connect = dialog.add_action('Connect', Gtk.ResponseType.ACCEPT, role='suggested-action', default=True)
+        def changed(*_):
+            dialog.clear_error()
+            entry.remove_css_class('error')
+            connect.set_sensitive(bool(entry.get_text().strip()))
+        entry.connect('changed', changed)
+        connect.set_sensitive(False)
         mount_cancel = Gio.Cancellable()
         mounting = False
 
@@ -1473,9 +1465,9 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             )
 
         dialog.connect("response", on_response)
-        dialog.connect('close-request', lambda *_: on_response(dialog, Gtk.ResponseType.CANCEL) or True)
         dialog.present()
         entry.grab_focus()
+        return dialog
 
     def _open_mounted_location(self, uri: str) -> None:
         # Repair the local bridge off the GTK thread; a GFile path alone does
@@ -1532,11 +1524,9 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                 return
             path = self.current_dir / name
             if path.exists() and path.is_file():
-                dialog = Gtk.AlertDialog(message=f"Replace “{path.name}”?", detail="A file with this name already exists.")
-                dialog.set_buttons(["Cancel", "Replace"])
-                dialog.set_cancel_button(0)
-                dialog.set_default_button(1)
-                dialog.choose(self, None, lambda alert, result: self._replace_chosen(alert, result, path))
+                confirmation(self, 'Replace existing file?',
+                             'Saving will replace this file’s current contents.', 'Replace', [path],
+                             lambda: self._finish(paths=[path]), destructive=True)
                 return
             self._finish(paths=[path])
             return
@@ -1547,13 +1537,6 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         paths = [path for path in selected if path.is_file()]
         if paths:
             self._finish(paths=paths)
-
-    def _replace_chosen(self, dialog: Gtk.AlertDialog, result, path: Path) -> None:
-        try:
-            if dialog.choose_finish(result) == 1:
-                self._finish(paths=[path])
-        except GLib.Error:
-            pass
 
     def _choice_results(self) -> dict[str, str]:
         results = {}

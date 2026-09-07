@@ -116,7 +116,7 @@ def moved():
     assert w.context_popover.get_parent() is w.browser_stack
     w._refresh_files()
     w._show_properties([dest/'b.txt'])
-    d=dialog('Properties'); assert 'Size\n9 B' in labels(d),labels(d); d.response(Gtk.ResponseType.CLOSE)
+    d=dialog('Properties'); assert 'Size' in labels(d) and '9 B' in labels(d),labels(d); d.response(Gtk.ResponseType.CLOSE)
     w.flow.grab_focus()
     w._on_key_pressed(None, Gdk.KEY_F2, 0, Gdk.ModifierType(0))
     dialog('Rename').response(Gtk.ResponseType.CANCEL)

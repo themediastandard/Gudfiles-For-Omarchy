@@ -86,7 +86,8 @@ with tempfile.TemporaryDirectory() as directory:
             Gtk.WidgetPaintable.new(dialog).snapshot(snapshot, dialog.get_width(), dialog.get_height())
             texture = dialog.get_renderer().render_texture(snapshot.to_node(), None)
             texture.save_to_png(screenshot)
-        dialog._apply()
+        dialog.pattern.get_first_child().emit('activate')
+        settle(.3)
         deadline = time.monotonic() + 6
         while dialog.active and time.monotonic() < deadline:
             settle(0.05)

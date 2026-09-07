@@ -152,27 +152,6 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['background']}; color: {colors['foreground']}; font-family: monospace;
     }}
     .quicklook-caption {{ color: {colors['light_foreground']}; font-size: 12px; padding: 10px 16px; }}
-    .picker-dialog button.secondary-action {{
-      background: {colors['dark_background']};
-      color: {colors['foreground']};
-      border: 1px solid {colors['darker_background']};
-      background-image: none;
-      text-shadow: none;
-    }}
-    .picker-dialog button.secondary-action:hover {{ background: {colors['lighter_background']}; }}
-    .picker-dialog button.secondary-action, .picker-dialog button.suggested-action {{
-      min-width: 88px; min-height: 36px; padding: 2px 14px; border-radius: 6px;
-      box-shadow: none;
-    }}
-    .picker-dialog button.suggested-action {{ background-image: none; text-shadow: none; }}
-    .picker-dialog entry {{ padding: 3px 10px; }}
-    .picker-dialog button.network-location {{
-      background: {colors['dark_background']}; color: {colors['foreground']};
-      background-image: none; border: 1px solid {colors['darker_background']};
-      border-radius: 6px; padding: 10px 12px; text-shadow: none; box-shadow: none;
-    }}
-    .picker-dialog button.network-location:hover {{ background: {colors['lighter_background']}; }}
-    .picker-dialog button.flat {{ background: transparent; background-image: none; border: 0; }}
     button {{
       color: {colors['foreground']};
       border-radius: 7px;
@@ -376,31 +355,124 @@ def build_css(colors: dict[str, str]) -> str:
     .media-details-button > button:hover {{ background: {colors['lighter_background']}; }}
     .media-details-key {{ color: {colors['light_foreground']}; font-size: 12px; }}
     .media-details-value {{ color: {colors['foreground']}; font-size: 12px; }}
-    .rename-header {{ padding: 0; }}
-    .rename-description {{ color: {colors['light_foreground']}; font-size: 12px; }}
-    .rename-fields {{ padding: 0; }}
-    .rename-preview {{ background: {colors['dark_background']}; border-radius: 8px; }}
-    .rename-preview-heading {{ font-size: 11px; font-weight: 600; color: {colors['light_foreground']}; padding: 8px 12px; }}
-    .rename-preview-row {{ padding: 8px 12px; border-bottom: 1px solid alpha({colors['foreground']}, 0.07); }}
-    .rename-before {{ color: {colors['light_foreground']}; font-size: 12px; }}
-    .rename-after {{ color: {colors['foreground']}; font-size: 12px; }}
-    .rename-status {{ color: {colors['light_foreground']}; font-size: 12px; }}
-    .rename-footer {{ padding-top: 14px; border-top: 1px solid {colors['darker_background']}; }}
-    .batch-rename-dialog .linked button {{
-      background: {colors['background']}; color: {colors['foreground']};
-      background-image: none; box-shadow: none; text-shadow: none; border-color: {colors['darker_background']};
-    }}
-    .batch-rename-dialog .linked button:checked {{ background: {colors['selection']}; color: {colors['accent']}; }}
-    .batch-rename-dialog spinbutton {{
-      background: {colors['background']}; color: {colors['foreground']};
-      border: 1px solid {colors['darker_background']}; border-radius: 6px; box-shadow: none;
-    }}
-    .batch-rename-dialog spinbutton text {{ background: transparent; color: {colors['foreground']}; padding: 4px 8px; }}
-    .batch-rename-dialog spinbutton button {{
-      background: transparent; background-image: none; color: {colors['foreground']};
-      border: 0; border-left: 1px solid {colors['darker_background']}; min-width: 24px; min-height: 28px;
-    }}
-    .batch-rename-dialog spinbutton button:hover {{ background: {colors['lighter_background']}; }}
     .error {{ color: {colors['red']}; }}
     separator {{ background: {colors['darker_background']}; }}
+    """ + dialog_css(colors)
+
+
+def button_foreground(color):
+    """Use dark ink on pastel accents and white ink on deeper accents."""
+    try:
+        rgb = [int(color.lstrip('#')[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
+        luminance = sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+        return '#111318' if luminance > 0.179 else '#ffffff'
+    except (ValueError, TypeError):
+        return '#ffffff'
+
+
+def dialog_css(c):
+    muted = c['light_foreground'] if c.get('mode') == 'light' else f"alpha({c['foreground']}, 0.85)"
+    return f"""
+    window.picker-dialog {{ border-radius: 14px; }}
+    .picker-dialog .dialog-heading {{ padding: 24px 24px 12px; }}
+    .picker-dialog .dialog-title {{ color: {c['bright_foreground']}; font-size: 22px; font-weight: 700; }}
+    .picker-dialog .dialog-description {{ color: {muted}; font-size: 12px; }}
+    .picker-dialog .dialog-body {{ padding: 10px 24px 24px; }}
+    .picker-dialog .dialog-footer {{
+      padding: 16px 24px; border-top: 1px solid alpha({c['foreground']}, 0.10);
+      background: alpha({c['foreground']}, 0.025);
+    }}
+    .picker-dialog button {{ background-image: none; text-shadow: none; box-shadow: none; }}
+    .picker-dialog button.flat {{ background: transparent; border: 0; }}
+    .picker-dialog button.dialog-close {{
+      background: transparent; border: 0; min-width: 28px; min-height: 28px;
+      padding: 3px; margin: -3px -5px 0 0; color: alpha({c['foreground']}, 0.7);
+      border-radius: 7px;
+    }}
+    .picker-dialog button.dialog-close:hover {{ background: alpha({c['foreground']}, 0.09); color: {c['foreground']}; }}
+    .picker-dialog button.secondary-action, .picker-dialog button.suggested-action,
+    .picker-dialog button.destructive-action {{
+      min-width: 82px; min-height: 36px; padding: 2px 16px; border-radius: 8px;
+      font-weight: 600;
+    }}
+    .picker-dialog button.secondary-action {{
+      background: alpha({c['foreground']}, 0.04); color: {c['foreground']};
+      border: 1px solid alpha({c['foreground']}, 0.16);
+    }}
+    .picker-dialog button.secondary-action:hover {{ background: alpha({c['foreground']}, 0.10); }}
+    .picker-dialog button.suggested-action {{
+      background: {c['accent']}; color: {button_foreground(c['accent'])}; border: 1px solid transparent;
+    }}
+    .picker-dialog button.suggested-action:hover {{ background: shade({c['accent']}, 1.08); }}
+    .picker-dialog button.destructive-action {{
+      background: {c['red']}; color: {button_foreground(c['red'])}; border: 1px solid transparent;
+    }}
+    .picker-dialog button.destructive-action:hover {{ background: shade({c['red']}, 1.08); }}
+    .picker-dialog button:disabled {{ opacity: 0.45; }}
+    .picker-dialog button:focus-visible {{ outline: 2px solid {c['accent']}; outline-offset: 3px; }}
+    .picker-dialog entry {{
+      background: {c['dark_background']}; color: {c['foreground']};
+      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 8px;
+      min-height: 42px; padding: 2px 12px; caret-color: {c['accent']};
+    }}
+    .picker-dialog entry:focus-within {{ border-color: {c['accent']}; box-shadow: 0 0 0 2px alpha({c['accent']}, 0.14); }}
+    .picker-dialog entry.error {{ border-color: {c['red']}; }}
+    .picker-dialog entry selection {{ background: alpha({c['accent']}, 0.3); color: {c['bright_foreground']}; }}
+    .picker-dialog .dialog-field-label {{ font-size: 13px; font-weight: 600; color: {c['foreground']}; }}
+    .picker-dialog .dialog-file-summary {{
+      background: alpha({c['foreground']}, 0.035); border: 1px solid alpha({c['foreground']}, 0.10);
+      border-radius: 10px; padding: 16px;
+    }}
+    .picker-dialog .dialog-file-icon {{
+      background: alpha({c['accent']}, 0.12); color: {c['accent']}; border-radius: 10px; padding: 12px;
+    }}
+    .picker-dialog .dialog-file-name {{ color: {c['bright_foreground']}; font-size: 15px; font-weight: 600; }}
+    .picker-dialog .dialog-section-title {{ color: {muted}; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }}
+    .picker-dialog .dialog-detail-card {{
+      border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 10px;
+      background: alpha({c['foreground']}, 0.025);
+    }}
+    .picker-dialog .dialog-detail-row {{ padding: 12px 14px; }}
+    .picker-dialog .dialog-detail-row.divided {{ border-top: 1px solid alpha({c['foreground']}, 0.08); }}
+    .picker-dialog .dialog-detail-key {{ color: {muted}; font-size: 12px; }}
+    .picker-dialog .dialog-detail-value {{ color: {c['foreground']}; font-size: 13px; }}
+    .picker-dialog .dialog-path-row {{ padding: 10px 14px; }}
+    .picker-dialog .dialog-path-row image {{ color: {c['accent']}; }}
+    .picker-dialog .dialog-path-row label {{ font-size: 13px; }}
+    .picker-dialog .dialog-error {{
+      margin: 0 24px 18px; padding: 10px 12px; border-radius: 8px;
+      color: {c['red']}; background: alpha({c['red']}, 0.08); font-size: 12px;
+    }}
+    .picker-dialog .error-detail {{ padding: 14px; font-size: 13px; }}
+    .picker-dialog .rename-preview {{
+      background: alpha({c['foreground']}, 0.025); border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 10px;
+    }}
+    .picker-dialog .rename-preview-heading {{ padding: 10px 14px; border-bottom: 1px solid alpha({c['foreground']}, 0.10); }}
+    .picker-dialog .rename-preview-heading label {{ color: {muted}; font-size: 11px; font-weight: 600; }}
+    .picker-dialog .rename-preview-row {{ padding: 10px 14px; border-bottom: 1px solid alpha({c['foreground']}, 0.07); }}
+    .picker-dialog .rename-before {{ color: {muted}; font-size: 12px; }}
+    .picker-dialog .rename-after {{ color: {c['accent']}; font-size: 12px; }}
+    .picker-dialog .rename-status {{ color: {muted}; font-size: 12px; }}
+    .picker-dialog .rename-status.error {{ color: {c['red']}; }}
+    .picker-dialog .linked {{ background: alpha({c['foreground']}, 0.05); border-radius: 8px; padding: 3px; }}
+    .picker-dialog .linked button {{ border: 0; background: transparent; border-radius: 6px; padding: 3px 14px; }}
+    .picker-dialog .linked button:checked {{ background: alpha({c['accent']}, 0.15); color: {c['accent']}; }}
+    .picker-dialog spinbutton {{
+      background: {c['dark_background']}; color: {c['foreground']};
+      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 7px; box-shadow: none;
+    }}
+    .picker-dialog spinbutton text {{ background: transparent; color: {c['foreground']}; padding: 4px 8px; }}
+    .picker-dialog spinbutton button {{
+      background: transparent; color: {c['foreground']}; border: 0;
+      border-left: 1px solid alpha({c['foreground']}, 0.12); min-width: 24px; min-height: 28px;
+    }}
+    .picker-dialog spinbutton button:hover {{ background: alpha({c['foreground']}, 0.08); }}
+    .picker-dialog button.network-location {{
+      background: alpha({c['foreground']}, 0.035); border: 1px solid alpha({c['foreground']}, 0.12);
+      border-radius: 9px; padding: 12px 14px;
+    }}
+    .picker-dialog button.network-location:hover {{ background: alpha({c['accent']}, 0.09); border-color: alpha({c['accent']}, 0.30); }}
+    .picker-dialog .network-locations .muted, .picker-dialog .muted {{ color: {muted}; }}
+    .picker-dialog .network-heading {{ font-size: 13px; font-weight: 600; }}
     """
