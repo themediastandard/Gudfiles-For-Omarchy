@@ -19,7 +19,8 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 - Stars, color labels and rejects with compact controls, thumbnail badges and filters
 - Preview-first batch rename with naming patterns, numbering and find/replace
 - Pinned folders, recent files, and mounted volumes
-- Drag the divider beside the sidebar to resize it; its width is remembered
+- Drag the divider beside the sidebar to resize it; width is remembered, with
+  a 280-pixel minimum and a 300-pixel default
 - Compact, icon-led right-click menu with grouped media submenus
 - Right-click creation of folders and text files
 - New Text File immediately creates `untitled.txt`, then `untitled (1).txt`, etc.,
@@ -33,6 +34,9 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 - Video conversion to MP4, WebM, MOV, and GIF
 - SMB and NFS NAS mounting with native credential prompts
 - Search, breadcrumb navigation, typed paths, and history
+- Connected chevron breadcrumbs; scroll the wheel over them to move along the path
+- Eye toggle for hidden files and removable active-filter chips below the toolbar
+- No full-path hover tooltips on file rows or breadcrumbs
 - Open, multi-open, select-folder, Save, and SaveFiles flows
 - Portal file filters and caller-supplied choices
 - `Ctrl+F`, `Ctrl+L`, `Ctrl+H`, `Alt+Left`, `Alt+Right`, and `Escape`
@@ -125,6 +129,10 @@ and do not delete or alter media. The toolbar star opens rating/color filters;
 folders remain visible for navigation. When culling a filtered selection in
 Quick Look, a file that stops matching advances to a remaining neighbor, or
 closes the preview when no matching files remain.
+Active search, file-type, rating, color and hidden-file settings are shown below
+the toolbar. Click a chip to remove just that setting, or **Clear all** to reset
+them. The row disappears when no filters are active. The eye button shows whether
+hidden files are visible; `Ctrl+H` toggles the same state.
 
 Annotations are local to this app in
 `~/.local/share/omarchy-file-picker/ratings.sqlite3`, not embedded metadata or

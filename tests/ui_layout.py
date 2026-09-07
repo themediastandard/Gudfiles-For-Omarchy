@@ -57,6 +57,10 @@ with tempfile.TemporaryDirectory(prefix='picker-layout-') as temp:
         clients = json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
         client = next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker')
         selector = json.dumps('address:' + client['address'])
+        if not client['floating']:
+            subprocess.run(['hyprctl', 'dispatch',
+                            'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True)
+            settle()
         subprocess.run(['hyprctl', 'dispatch',
                         'hl.dsp.window.resize({x=1040,y=680,relative=false,window=' + selector + '})'], check=True)
         settle()

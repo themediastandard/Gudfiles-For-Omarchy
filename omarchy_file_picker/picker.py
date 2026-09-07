@@ -34,7 +34,7 @@ from .actions import (
 )
 from .model import PickerRequest, file_type, format_size, list_directory, recent_files, safe_uri
 from .theme import build_css, load_colors
-from .file_management import FileManagement
+from .file_management import FileManagement, SIDEBAR_MIN_WIDTH
 from .file_actions import create_untitled_text, sort_entries
 from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
@@ -43,6 +43,7 @@ from .network import NetworkLocation, safe_network_uri, mounted_local_path
 from .creative import CreativeTools
 from .hover_scrub import HoverScrub
 from .media_details import MediaDetailsService, make_details_widget
+from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -185,6 +186,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
     def _install_theme(self) -> None:
         colors = load_colors()
+        self.colors = colors
         provider = Gtk.CssProvider()
         provider.load_from_string(build_css(colors))
         Gtk.StyleContext.add_provider_for_display(
@@ -231,8 +233,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.sidebar.add_css_class("sidebar")
         sidebar_scroll = Gtk.ScrolledWindow()
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        sidebar_scroll.set_min_content_width(160)
-        sidebar_scroll.set_size_request(160, -1)
+        sidebar_scroll.set_min_content_width(SIDEBAR_MIN_WIDTH)
+        sidebar_scroll.set_size_request(SIDEBAR_MIN_WIDTH, -1)
         sidebar_scroll.set_child(self.sidebar)
         body.set_start_child(sidebar_scroll)
         self._build_sidebar()
@@ -248,6 +250,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.toolbar.add_css_class("toolbar")
         browser.append(self.toolbar)
         self._build_toolbar()
+        browser.append(self._build_active_filters())
 
         self.browser_stack = Gtk.Stack()
         self.browser_stack.set_vexpand(True)
@@ -323,7 +326,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         if self.sidebar_save_timer:
             GLib.source_remove(self.sidebar_save_timer)
             self.sidebar_save_timer = 0
-        width = max(160, self.sidebar_split.get_position())
+        width = max(SIDEBAR_MIN_WIDTH, self.sidebar_split.get_position())
         if width != self.file_preferences['sidebar_width']:
             self._set_file_preference('sidebar_width', width, reload=False)
         return False
@@ -423,8 +426,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
         self.path_stack = Gtk.Stack()
         self.path_stack.set_hexpand(True)
-        self.path_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=1)
-        self.path_box.set_hexpand(True)
+        self.path_box = BreadcrumbTrail()
         # Keep all ancestors reachable without growing the window's minimum
         # width every time the user enters another folder.
         self.path_scroll = Gtk.ScrolledWindow()
@@ -433,6 +435,11 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.path_scroll.set_propagate_natural_width(False)
         self.path_scroll.set_child(self.path_box)
         self.path_scroll.get_hadjustment().connect('changed', self._scroll_path_to_current)
+        self.path_wheel = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.BOTH_AXES)
+        self.path_wheel.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self.path_wheel.connect('scroll', lambda controller, dx, dy:
+                                scroll_breadcrumbs(controller, dx, dy, self.path_scroll.get_hadjustment()))
+        self.path_scroll.add_controller(self.path_wheel)
         self.path_stack.add_named(self.path_scroll, "crumbs")
         self.path_entry = Gtk.Entry()
         self.path_entry.connect("activate", self._on_path_activate)
@@ -445,11 +452,12 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
         self.search = Gtk.SearchEntry(placeholder_text="Search this folder")
         self.search.set_size_request(240, -1)
-        self.search.connect("search-changed", lambda _entry: self._load())
+        self.search.connect("search-changed", lambda _entry: self._refresh_files())
         self.toolbar.append(self.search)
         self.toolbar.append(self._creative_filter_button())
 
-        self.hidden_button = self._icon_button("view-more-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
+        self.hidden_button = self._icon_button("view-conceal-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
+        self.hidden_button.add_css_class('hidden-toggle')
         self.toolbar.append(self.hidden_button)
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
@@ -492,7 +500,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             self.filter_combo.append_text(file_filter.name)
         requested = min(self.request.current_filter + 1, len(self.request.filters)) if self.request.filters else 0
         self.filter_combo.set_active(requested)
-        self.filter_combo.connect("changed", lambda _combo: self._load())
+        self.filter_combo.connect("changed", lambda _combo: self._refresh_files())
         self.filter_combo.set_size_request(210, -1)
         row.append(self.filter_combo)
 
@@ -653,6 +661,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         return None
 
     def _load(self) -> None:
+        self._update_active_filters()
         query = self.search.get_text() if hasattr(self, "search") else ""
         if self.special_mode == "recent":
             entries = recent_files()
@@ -690,7 +699,6 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         for path in self.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = path  # type: ignore[attr-defined]
-            child.set_tooltip_text(str(path))
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
             self.flow.append(child)
             self.children_by_path[path] = child
@@ -780,8 +788,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         while child := self.path_box.get_first_child():
             self.path_box.remove(child)
         if self.special_mode == "recent":
-            button = Gtk.Button(label="Recent")
-            button.add_css_class("path-segment")
+            button = BreadcrumbButton('Recent', self.colors, first=True, current=True)
             self.path_box.append(button)
             return
         path = self.current_dir.resolve()
@@ -789,24 +796,18 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         if path == home or home in path.parents:
             current = home
             parts = path.relative_to(home).parts
-            root = Gtk.Button(label="Home")
-            root.add_css_class("path-segment")
+            root = BreadcrumbButton('Home', self.colors, first=True, current=not parts)
             root.connect("clicked", lambda _b: self.navigate(home))
             self.path_box.append(root)
         else:
             parts = path.parts[1:]
             current = Path("/")
-            root = Gtk.Button(label="/")
-            root.add_css_class("path-segment")
+            root = BreadcrumbButton('/', self.colors, first=True, current=not parts)
             root.connect("clicked", lambda _b: self.navigate(Path("/")))
             self.path_box.append(root)
         for part in parts:
             current = current / part
-            button = Gtk.Button(label=part)
-            button.add_css_class("path-segment")
-            button.get_child().set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-            button.get_child().set_max_width_chars(24)
-            button.set_tooltip_text(str(current))
+            button = BreadcrumbButton(part, self.colors, current=current == path)
             button.connect("clicked", lambda _b, p=current: self.navigate(p))
             self.path_box.append(button)
         self.path_entry.set_text(str(path))
@@ -841,7 +842,6 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             detail_label = label(detail, "muted")
             detail_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             detail_label.set_max_width_chars(36)
-            detail_label.set_tooltip_text(detail)
             primary.append(detail_label)
         paths = self._selected_paths() or [path]
         primary.append(self._rating_controls(paths))
@@ -1601,11 +1601,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
     def _toggle_hidden(self, _button) -> None:
         self.show_hidden = not self.show_hidden
-        if self.show_hidden:
-            self.hidden_button.add_css_class("active")
-        else:
-            self.hidden_button.remove_css_class("active")
-        self._load()
+        self._refresh_files()
 
     def _set_view(self, mode: str) -> None:
         if self.view_mode == mode:

@@ -13,6 +13,7 @@ gi.require_version('Gdk', '4.0')
 from gi.repository import Gdk, GLib, Gtk
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
+from omarchy_file_picker.file_management import SIDEBAR_MIN_WIDTH, SIDEBAR_DEFAULT_WIDTH
 
 
 def settle(delay=150):
@@ -34,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix='picker-sidebar-') as temp, patch.object
     app = PickerApplication(request, None)
     app.register(None)
     window = PickerWindow(app, request, None)
+    assert window.sidebar_split.get_position() == SIDEBAR_DEFAULT_WIDTH
     window.present()
     settle()
     try:
@@ -49,7 +51,10 @@ with tempfile.TemporaryDirectory(prefix='picker-sidebar-') as temp, patch.object
         size = window.get_width(), window.get_height()
         window.flow.select_child(window.children_by_path[path])
         tiles = dict(window.children_by_path)
-        for width in (180, 310, 240):
+        window.sidebar_split.set_position(80)
+        settle(550)
+        assert window.sidebar_split.get_position() >= SIDEBAR_MIN_WIDTH
+        for width in (SIDEBAR_MIN_WIDTH, 350, SIDEBAR_DEFAULT_WIDTH):
             window.sidebar_split.set_position(width)
             settle(550)
             assert abs(window.sidebar_split.get_position() - width) <= 1, (width, window.sidebar_split.get_position(), window.sidebar.measure(Gtk.Orientation.HORIZONTAL, -1))
@@ -86,10 +91,16 @@ with tempfile.TemporaryDirectory(prefix='picker-sidebar-') as temp, patch.object
             window._close_context_menu()
             settle()
         restored = PickerWindow(app, request, None)
-        assert restored.sidebar_split.get_position() == 240
+        assert restored.sidebar_split.get_position() == SIDEBAR_DEFAULT_WIDTH
         restored.present()
         settle()
         restored.destroy()
+        window.preferences_path.write_text(json.dumps({'sidebar_width': 180}))
+        legacy = PickerWindow(app, request, None)
+        assert legacy.sidebar_split.get_position() == SIDEBAR_MIN_WIDTH
+        legacy.present()
+        settle()
+        legacy.destroy()
         print('PASS: sidebar resize, persisted width, stable window/selection, pointer anchors and keyboard row anchor')
     except Exception:
         traceback.print_exc()

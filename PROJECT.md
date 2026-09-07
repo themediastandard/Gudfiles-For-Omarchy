@@ -49,12 +49,21 @@ as the desktop's XDG FileChooser portal backend.
 - Reads the active Omarchy `colors.toml` on every launch.
 - User-local portal installation with GTK retained as the fallback backend.
 - Sidebar uses the same application background, not a contrasting white panel.
-- Native draggable sidebar divider with a 160-pixel minimum, scrollable places,
+- Native draggable sidebar divider with a 280-pixel minimum and 300-pixel default,
+  older narrower saved widths clamped on load, scrollable places,
   and debounced width persistence without reloading files or clearing selection.
+- Hidden-file visibility uses open/concealed eye icons, an active state and Ctrl+H.
+- Active search, file-type, rating, color and hidden-file settings appear as
+  removable chips below the toolbar. Clear all resets them; the strip hides
+  when inactive and scrolls horizontally instead of growing for long labels.
 - Mouse context menus preserve browser-relative pointer coordinates. Only
   keyboard-opened menus use the selected row/tile's center as their anchor.
 - Breadcrumbs scroll within a bounded toolbar viewport; long metadata, type,
   sidebar and selection labels ellipsize instead of growing the window.
+- Breadcrumbs are connected chevron buttons with matching notch hit tests and
+  a highlighted current folder. Wheel input scrolls the trail horizontally,
+  never navigates folders. File rows, breadcrumbs and metadata paths do not
+  show full-path hover tooltips.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
@@ -93,6 +102,7 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/media_details.py` — asynchronous media/EXIF probing and card.
 - `omarchy_file_picker/ratings.py` / `creative.py` — local annotation store and controls.
 - `omarchy_file_picker/batch_rename.py` — preview planning, no-overwrite apply and dialog.
+- `omarchy_file_picker/breadcrumbs.py` — chevron drawing/allocation and wheel handling.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
@@ -110,6 +120,8 @@ PYTHONPATH=. python tests/ui_hover_scrub.py
 PYTHONPATH=. python tests/ui_media_details.py
 PYTHONPATH=. python tests/ui_creative.py
 PYTHONPATH=. python tests/ui_label_colors.py
+PYTHONPATH=. python tests/ui_active_filters.py
+PYTHONPATH=. python tests/ui_breadcrumbs.py
 PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
@@ -169,6 +181,10 @@ gdbus introspect --session \
   restored width, and checks pointer/keyboard anchors against real GTK bounds.
   Present test windows before destroying them; an unshown second window triggered
   a GTK destruction crash on this desktop. No desktop rules are changed by QA.
+- Navigation QA checks the wider default/minimum and old-width migration,
+  synchronized eye/filter chips and removals, bounded long queries, connected
+  chevron geometry/hit areas and bidirectional wheel scrolling without navigation.
+  Absolute resize tests float only their exact disposable native window first.
 - Content must not increase the top-level minimum size during navigation.
   Keep path ancestors in a horizontal scroller (current folder auto-revealed),
   preserve the full typed path, and use tooltips for truncated labels. The layout

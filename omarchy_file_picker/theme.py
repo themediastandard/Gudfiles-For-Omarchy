@@ -55,6 +55,24 @@ def build_css(colors: dict[str, str]) -> str:
       padding: 12px 16px;
       border-bottom: 1px solid {colors['darker_background']};
     }}
+    .active-filters {{
+      background: {colors['background']}; padding: 6px 16px;
+      border-bottom: 1px solid {colors['darker_background']};
+    }}
+    button.active-filter-chip {{
+      background: alpha({colors['accent']}, 0.08); background-image: none;
+      border: 1px solid alpha({colors['accent']}, 0.22); border-radius: 6px;
+      min-height: 24px; padding: 0 8px; box-shadow: none;
+    }}
+    .active-filter-chip label {{ font-size: 12px; }}
+    .active-filter-chip image {{ -gtk-icon-size: 12px; color: {colors['light_foreground']}; }}
+    button.active-filter-chip:hover {{ background: alpha({colors['accent']}, 0.16); }}
+    button.clear-active-filters {{
+      background: transparent; background-image: none; border: 0;
+      color: {colors['light_foreground']}; min-height: 24px; padding: 0 4px; font-size: 12px;
+    }}
+    button.clear-active-filters:hover {{ color: {colors['accent']}; }}
+    button.hidden-toggle.active {{ color: {colors['accent']}; background: alpha({colors['accent']}, 0.10); }}
     .footer {{
       padding: 12px 16px;
       border-top: 1px solid {colors['darker_background']};
@@ -152,15 +170,17 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     .path-segment {{
       background: transparent;
+      background-image: none;
       border: 0;
       box-shadow: none;
-      padding: 4px 8px;
-      min-height: 30px;
+      padding: 0;
+      min-height: 34px;
       color: {colors['light_foreground']};
     }}
-    .path-segment:last-child {{
+    .path-segment:hover {{ background: transparent; }}
+    .path-segment.current {{
       font-weight: 700;
-      color: {colors['foreground']};
+      color: {colors['accent']};
     }}
     flowbox {{
       background: {colors['background']};

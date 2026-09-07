@@ -3,7 +3,7 @@ import sqlite3
 
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gdk, GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk, Pango
 from .ratings import COLORS, RatingStore, matches
 
 
@@ -213,5 +213,79 @@ class CreativeTools:
         box.append(reset)
         popover.set_child(box)
         button.set_popover(popover)
+        self._refresh_creative_filter_controls = refresh_controls
         refresh_controls()
         return button
+
+    def _build_active_filters(self):
+        self.active_filters = Gtk.Box(spacing=8)
+        self.active_filters.add_css_class('active-filters')
+        self.active_filter_chips = Gtk.Box(spacing=6)
+        scroller = Gtk.ScrolledWindow(hexpand=True)
+        scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        scroller.set_min_content_width(1)
+        scroller.set_propagate_natural_width(False)
+        scroller.set_child(self.active_filter_chips)
+        self.active_filters.append(scroller)
+        clear = Gtk.Button(label='Clear all')
+        clear.add_css_class('clear-active-filters')
+        clear.set_tooltip_text('Clear search, file type, rating and color filters; hide hidden files')
+        clear.connect('clicked', lambda *_: self._clear_active_filter('all'))
+        self.active_filters.append(clear)
+        self.active_filters.set_visible(False)
+        return self.active_filters
+
+    def _update_active_filters(self):
+        self._refresh_creative_filter_controls()
+        self.hidden_button.set_icon_name('view-reveal-symbolic' if self.show_hidden else 'view-conceal-symbolic')
+        self.hidden_button.set_tooltip_text(('Hide' if self.show_hidden else 'Show') + ' hidden files (Ctrl+H)')
+        (self.hidden_button.add_css_class if self.show_hidden else self.hidden_button.remove_css_class)('active')
+        while child := self.active_filter_chips.get_first_child():
+            self.active_filter_chips.remove(child)
+        mode, minimum, color = self.creative_filter
+        items = []
+        query = self.search.get_text()
+        if query:
+            items.append(('search', 'Search: ' + query))
+        file_filter = self._active_filter() if hasattr(self, 'filter_combo') else None
+        if file_filter:
+            items.append(('type', 'Type: ' + file_filter.name))
+        if mode != 'all':
+            items.append(('mode', 'Rated' if mode == 'rated' else 'Rejected'))
+        if minimum:
+            items.append(('minimum', f'{minimum}★ & up'))
+        if color:
+            items.append(('color', color.title() + ' label'))
+        if self.show_hidden:
+            items.append(('hidden', 'Hidden files'))
+        for key, text in items:
+            chip = Gtk.Button()
+            chip.filter_key = key
+            chip.add_css_class('active-filter-chip')
+            row = Gtk.Box(spacing=6)
+            title = Gtk.Label(label=text, ellipsize=Pango.EllipsizeMode.END, max_width_chars=24)
+            title.set_single_line_mode(True)
+            if key == 'color':
+                title.add_css_class('label-' + color)
+            row.append(title)
+            row.append(Gtk.Image.new_from_icon_name('window-close-symbolic'))
+            chip.set_child(row)
+            chip.set_tooltip_text(text + ' · Remove filter')
+            # Rebuilding the strip must not destroy the current event target.
+            chip.connect('clicked', lambda _button, k=key: GLib.idle_add(self._clear_active_filter, k))
+            self.active_filter_chips.append(chip)
+        self.active_filters.set_visible(bool(items))
+
+    def _clear_active_filter(self, key):
+        mode, minimum, color = self.creative_filter
+        self.creative_filter = ('all' if key in ('all', 'mode') else mode,
+                                0 if key in ('all', 'minimum') else minimum,
+                                '' if key in ('all', 'color') else color)
+        if key in ('all', 'search'):
+            self.search.set_text('')
+        if key in ('all', 'hidden'):
+            self.show_hidden = False
+        if key in ('all', 'type'):
+            self.filter_combo.set_active(0)
+        self._refresh_files()
+        return False
