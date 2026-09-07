@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory(prefix='picker-explorer-') as temp, patch.objec
     window.present()
     settle()
     try:
+        assert window.tabs.get_visible() and len(window.tabs.items) == 1
         assert request.explorer
         assert not window.footer.get_visible() and not window.footer.get_mapped()
         assert window.metadata_viewport.get_mapped()
@@ -56,6 +57,8 @@ with tempfile.TemporaryDirectory(prefix='picker-explorer-') as temp, patch.objec
         window.present()
         settle()
         try:
+            assert not window.tabs.get_visible() and not window.tabs.items
+            assert not window.tabs.shortcut(Gdk.KEY_w, Gdk.ModifierType.CONTROL_MASK)
             assert window.footer.get_visible() and window.footer.get_mapped()
             if mode == 'open':
                 window.flow.select_child(window.children_by_path[path])

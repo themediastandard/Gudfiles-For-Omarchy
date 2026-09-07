@@ -48,11 +48,63 @@ def build_css(colors: dict[str, str]) -> str:
       border-bottom: 1px solid {colors['darker_background']};
       box-shadow: none;
     }}
-    .transfer-launcher {{
-      background: transparent; background-image: none; border: 1px solid {colors['darker_background']};
-      min-height: 30px; padding: 0 10px;
+    headerbar button.header-utility {{
+      background: transparent; background-image: none; border: 1px solid transparent;
+      color: {colors['light_foreground']}; min-width: 18px; min-height: 18px;
+      padding: 6px; margin: 0; border-radius: 7px; box-shadow: none; text-shadow: none;
     }}
-    .transfer-launcher.active {{ color: {colors['accent']}; border-color: alpha({colors['accent']}, 0.4); }}
+    headerbar button.header-utility image {{ -gtk-icon-size: 16px; }}
+    headerbar button.header-utility:hover {{ background: alpha({colors['foreground']}, 0.07); color: {colors['foreground']}; }}
+    headerbar button.header-utility:active {{ background: alpha({colors['accent']}, 0.14); color: {colors['accent']}; }}
+    headerbar button.header-utility:focus-visible {{ outline: 2px solid alpha({colors['accent']}, 0.65); outline-offset: 1px; }}
+    headerbar button.header-utility.active {{ color: {colors['accent']}; }}
+    headerbar .header-transfer-badge {{
+      font-size: 9px; font-weight: 700; min-width: 10px; padding: 0 2px;
+      margin-top: -7px; margin-right: -7px; border-radius: 5px;
+      background: {colors['background']}; color: {colors['accent']};
+      border: 1px solid alpha({colors['accent']}, 0.35);
+    }}
+    .files-help .help-heading {{ padding: 20px 22px 16px; }}
+    .files-help .help-title {{ font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }}
+    .files-help .help-emblem {{
+      color: {colors['accent']}; background: alpha({colors['accent']}, 0.10);
+      border: 1px solid alpha({colors['accent']}, 0.16); border-radius: 12px; padding: 12px;
+    }}
+    .files-help .help-description {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .files-help .help-search-box {{ padding: 0 22px 18px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .files-help searchentry {{
+      min-height: 34px; padding: 3px 10px; border-radius: 8px;
+      background: alpha({colors['foreground']}, 0.035); color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']}; box-shadow: none;
+    }}
+    .files-help searchentry:focus-within {{ border-color: {colors['accent']}; }}
+    .files-help .help-nav {{ border-right: 1px solid {colors['darker_background']}; padding: 18px 10px 14px; }}
+    .files-help .help-eyebrow {{ font-size: 10px; font-weight: 700; letter-spacing: 1px; color: {colors['light_foreground']}; margin: 0 10px 9px; }}
+    .files-help button {{ background-image: none; box-shadow: none; text-shadow: none; }}
+    .files-help button.flat {{ background: transparent; border: 0; padding: 6px; }}
+    .files-help button.help-category {{
+      background: transparent; border: 1px solid transparent; border-radius: 7px;
+      padding: 9px; min-height: 20px; color: {colors['foreground']};
+    }}
+    .files-help .help-nav-title {{ font-size: 12px; font-weight: 550; }}
+    .files-help button.help-category:hover, .files-help button.flat:hover {{ background: alpha({colors['foreground']}, 0.06); }}
+    .files-help button.help-category:checked {{ background: alpha({colors['accent']}, 0.12); color: {colors['accent']}; border-color: alpha({colors['accent']}, 0.18); }}
+    .files-help .help-tip {{ color: {colors['light_foreground']}; font-size: 11px; margin: 24px 10px 0; }}
+    .files-help .help-content {{ padding: 22px; }}
+    .files-help .help-section-title {{ font-size: 20px; font-weight: 700; letter-spacing: -0.4px; }}
+    .files-help .help-group-heading {{ color: {colors['accent']}; margin-top: 4px; }}
+    .files-help .help-group-title {{ font-size: 12px; font-weight: 650; }}
+    .files-help .help-card {{ border: 1px solid {colors['darker_background']}; border-radius: 10px; background: alpha({colors['foreground']}, 0.02); }}
+    .files-help .help-card separator {{ background: {colors['darker_background']}; min-height: 1px; margin: 0 14px; }}
+    .files-help .help-feature {{ padding: 13px 14px; }}
+    .files-help .help-feature-title {{ font-size: 13px; font-weight: 650; }}
+    .files-help .help-key {{
+      font-size: 10px; font-weight: 600; color: {colors['light_foreground']};
+      background: alpha({colors['foreground']}, 0.035); border: 1px solid {colors['darker_background']};
+      border-bottom-width: 2px; padding: 2px 6px; border-radius: 5px;
+    }}
+    .files-help .help-empty {{ padding: 30px 14px; color: {colors['light_foreground']}; }}
+    .files-help .help-footer {{ padding: 11px 22px; border-top: 1px solid {colors['darker_background']}; }}
     .transfer-window .transfer-toolbar {{ padding: 14px 16px; border-bottom: 1px solid {colors['darker_background']}; }}
     .transfer-window .transfer-row {{
       background: alpha({colors['foreground']}, 0.025); border: 1px solid {colors['darker_background']};
@@ -219,6 +271,33 @@ def build_css(colors: dict[str, str]) -> str:
       border-color: {colors['accent']};
       color: {colors['foreground']};
     }}
+    .browser-tabs {{ padding: 5px 12px; border-bottom: 1px solid {colors['dark_background']}; }}
+    .browser-tab {{
+      padding: 3px; border: 1px solid alpha({colors['foreground']}, 0.07);
+      border-radius: 999px; background: alpha({colors['foreground']}, 0.035);
+    }}
+    .browser-tab:hover {{ background: alpha({colors['foreground']}, 0.07); }}
+    .browser-tab.active {{
+      background: alpha({colors['accent']}, 0.10);
+      border-color: alpha({colors['accent']}, 0.24);
+    }}
+    .browser-tab button, .browser-tabs button.tab-new {{
+      background: transparent; background-image: none; border: 0; box-shadow: none;
+      text-shadow: none; min-width: 0; min-height: 20px; padding: 0; margin: 0;
+      border-radius: 999px; color: {colors['light_foreground']};
+    }}
+    .browser-tab button.tab-label {{ padding: 0 7px 0 4px; }}
+    .browser-tab .tab-label label {{ font-size: 12px; font-weight: 500; }}
+    .browser-tab.active .tab-label {{ color: {colors['foreground']}; }}
+    .browser-tab button.tab-close {{
+      min-width: 20px; background: alpha({colors['foreground']}, 0.075);
+    }}
+    .browser-tab .tab-close image {{ -gtk-icon-size: 10px; }}
+    .browser-tab button.tab-close:hover {{ background: alpha({colors['foreground']}, 0.17); color: {colors['foreground']}; }}
+    .browser-tabs button.tab-new {{ min-width: 28px; min-height: 28px; }}
+    .browser-tabs .tab-new image {{ -gtk-icon-size: 14px; }}
+    .browser-tabs button.tab-new:hover {{ background: alpha({colors['foreground']}, 0.08); color: {colors['foreground']}; }}
+    .browser-tabs button:focus-visible {{ outline: 2px solid {colors['accent']}; outline-offset: -1px; }}
     .drop-copy-target {{ box-shadow: inset 0 0 0 2px {colors['accent']}; }}
     .file-copy-drag {{
       background: {colors['background']}; color: {colors['foreground']};

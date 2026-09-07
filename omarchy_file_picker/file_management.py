@@ -37,7 +37,7 @@ class FileManagement(TransferUI):
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
                         show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH,
-                        transfer_mode='queue')
+                        transfer_mode='queue', hidden_locations=[], view_mode='grid')
         try:
             saved = json.loads(self.preferences_path.read_text())
             if not isinstance(saved, dict):
@@ -51,6 +51,9 @@ class FileManagement(TransferUI):
             defaults['sort_key'] = 'name'
         if defaults['transfer_mode'] not in {'queue', 'all'}:
             defaults['transfer_mode'] = 'queue'
+        if defaults['view_mode'] not in {'grid', 'list', 'columns'}:
+            defaults['view_mode'] = 'grid'
+        defaults['hidden_locations'] = [key for key in defaults['hidden_locations'] if isinstance(key, str)]
         defaults['sidebar_width'] = max(SIDEBAR_MIN_WIDTH, defaults['sidebar_width'])
         self.file_preferences = defaults
 
@@ -58,8 +61,24 @@ class FileManagement(TransferUI):
         self.file_preferences[key] = value
         try:
             self.preferences_path.parent.mkdir(parents=True, exist_ok=True)
-            Gio.File.new_for_path(str(self.preferences_path)).replace_contents(
-                json.dumps(self.file_preferences).encode(), None, False,
+            file = Gio.File.new_for_path(str(self.preferences_path))
+            try:
+                _, content, etag = file.load_contents(None)
+                try:
+                    saved = json.loads(content)
+                except (UnicodeError, ValueError):
+                    saved = {}
+                if not isinstance(saved, dict):
+                    saved = {}
+            except GLib.Error as error:
+                if not error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_FOUND):
+                    raise
+                saved, etag = {}, None
+            # Other Files windows may have saved newer choices. Change only this
+            # key on disk; keep this window's current display settings in memory.
+            updated = {**self.file_preferences, **saved, key: value}
+            file.replace_contents(
+                json.dumps(updated).encode(), etag, False,
                 Gio.FileCreateFlags.PRIVATE, None,
             )
         except (OSError, GLib.Error) as error:
@@ -80,6 +99,10 @@ class FileManagement(TransferUI):
         return result
 
     def _toggle_bookmark(self, path):
+        self._set_bookmark(path, None)
+
+    def _set_bookmark(self, path, present):
+        """Update one URI against the latest file; explicit removal never re-adds it."""
         uri = path.absolute().as_uri()
         try:
             self.bookmarks_path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,12 +114,15 @@ class FileManagement(TransferUI):
                 if not error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_FOUND): raise
                 lines, etag = [], None
             exists = any(line.split(' ', 1)[0] == uri for line in lines)
+            if present is not None and exists == present:
+                self._refresh_sidebar()
+                return
             lines = [line for line in lines if line.split(' ', 1)[0] != uri]
-            if not exists: lines.append(uri)
+            if present is True or (present is None and not exists): lines.append(uri)
             file.replace_contents(('\n'.join(lines) + '\n').encode(), etag, False,
                                   Gio.FileCreateFlags.PRIVATE, None)
             self._refresh_sidebar()
-        except (OSError, GLib.Error) as error:
+        except (OSError, UnicodeError, GLib.Error) as error:
             self._show_error('Could not update bookmarks', str(error))
 
     def _run_file_job(self, title, work, finished=None):
@@ -123,6 +149,8 @@ class FileManagement(TransferUI):
         threading.Thread(target=worker, daemon=True).start()
 
     def _refresh_files(self, selected=None):
+        if getattr(self, "_restoring_tab", False):
+            return
         selected = self._selected_paths() if selected is None else selected
         self._close_context_menu()
         self._load()

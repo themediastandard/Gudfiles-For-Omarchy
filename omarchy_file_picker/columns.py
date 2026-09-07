@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
+from .drag_copy import disable_native_rubberband
 
 
 class ColumnBrowser(Gtk.ScrolledWindow):
@@ -52,8 +53,12 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         # Keep the visible ancestors on refresh/history navigation. A new
         # sidebar/location destination starts a new trail rather than inventing
         # columns for every system ancestor.
+        restore = getattr(self, 'restore_state', None)
+        self.restore_state = None
         paths = [c.path for c in self.columns]
-        if owner.special_mode is None and owner.current_dir in paths:
+        if restore:
+            paths = [path for path, _selected, _y in restore]
+        elif owner.special_mode is None and owner.current_dir in paths:
             paths = paths[:paths.index(owner.current_dir) + 1]
         else:
             paths = [owner.current_dir]
@@ -62,12 +67,19 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         owner.rating_badges.clear()
         self.busy = True
         for index, path in enumerate(paths):
-            column = self.append(path, entries if index == len(paths) - 1 else None)
+            column = self.append(path, entries if path == owner.current_dir else None)
             if index:
                 previous = self.columns[index - 1]
                 child = previous.children.get(path)
                 if child:
                     previous.flow.select_child(child)
+        if restore:
+            for column, (_path, selected, _y) in zip(self.columns, restore):
+                column.flow.unselect_all()
+                for path in selected:
+                    if path in column.children:
+                        column.flow.select_child(column.children[path])
+            column = next((c for c in self.columns if c.path == owner.current_dir), self.columns[-1])
         self.activate(column, record=False)
         if restore_focus:
             self.focus_column(column)
@@ -109,6 +121,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         title.add_css_class('column-heading')
         panel.append(title)
         flow = Gtk.FlowBox(valign=Gtk.Align.START)
+        disable_native_rubberband(flow)
         flow.set_focusable(True)
         flow.add_css_class('file-list')
         flow.add_css_class('column-files')

@@ -114,7 +114,8 @@ def show_selection_summary(owner, paths):
     folders, files, total, unavailable = selection_totals(paths)
     kind = 'folders' if not files else 'files' if not folders else 'mixed'
     owner.metadata.append(SelectionStack(owner.colors, kind))
-    primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
+    primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3,
+                      hexpand=True, valign=Gtk.Align.CENTER)
     primary.set_size_request(140, -1)
     title = Gtk.Label(label=f'{len(paths):,} items selected', xalign=0)
     title.add_css_class('metadata-title')

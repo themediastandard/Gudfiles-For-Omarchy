@@ -1,6 +1,7 @@
 """Verify native GTK range/toggle selection in the standalone launch mode."""
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
@@ -13,7 +14,7 @@ def settle():
     loop.run()
 
 
-with tempfile.TemporaryDirectory(prefix='picker-selection-') as temp:
+with tempfile.TemporaryDirectory(prefix='picker-selection-') as temp, patch.object(Path, 'home', return_value=Path(temp)):
     root = Path(temp)
     paths = [root / f'{i:02d}.txt' for i in range(10)]
     for path in paths:

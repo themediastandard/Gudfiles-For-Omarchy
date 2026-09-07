@@ -39,7 +39,7 @@ from .file_actions import create_untitled_text, sort_entries
 from .dialogs import PickerDialog, confirmation, entry_field, file_summary, text_label
 from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
-from .drag_copy import DragCopy
+from .drag_copy import DragCopy, disable_native_rubberband
 from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri, mounted_local_path
 from .creative import CreativeTools
@@ -48,6 +48,10 @@ from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
 from .selection_summary import show_selection_summary
+from .sidebar import SidebarMenus
+from .help_window import show_help
+from .list_navigation import navigate_list
+from .tabs import BrowserTabs
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -123,7 +127,7 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
     return widget
 
 
-class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
+class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None):
         super().__init__(application=app, title=request.title)
         self.request = request
@@ -162,7 +166,11 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.volume_monitor.connect("mount-removed", lambda *_args: self._refresh_sidebar())
         self._install_shortcuts()
         self.connect('close-request', self._on_close_requested)
-        self._load()
+        if self.file_preferences['view_mode'] == self.view_mode:
+            self._load()
+        else:
+            self._set_view(self.file_preferences['view_mode'], persist=False)
+        self.tabs.initialize()
         if os.environ.get("OMARCHY_FILE_PICKER_DEMO_SELECT_FIRST") == "1":
             GLib.idle_add(self._select_first_file)
         automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
@@ -213,6 +221,13 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         title_box.append(title_label)
         title_box.append(subtitle)
         header.set_title_widget(title_box)
+        self.help_button = Gtk.Button.new_from_icon_name('help-browser-symbolic')
+        self.help_button.set_valign(Gtk.Align.CENTER)
+        self.help_button.add_css_class('header-utility')
+        self.help_button.update_property([Gtk.AccessibleProperty.LABEL], ['Help'])
+        self.help_button.set_tooltip_text('Help · Features and shortcuts (F1)')
+        self.help_button.connect('clicked', lambda *_: show_help(self))
+        header.pack_end(self.help_button)
         header.pack_end(self._build_transfer_button())
         self.set_titlebar(header)
 
@@ -241,8 +256,10 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         sidebar_scroll.set_min_content_width(SIDEBAR_MIN_WIDTH)
         sidebar_scroll.set_size_request(SIDEBAR_MIN_WIDTH, -1)
         sidebar_scroll.set_child(self.sidebar)
+        self.sidebar_scroll = sidebar_scroll
         body.set_start_child(sidebar_scroll)
         self._build_sidebar()
+        self._install_sidebar_context()
 
         browser = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         browser.set_hexpand(True)
@@ -250,6 +267,9 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         body.set_end_child(browser)
         body.set_position(self.file_preferences['sidebar_width'])
         body.connect('notify::position', self._sidebar_resized)
+
+        self.tabs = BrowserTabs(self)
+        browser.append(self.tabs)
 
         self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.toolbar.add_css_class("toolbar")
@@ -267,6 +287,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         browser.append(self.browser_overlay)
 
         self.flow = Gtk.FlowBox()
+        disable_native_rubberband(self.flow)
         self.flow.set_activate_on_single_click(False)
         self.flow.set_selection_mode(
             Gtk.SelectionMode.MULTIPLE if self.request.multiple else Gtk.SelectionMode.SINGLE
@@ -347,6 +368,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def _sidebar_button(self, text: str, icon_name: str, callback) -> Gtk.Button:
         button = Gtk.Button()
         button.add_css_class("location-button")
+        button._sidebar_kind = 'location'
+        button._sidebar_key = text.casefold()
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         icon = Gtk.Image.new_from_icon_name(icon_name)
         icon.set_pixel_size(18)
@@ -374,7 +397,10 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             ("Videos", "folder-videos-symbolic", home / "Videos"),
             ("Projects", "folder-symbolic", home / "Documents/Omarchy"),
         ]
+        existing_locations = {path for _, _, path in locations if path is not None}
         for name, icon, path in locations:
+            if name.casefold() in self.file_preferences['hidden_locations']:
+                continue
             if path is not None and not path.exists():
                 continue
             if name == "Recent":
@@ -388,13 +414,13 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         separator.set_margin_top(10)
         separator.set_margin_bottom(6)
         self.sidebar.append(separator)
-        existing_locations = {getattr(button, '_picker_path', None) for button in self.location_buttons}
         extra_bookmarks = [(path, name) for path, name in self._bookmarks() if path not in existing_locations]
         if extra_bookmarks:
             self.sidebar.append(label('BOOKMARKS', 'sidebar-heading'))
         for path, name in extra_bookmarks:
             button = self._sidebar_button(name, 'folder-symbolic', lambda _b, p=path: self.navigate(p))
             button._picker_path = path
+            button._sidebar_kind = 'bookmark'
             self.sidebar.append(button)
         self.sidebar.append(label("DEVICES", "sidebar-heading"))
 
@@ -410,15 +436,19 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                 lambda _b, uri=mount.get_root().get_uri(): self._open_mounted_location(uri)
             )
             button._picker_path = path  # type: ignore[attr-defined]
+            button._sidebar_kind = 'mount'
+            button._sidebar_mount = mount
             self.sidebar.append(button)
 
         connect = self._sidebar_button("Connect to NAS…", "network-server-symbolic", self._show_nas_dialog)
         connect.add_css_class("nas-button")
+        connect._sidebar_kind = 'connect'
         self.sidebar.append(connect)
 
     def _refresh_sidebar(self) -> None:
         if not hasattr(self, "sidebar"):
             return
+        self._close_context_menu()
         while child := self.sidebar.get_first_child():
             self.sidebar.remove(child)
         self.location_buttons.clear()
@@ -465,7 +495,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
         self.search = Gtk.SearchEntry(placeholder_text="Search this folder")
         self.search.set_size_request(240, -1)
-        self.search.connect("search-changed", lambda _entry: self._refresh_files())
+        self._last_search = ""
+        self.search.connect("search-changed", self._search_changed)
         self.toolbar.append(self.search)
         self.toolbar.append(self._creative_filter_button())
 
@@ -560,10 +591,24 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         keys.connect("key-pressed", self._on_key_pressed)
         self.add_controller(keys)
 
+    def _search_changed(self, entry):
+        if entry.get_text() != self._last_search:
+            self._last_search = entry.get_text()
+            self._refresh_files()
+
     def _on_preview_key(self, _controller, keyval, _keycode, state):
+        if keyval == Gdk.KEY_F1 and not self.drag_copy.active and not self.drag_selection.active:
+            if self.context_popover:
+                self._close_context_menu()
+            show_help(self)
+            return Gdk.EVENT_STOP
+        if self.context_popover:
+            return Gdk.EVENT_PROPAGATE
         if self.drag_copy.active:
             if keyval == Gdk.KEY_Escape:
                 self.drag_copy.cancel()
+            return Gdk.EVENT_STOP
+        if not self.quicklook.get_visible() and self.tabs.shortcut(keyval, state):
             return Gdk.EVENT_STOP
         if self.view_mode == 'columns' and not self.quicklook.get_visible():
             self.columns.activate_focused()
@@ -590,6 +635,8 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             return Gdk.EVENT_PROPAGATE
         editing = isinstance(self.get_focus(), (Gtk.Editable, Gtk.TextView))
         modifiers = state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK)
+        if navigate_list(self, keyval, state):
+            return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_space and not editing and not modifiers:
             paths = self._selected_paths()
             if paths and paths[0].is_file():
@@ -608,8 +655,17 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         if keyval == Gdk.KEY_Escape and self.context_popover:
             self._close_context_menu()
             return Gdk.EVENT_STOP
+        if self.context_popover:
+            return Gdk.EVENT_PROPAGATE
         if not editing:
             selected = self._selected_paths()
+            if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
+                button = self._sidebar_target(focus)
+                if button:
+                    self._show_sidebar_context_menu(0, 0, button, keyboard=True)
+                else:
+                    self._show_context_menu(24, 24, selected[0] if selected else None, keyboard=True)
+                return Gdk.EVENT_STOP
             if self.file_job_active and (keyval in (Gdk.KEY_F2, Gdk.KEY_Delete) or
                     (control and keyval in (Gdk.KEY_v, Gdk.KEY_V, Gdk.KEY_n, Gdk.KEY_N))):
                 return Gdk.EVENT_STOP
@@ -647,9 +703,6 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                 return Gdk.EVENT_STOP
             if alt and keyval == Gdk.KEY_Return:
                 self._show_properties(selected or [self.current_dir])
-                return Gdk.EVENT_STOP
-            if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
-                self._show_context_menu(24, 24, selected[0] if selected else None, keyboard=True)
                 return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_Escape:
             if self.path_stack.get_visible_child_name() == "entry":
@@ -692,6 +745,9 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
                             self.file_preferences['descending'], self.file_preferences['folders_first'])
 
     def _load(self) -> None:
+        if getattr(self, "_restoring_tab", False):
+            return
+        self._last_search = self.search.get_text()
         self._update_active_filters()
         query = self.search.get_text() if hasattr(self, "search") else ""
         if self.special_mode == "recent":
@@ -857,7 +913,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         image = Gtk.Image.new_from_icon_name("document-open-symbolic")
         image.set_pixel_size(32)
         self.metadata.append(image)
-        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
         copy.append(label("Select a file to preview", "metadata-title"))
         copy.append(label("Images and cached video thumbnails appear here.", "muted"))
         self.metadata.append(copy)
@@ -872,7 +928,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             return
         poster = picture_for(path, 132, 76, crop=True)
         self.metadata.append(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
-        primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
         primary.set_size_request(140, -1)
         primary.set_hexpand(True)
         title = label(path.name, "metadata-title")
@@ -893,7 +949,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             modified = datetime.fromtimestamp(stat.st_mtime).strftime("%B %-d, %Y at %-I:%M %p")
         except OSError:
             size, modified = "—", "—"
-        facts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        facts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5, valign=Gtk.Align.CENTER)
         facts.set_hexpand(True)
         def append_fact(text):
             fact = label(text, 'muted')
@@ -1116,6 +1172,12 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             menu.append(new_folder)
             menu.append(new_text)
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        if self.request.explorer:
+            if path and path.is_dir():
+                menu.append(self._menu_button('Open in New Tab', lambda: self.tabs.new(path),
+                                              icon_name='tab-new-symbolic'))
+            elif path is None:
+                menu.append(self._menu_button('New Tab', lambda: self.tabs.new(), icon_name='tab-new-symbolic'))
         paths = self._selected_paths() if path else []
         if path and path not in paths: paths = [path]
         self._append_common_context(menu, paths, background=path is None, qa=keep_open_for_qa)
@@ -1189,7 +1251,11 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
 
     def _on_context_closed(self, popover: Gtk.Popover) -> None:
         if self.context_popover is popover:
-            if self.view_mode == 'columns' and self.columns.active:
+            if popover.get_parent() is self.sidebar_scroll:
+                button = getattr(popover, '_sidebar_button', None)
+                if button and button.get_root() is self:
+                    button.grab_focus()
+            elif self.view_mode == 'columns' and self.columns.active:
                 self.columns.focus_column(self.columns.active)
             self.context_popover = None
         GLib.idle_add(self._unparent_popover, popover)
@@ -1476,16 +1542,19 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         entry.grab_focus()
         return dialog
 
-    def _open_mounted_location(self, uri: str) -> None:
+    def _open_mounted_location(self, uri: str, *, new_window=False) -> None:
         # Repair the local bridge off the GTK thread; a GFile path alone does
         # not prove that GVfs has exposed the share to ordinary filesystem APIs.
         token = getattr(self, '_mount_open_generation', 0) + 1
-        self._mount_open_generation = token
+        if not new_window:
+            self._mount_open_generation = token
         def complete(path, error):
-            if not self.get_visible() or token != self._mount_open_generation:
+            if not self.get_visible() or (not new_window and token != self._mount_open_generation):
                 return False
             if error:
                 self._show_error('Could not open mounted folder', error)
+            elif new_window:
+                self._open_sidebar_window(path)
             else:
                 self.navigate(path)
             return False
@@ -1622,8 +1691,12 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.forward_button.set_sensitive(self.history_index < len(self.history) - 1)
 
     def _update_active_location(self) -> None:
+        if hasattr(self, "tabs"):
+            self.tabs.update()
         for button in self.location_buttons:
             active = getattr(button, "_picker_path", None) == self.current_dir and self.special_mode is None
+            if button._sidebar_kind == 'location' and button._sidebar_key == 'recent':
+                active = self.special_mode == 'recent'
             if active:
                 button.add_css_class("active")
             else:
@@ -1633,8 +1706,12 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.show_hidden = not self.show_hidden
         self._refresh_files()
 
-    def _set_view(self, mode: str) -> None:
-        if self.view_mode == mode or mode not in ('grid', 'list', 'columns'):
+    def _set_view(self, mode: str, *, persist=True) -> None:
+        if mode not in ('grid', 'list', 'columns'):
+            return
+        if persist:
+            self._set_file_preference('view_mode', mode, reload=False)
+        if self.view_mode == mode:
             return
         selected = self._selected_paths()
         self.drag_selection.cancel()

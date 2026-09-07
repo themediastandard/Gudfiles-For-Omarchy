@@ -1,4 +1,4 @@
-"""Strict codec QA: generated videos must actually play in GTK Quick Look."""
+"""Strict codec QA: generated videos must play at real-time speed in Quick Look."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,6 +10,10 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import GLib
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
+
+# PipeWire restores mute/volume by application name, outside Path.home().
+# Keep silent QA from muting the user's Python-backed Files previews.
+GLib.set_application_name('Omarchy File Picker Playback QA')
 
 
 def settle():
@@ -62,6 +66,12 @@ with tempfile.TemporaryDirectory(prefix='picker-video-') as temp, patch.object(P
             assert media.has_video() and media.has_audio(), name
             until(lambda: media.get_timestamp() > 150000)
             assert media.get_playing(), name
+            started = time.monotonic()
+            timestamp = media.get_timestamp()
+            until(lambda: time.monotonic() - started >= 1.2)
+            elapsed = time.monotonic() - started
+            advanced = (media.get_timestamp() - timestamp) / 1_000_000
+            assert abs(advanced - elapsed) < .2, (name, 'video seconds', advanced, 'wall seconds', elapsed)
             media.pause()
             until(lambda: not media.get_playing())
             assert media.is_seekable(), name
@@ -72,6 +82,6 @@ with tempfile.TemporaryDirectory(prefix='picker-video-') as temp, patch.object(P
             preview.close()
             until(lambda: not preview.get_visible())
             assert preview.media is None and not media.get_playing()
-            print('PASS:', name, 'video/audio decoding, play, pause, seek, resume and stop on close', flush=True)
+            print('PASS:', name, 'video/audio decoding, real-time play, pause, seek, resume and stop on close', flush=True)
     finally:
         window.destroy()

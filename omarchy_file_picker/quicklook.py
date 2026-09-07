@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import math
 import mimetypes
 import threading
 from pathlib import Path
@@ -13,16 +14,19 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Graphene, Gsk, Gtk, Pango
 
 from .model import file_type, format_size
 from .image_preview import ZoomImage
+from .raw_preview import is_raw_image, read_raw_preview
 
 
 def point(x, y):
     return Graphene.Point().init(x, y)
 
 
-def read_preview(path: Path):
+def read_preview(path: Path, *, cancelled=None):
     """Bound rendered size and text reads; never execute or modify the file."""
     if not path.is_file():
         return 'info', 'Folder' if path.is_dir() else 'This file is no longer available.'
+    if is_raw_image(path):
+        return 'image', read_raw_preview(path, cancelled=cancelled)
     mime = mimetypes.guess_type(path.name)[0] or ''
     if mime.startswith('image/'):
         pixels = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(path), 1800, 1400, True)
@@ -72,6 +76,8 @@ class QuickLook(Gtk.Widget):
         self.tick_id = 0
         self.generation = 0
         self.media = None
+        self.aspect_ratio = 0.0
+        self.compact_header = False
         self.origin = (0, 0, 100, 100)
         self.rect = (0, 0, 1, 1)
         self.kind = None
@@ -83,9 +89,11 @@ class QuickLook(Gtk.Widget):
         self.card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.card.add_css_class('quicklook-card')
         self.card.set_parent(self)
-        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        bar.add_css_class('quicklook-bar')
-        self.card.append(bar)
+        self.header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.header.add_css_class('quicklook-bar')
+        self.card.append(self.header)
+        bar = self.bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.header.append(bar)
         close = Gtk.Button.new_from_icon_name('window-close-symbolic')
         close.set_tooltip_text('Close preview (Space / Escape)')
         close.connect('clicked', lambda *_: self.close())
@@ -95,12 +103,14 @@ class QuickLook(Gtk.Widget):
         bar.append(self.title)
         self.rating_box = Gtk.Box()
         bar.append(self.rating_box)
+        self.header_items = [close, self.title, self.rating_box]
         for icon, step, name in [('go-previous-symbolic', -1, 'Previous file'),
                                   ('go-next-symbolic', 1, 'Next file')]:
             button = Gtk.Button.new_from_icon_name(icon)
             button.set_tooltip_text(name)
             button.connect('clicked', lambda _b, s=step: self.step(s))
             bar.append(button)
+            self.header_items.append(button)
         self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True, hexpand=True)
         self.content.add_css_class('quicklook-content')
         self.card.append(self.content)
@@ -117,9 +127,62 @@ class QuickLook(Gtk.Widget):
 
     def do_size_allocate(self, width, height, baseline):
         w, h = max(1, min(940, width - 64)), max(1, min(720, height - 56))
+        if self.aspect_ratio:
+            card_x, card_y = self._insets(self.card)
+            content_x, content_y = self._insets(self.content)
+            header_x, header_y = self._insets(self.header)
+            chrome_x = card_x + content_x
+            caption_h = self.caption.measure(Gtk.Orientation.VERTICAL, w)[0]
+            wide_h = max(item.measure(Gtk.Orientation.VERTICAL, -1)[0]
+                         for item in self.header_items) + header_y
+            wide_w = sum(item.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
+                         for item in self.header_items) + 4 * self.bar.get_spacing() + header_x
+            available_h = max(1, h - card_y - content_y - caption_h - wide_h)
+            fitted_w = min(w, available_h * self.aspect_ratio + chrome_x)
+            self._compact_header(fitted_w < wide_w + 64)
+
+            # Only chrome sets a minimum; decoded pixels never request a larger
+            # native window. Very narrow media still needs usable controls.
+            minimum_w = self.header.measure(Gtk.Orientation.HORIZONTAL, -1)[0] + card_x
+            header_h = self.header.measure(Gtk.Orientation.VERTICAL,
+                                          max(minimum_w, round(fitted_w)) - card_x)[0]
+            chrome_y = card_y + content_y + header_h + caption_h
+            media_h = min(max(1, h - chrome_y), max(1, w - chrome_x) / self.aspect_ratio)
+            w = min(w, max(minimum_w, round(media_h * self.aspect_ratio) + chrome_x))
+            h = min(h, round(media_h) + chrome_y)
+        else:
+            self._compact_header(False)
         x, y = (width - w) / 2, (height - h) / 2
         self.rect = x, y, w, h
         self.card.allocate(w, h, -1, Gsk.Transform.new().translate(point(x, y)))
+
+    @staticmethod
+    def _insets(widget):
+        style = widget.get_style_context()
+        padding, border = style.get_padding(), style.get_border()
+        return (padding.left + padding.right + border.left + border.right,
+                padding.top + padding.bottom + border.top + border.bottom)
+
+    def _compact_header(self, compact):
+        if compact == self.compact_header:
+            return
+        self.compact_header = compact
+        self.rating_box.get_parent().remove(self.rating_box)
+        self.rating_box.set_halign(Gtk.Align.CENTER if compact else Gtk.Align.FILL)
+        if compact:
+            self.header.append(self.rating_box)
+        else:
+            self.bar.insert_child_after(self.rating_box, self.title)
+
+    def _set_aspect_ratio(self, ratio):
+        ratio = ratio if math.isfinite(ratio) and ratio > 0 else 0.0
+        if ratio != self.aspect_ratio:
+            self.aspect_ratio = ratio
+            self.queue_allocate()
+
+    def _media_size_changed(self, media, generation):
+        if media is self.media and generation == self.generation:
+            self._set_aspect_ratio(media.get_intrinsic_aspect_ratio())
 
     def do_snapshot(self, snapshot):
         if self.progress <= 0:
@@ -213,6 +276,7 @@ class QuickLook(Gtk.Widget):
             self.media = None
         while child := self.content.get_first_child():
             self.content.remove(child)
+        self._set_aspect_ratio(0.0)
 
     def _message(self, text, loading=False):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, valign=Gtk.Align.CENTER, vexpand=True)
@@ -241,7 +305,7 @@ class QuickLook(Gtk.Widget):
         self.kind = 'loading'
         def worker():
             try:
-                kind, data = read_preview(path)
+                kind, data = read_preview(path, cancelled=lambda: generation != self.generation)
             except Exception as error:
                 kind, data = 'info', f'Preview unavailable: {error}'
             GLib.idle_add(self._loaded, generation, kind, data)
@@ -261,6 +325,7 @@ class QuickLook(Gtk.Widget):
         if kind in ('image', 'pdf'):
             texture = (Gdk.Texture.new_for_pixbuf(data) if kind == 'image' else
                        Gdk.Texture.new_from_bytes(GLib.Bytes.new(data[0])))
+            self._set_aspect_ratio(texture.get_intrinsic_aspect_ratio())
             if kind == 'image':
                 picture = ZoomImage(texture)
                 self.caption.set_text(f'{self.details}  ·  Scroll to zoom · Drag to pan · Double-click to fit · Space to close')
@@ -286,7 +351,9 @@ class QuickLook(Gtk.Widget):
             video.set_autoplay(True)
             self.media = video.get_media_stream()
             self.media.connect('notify::error', self._media_error, generation)
+            self.media.connect('invalidate-size', self._media_size_changed, generation)
             self.content.append(video)
+            self._media_size_changed(self.media, generation)
             self._media_error(self.media, None, generation)
         else:
             self._message(data)

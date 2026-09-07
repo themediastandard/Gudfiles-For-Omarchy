@@ -107,8 +107,10 @@ with tempfile.TemporaryDirectory(prefix='picker-drag-copy-') as temp, \
             action = drag.target.emit('motion', *position)
             assert action == Gdk.DragAction.COPY
             assert drag.highlight.has_css_class('drop-copy-target')
+        count = len(queue.jobs)
         assert drag.target.emit('drop', value, *position)
         drag._finish()
+        until(lambda: not window.file_job_active and len(queue.jobs) > count)
         job = queue.jobs[-1]
         assert job.duplicate and not job.cut
         until(lambda: not queue.active_jobs and job.state == 'completed')
@@ -127,9 +129,10 @@ with tempfile.TemporaryDirectory(prefix='picker-drag-copy-') as temp, \
             window.flow.select_child(window.children_by_path[first])
             ordinary = Gesture(Gdk.ModifierType(0))
             drag._arm(ordinary, *point(first))
-            assert ordinary.state == Gtk.EventSequenceState.DENIED
-            assert not drag.active and drag.source.emit('prepare', *point(first)) is None
+            assert ordinary.state is None and drag.armed
+            assert not drag.active
             assert window._selected_paths() == [first]
+            drag._finish()
             ordinary = Gesture()
             drag._arm(ordinary, *blank())
             assert ordinary.state == Gtk.EventSequenceState.DENIED

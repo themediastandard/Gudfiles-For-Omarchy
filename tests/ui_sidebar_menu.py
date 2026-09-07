@@ -1,4 +1,4 @@
-"""Native splitter, preference persistence and pointer/keyboard menu anchors."""
+"""Native splitter, remembered views and pointer/keyboard menu anchors."""
 import json
 import os
 import subprocess
@@ -94,13 +94,55 @@ with tempfile.TemporaryDirectory(prefix='picker-sidebar-') as temp, patch.object
         assert restored.sidebar_split.get_position() == SIDEBAR_DEFAULT_WIDTH
         restored.present()
         settle()
+        for mode in ('columns', 'grid', 'list'):
+            getattr(window, mode + '_button').emit('clicked')
+            settle()
+            assert json.loads(window.preferences_path.read_text())['view_mode'] == mode
+            # A different window retains its own view but must preserve the last
+            # explicit choice when saving an unrelated preference or closing.
+            restored._set_file_preference('show_type', False, reload=False)
+            assert json.loads(window.preferences_path.read_text())['view_mode'] == mode
+            for request_mode, explorer in (('open', True), ('open', False), ('save', False)):
+                with patch.object(PickerWindow, '_set_file_preference', autospec=True) as writes:
+                    reopened = PickerWindow(app, PickerRequest(current_folder=root, mode=request_mode,
+                                            explorer=explorer, multiple=explorer), None)
+                    writes.assert_not_called()
+                reopened.present()
+                settle()
+                try:
+                    assert reopened.view_mode == mode
+                    assert getattr(reopened, mode + '_button').has_css_class('active')
+                    assert reopened.footer.get_visible() == (not explorer)
+                    assert path in reopened.children_by_path
+                    if mode == 'columns':
+                        assert reopened.browser_stack.get_visible_child_name() == 'columns'
+                        assert reopened.columns.active.path == root
+                    else:
+                        assert reopened.flow.has_css_class('file-list') == (mode == 'list')
+                        assert reopened.flow.get_max_children_per_line() == (1 if mode == 'list' else 6)
+                    assert json.loads(window.preferences_path.read_text())['view_mode'] == mode
+                finally:
+                    reopened.destroy()
+        # Selecting an already-active view in an older window is still an
+        # explicit choice, and must take precedence over another window's choice.
+        window.columns_button.emit('clicked')
+        restored.list_button.emit('clicked')
+        assert restored.view_mode == 'list'
+        assert json.loads(window.preferences_path.read_text())['view_mode'] == 'list'
         restored.destroy()
+        window.preferences_path.write_text(json.dumps({'view_mode': 'unknown'}))
+        invalid = PickerWindow(app, request, None)
+        invalid.present()
+        settle()
+        assert invalid.view_mode == 'grid' and invalid.grid_button.has_css_class('active')
+        invalid.destroy()
         window.preferences_path.write_text(json.dumps({'sidebar_width': 180}))
         legacy = PickerWindow(app, request, None)
         assert legacy.sidebar_split.get_position() == SIDEBAR_MIN_WIDTH
         legacy.present()
         settle()
         legacy.destroy()
+        print('PASS: view choice persists across Files/Open/Save windows, older-window saves, active-view clicks and invalid values')
         print('PASS: sidebar resize, persisted width, stable window/selection, pointer anchors and keyboard row anchor')
     except Exception:
         traceback.print_exc()

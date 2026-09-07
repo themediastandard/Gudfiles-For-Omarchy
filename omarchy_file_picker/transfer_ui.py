@@ -161,12 +161,17 @@ class TransferUI:
     def _build_transfer_button(self):
         self.transfer_queue.set_mode(self.file_preferences.get('transfer_mode', 'queue'))
         self.transfer_button = Gtk.Button()
-        box = Gtk.Box(spacing=6)
-        box.append(Gtk.Image.new_from_icon_name('folder-download-symbolic'))
-        self.transfer_count = Gtk.Label(label='Transfers')
-        box.append(self.transfer_count)
-        self.transfer_button.set_child(box)
-        self.transfer_button.add_css_class('transfer-launcher')
+        self.transfer_button.set_valign(Gtk.Align.CENTER)
+        icon = Gtk.Overlay()
+        icon.set_child(Gtk.Image.new_from_icon_name('folder-download-symbolic'))
+        self.transfer_count = Gtk.Label(halign=Gtk.Align.END, valign=Gtk.Align.START,
+                                        visible=False, can_target=False)
+        self.transfer_count.add_css_class('header-transfer-badge')
+        icon.add_overlay(self.transfer_count)
+        icon.set_measure_overlay(self.transfer_count, False)
+        self.transfer_button.set_child(icon)
+        self.transfer_button.add_css_class('header-utility')
+        self.transfer_button.update_property([Gtk.AccessibleProperty.LABEL], ['Transfers'])
         self.transfer_button.set_tooltip_text('Transfers · Ctrl+Shift+V adds clipboard files to the queue')
         self.transfer_button.connect('clicked', lambda *_: self._show_transfers())
         self.transfer_timer = GLib.timeout_add(120, self._poll_transfers)
@@ -355,7 +360,10 @@ class TransferUI:
             self.transfer_seen_states[job.id] = state
         count = sum(job.state not in TERMINAL for job in jobs)
         if hasattr(self, 'transfer_count'):
-            self.transfer_count.set_text(f'Transfers · {count}' if count else 'Transfers')
+            self.transfer_count.set_text(str(count) if count < 100 else '99+')
+            self.transfer_count.set_visible(bool(count))
+            self.transfer_button.update_property([Gtk.AccessibleProperty.LABEL],
+                [f'Transfers, {count} unfinished' if count else 'Transfers'])
             getattr(self.transfer_button, 'add_css_class' if count else 'remove_css_class')('active')
         if self.transfer_window:
             self.transfer_empty.set_visible(not jobs)

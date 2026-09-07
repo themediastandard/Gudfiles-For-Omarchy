@@ -7,6 +7,30 @@ as the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- List Up/Down moves the native row cursor immediately after switching views,
+  keeps the entire row visible and stops at the list edges. Shift extends ranges;
+  Ctrl moves focus without replacing selection. Search, filename fields, sidebar,
+  Quick Look and Alt navigation retain their own keyboard behavior.
+- Help and Transfers use matching 32-pixel header icon buttons with quiet idle
+  styling, hover/focus feedback, tooltips and accessible names. Unfinished transfers
+  show a small count badge without changing the button width or header layout.
+- Explorer tabs keep independent folders, history, selection, view, search,
+  hidden/rating/type filters, scroll position and full column trails. The tab
+  strip has New/Close controls, native reordering, middle-click close and folder
+  opening, context-menu Open in New Tab, Ctrl+T/W/Shift+T, Ctrl+Tab/Shift+Tab,
+  Ctrl+PageUp/PageDown and Alt+1–9. Tab hover switches after 600 ms during a
+  file drag. All tabs share the existing transfer queue and guarded final close.
+  Tabs are session-only; portal/explicit picker windows retain their original
+  controls and result semantics.
+- Tab styling follows Tommy's compact Finder preference: 28-pixel rounded pills,
+  bounded labels that do not expand across the strip, and a 20-pixel circular
+  close button on the left. A small New Tab control stays at the right edge.
+  New-tab scrolling waits for GTK layout before revealing the selected pill.
+- Header Help / F1 opens a compact, searchable feature guide with seven categories,
+  shortcut badges, empty-search recovery and active Omarchy colors. Ctrl+F focuses
+  help search; Escape closes only help. Each browser owns one reusable guide,
+  cleaned up when its Files/picker window ends. Quick Look, selection and file
+  operations remain independent of the guide.
 - Shared native dialog design for Rename, Properties, New Folder, Batch Rename,
   NAS, errors, Trash/Delete and Save replacement: draggable in-window headings,
   consistent file cards, labeled fields, inline errors and a fixed action footer.
@@ -20,6 +44,10 @@ as the desktop's XDG FileChooser portal backend.
   ready form actions and Escape/titlebar close share the cancellation path.
 - Native GTK 4 picker with grid, list and Finder-style column layouts, selected
   through a compact three-button toolbar group or the View context submenu.
+  The last chosen view is saved immediately and restored in new Files windows
+  and Open/Save pickers. Missing/invalid values default to grid; startup does
+  not rewrite the preference. Settings writes merge the latest on-disk values
+  so an older window's sidebar resize cannot replace a newer view choice.
 - Column view opens a selected folder into an adjacent column, retains the
   ancestor trail, and scrolls horizontally without growing the window. Left/
   Right move between columns; each column has independent vertical scrolling.
@@ -38,15 +66,22 @@ as the desktop's XDG FileChooser portal backend.
 - Blank-background drags select intersecting files in all three views with a
   theme-colored rectangle, Shift-add, Ctrl-toggle, edge scrolling and Escape
   restoration. File-origin click gestures remain native GTK.
-- Alt/Option file drags copy the selected group through the transfer manager in
-  all three views. Blank space duplicates into that folder; folder rows and
-  column backgrounds target the folder under the pointer. Native COPY-only
-  payloads, a plus badge, destination highlighting and edge scrolling preserve
-  originals and clipboard contents. Alt presses preserve multi-selection and
-  suppress column expansion during the drag; ordinary clicks stay GTK-native.
-  Copies retain available names or choose `copy`/`copy 2` names, preserving file
-  extensions and dotted folder names. Dynamic targets are reserved per folder
-  in All mode; publication races choose another name without overwriting.
+- Ordinary file drags move within a filesystem and copy between filesystems;
+  Alt/Option forces copies, including same-folder duplication. Drops target
+  folders, column backgrounds, sidebar locations and tabs in all three views.
+  Source/destination device checks use worker-thread stat/lstat, including the
+  symlink's own device. Mixed-device selections split into move/copy batches.
+  Same-folder ordinary drops do nothing. Existing names are never overwritten;
+  copies choose available names or `copy`/`copy 2` suffixes. Queue operations
+  retain verified copies, atomic moves, labels, progress and clipboard contents.
+- Drag sources preserve GTK click/range/double-click behavior until the drag
+  threshold. FlowBox's duplicate native rubber-band controller is disabled;
+  the existing background selection overlay owns blank drags. Native FileList /
+  URI payloads support other windows/apps; Alt advertises COPY only. Files uses
+  a marker to negotiate MOVE internally, acknowledges outside sources as COPY
+  so they cannot delete before queued work, and never deletes URI sources based
+  solely on GDK's delete-data flag. Hover checks are bounded/latest-only;
+  publication and identity verification remain the transfer engine's authority.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Multi-selection metadata shows a theme-colored stack of folders/documents,
@@ -117,6 +152,13 @@ as the desktop's XDG FileChooser portal backend.
 - Reads the active Omarchy `colors.toml` on every launch.
 - User-local portal installation with GTK retained as the fallback backend.
 - Sidebar uses the same application background, not a contrasting white panel.
+- Sidebar items have native pointer/keyboard context menus for Open, a separate
+  Files window, enclosing-folder reveal, Copy Location and Properties. Right-click
+  preserves the current directory, browser selection, column trail and geometry.
+  Remove from Sidebar hides default locations in display preferences or removes
+  only the shared GTK bookmark. Restore Default Locations is available from the
+  sidebar context menu. Recent has Open/removal actions; devices expose supported
+  Eject/Unmount/Disconnect actions and the NAS entry opens its connection dialog.
 - Native draggable sidebar divider with a 280-pixel minimum and 300-pixel default,
   older narrower saved widths clamped on load, scrollable places,
   and debounced width persistence without reloading files or clearing selection.
@@ -135,6 +177,18 @@ as the desktop's XDG FileChooser portal backend.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
+- Camera RAW Quick Look uses desktop MIME recognition and the installed
+  `raw-preview --thumbnail` reader, preserving orientation and the existing
+  1800×1400 texture bound, zoom/pan/fit controls and file navigation. Decoding
+  runs off GTK's thread with two shared slots and a 90-second limit. Closing,
+  browsing away or destroying the preview cancels queued work and kills the
+  active decoder process group. Temporary output is removed; originals and
+  sidecars are untouched. Missing support and unreadable files show an error.
+- Image, PDF and video preview cards fit the displayed media's aspect ratio
+  within the existing window bounds. Narrow previews put ratings below the
+  title/navigation row; extreme portrait media retains enough width for usable
+  controls. Video dimensions update when the decoder reports its display size;
+  text, audio-only and unavailable previews retain the general-purpose frame.
 - Image previews support pointer-anchored scroll zoom from fit to 8×, bounded
   drag panning and double-click to fit. Each new image starts fitted. Drawing
   is clipped inside a zero-request widget; the decoded texture remains bounded
@@ -146,6 +200,8 @@ as the desktop's XDG FileChooser portal backend.
 - Selection previews occupy a reserved 113-pixel strip. Neither the strip's
   content nor the Quick Look overlay participates in window size requests;
   long titles and metadata ellipsize with full values available in tooltips.
+  Empty, single-file and multi-selection text blocks remain vertically centered,
+  with the text rows in each block sharing the same left edge.
 - NAS dialog uses flat theme-colored controls, automatically searches Avahi/
   GVfs network advertisements, and offers explicit SMB share browsing, Refresh,
   saved/mounted locations, inline errors and cancellable mounting.
@@ -155,6 +211,12 @@ as the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/list_navigation.py` — list arrow routing through GTK's
+  native cursor/selection engine, with view-button focus handoff and row reveal.
+- `omarchy_file_picker/help_catalog.py` — feature descriptions, category metadata
+  and search; the single content source for the in-app guide.
+- `omarchy_file_picker/help_window.py` — native help window, category navigation,
+  shortcut badges, search states and owner-bound lifetime.
 - `omarchy_file_picker/picker.py` — native chooser UI and result protocol.
 - `omarchy_file_picker/portal.py` — XDG FileChooser D-Bus backend.
 - `omarchy_file_picker/model.py` — request parsing, filters, filesystem helpers.
@@ -171,6 +233,8 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/dialogs.py` — shared dialog shell, fields, file summaries,
   detail cards, bounded lists and explicit confirmation actions.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
+- `omarchy_file_picker/raw_preview.py` — RAW MIME detection and bounded,
+  cancellable subprocess loading through the external `raw-preview` helper.
 - `omarchy_file_picker/image_preview.py` — clipped image zoom and pan controllers.
 - `omarchy_file_picker/hover_scrub.py` — bounded silent thumbnail extraction/cache.
 - `omarchy_file_picker/media_details.py` — asynchronous media/EXIF probing and card.
@@ -179,9 +243,12 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/breadcrumbs.py` — chevron drawing/allocation and wheel handling.
 - `omarchy_file_picker/columns.py` — adjacent directory columns and active selection/focus.
 - `omarchy_file_picker/selection_summary.py` — collective selection icon/count strip.
+- `omarchy_file_picker/sidebar.py` — sidebar menus, shortcut visibility, independent
+  explorer windows and asynchronous device removal.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
-- `omarchy_file_picker/drag_copy.py` — Alt-drag capture, native COPY payloads,
-  folder/column drop targets, highlighting and scrolling.
+- `omarchy_file_picker/drag_copy.py` / `drag_policy.py` — native file dragging,
+  asynchronous disk policy, folder/sidebar/tab targets, highlights and scrolling.
+- `omarchy_file_picker/tabs.py` — explorer tab strip and independent browser state.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
 - `data/` — user-local portal, D-Bus, desktop, and systemd templates.
@@ -191,13 +258,16 @@ as the desktop's XDG FileChooser portal backend.
 
 ```bash
 python -m unittest discover -v
+HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
 PYTHONPATH=. python tests/ui_transfer_modes.py
 PYTHONPATH=. python tests/ui_transfer_visibility.py
 PYTHONPATH=. python tests/ui_drag_copy.py
+PYTHONPATH=. python tests/ui_tabs_drag.py
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
+RAW_PREVIEW_SAMPLES=/path/to/known-good-raws PYTHONPATH=. python tests/ui_raw_preview.py
 PYTHONPATH=. python tests/ui_image_zoom.py
 PYTHONPATH=. python tests/ui_hover_scrub.py
 PYTHONPATH=. python tests/ui_media_details.py
@@ -209,11 +279,13 @@ PYTHONPATH=. python tests/ui_columns.py
 PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
+PYTHONPATH=. python tests/ui_preview_aspect.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
 PYTHONPATH=. python tests/ui_selection_summary.py
 PYTHONPATH=. python tests/ui_sidebar_menu.py
+PYTHONPATH=. python tests/ui_sidebar_actions.py
 PYTHONPATH=. python tests/ui_explorer.py
 PYTHONPATH=. python tests/ui_drag_selection.py
 PYTHONPATH=. python tests/ui_conversion_notice.py
@@ -233,6 +305,31 @@ gdbus introspect --session \
 
 ## Decisions and constraints
 
+- When restoring list keyboard navigation after rebuilding FlowBox children, use
+  the FlowBox's `child_focus()` to initialize its native cursor. Direct child
+  `grab_focus()` can leave the old internal cursor invalid; a subsequent native
+  move reproduced a GTK crash in an isolated test. `tests/ui_list_navigation.py`
+  exercises actual Up/Down/Shift/Ctrl/Enter keys using disposable Xvfb + xdotool,
+  including view changes, full-row scrolling, boundaries, folder-only/Save modes
+  and editable/sidebar safety. It uses the same `POINTER_QA_ISOLATED=1` guard and
+  optional `XDOTOOL` path as the existing isolated pointer suite.
+- RAW support reuses the workstation's `raw-preview` helper rather than loading
+  camera decoders into GTK. The helper, desktop RAW MIME database and decoder
+  packages must already be installed; `install.sh` only installs the picker.
+  Native RAW QA accepts supplied samples read-only, isolates app preferences,
+  verifies Space/Escape, navigation, zoom/fit, responsive loading, orientation,
+  cancellation and stable geometry. `RAW_PREVIEW_SCREENSHOTS=/tmp/raw-preview`
+  captures its own widget tree. The tests float only their disposable window.
+  Complete CR2/CR3/ARW/NEF/RAF/RW2/ORF/PEF/KDC/X3F samples and a DNG preview
+  fixture passed. Decoder tests cover child-process cleanup, timeout, bounded
+  concurrency and missing/failed helpers. File hashes and sidecars are checked.
+- Keep `help_catalog.py` current whenever a user-facing capability or shortcut
+  changes. Describe shipped behavior and its entry point; do not list planned
+  features. The guide derives its navigation and counts from this catalog.
+- Help QA uses disposable files/preferences and native GTK signals. It verifies
+  light/active themes, categories, global and shortcut searches, long/no-result
+  queries, repeat open/close, F1 across views and Quick Look, picker isolation,
+  and owner teardown. Optional captures show the actual GTK windows.
 - No files under `/usr/share/omarchy` are modified.
 - The implementation depends only on Omarchy's existing GTK 4/PyGObject stack.
 - PDF preview uses optional Poppler GI/Cairo. Media playback needs GStreamer
@@ -309,11 +406,20 @@ gdbus introspect --session \
 - Drag-copy QA uses GTK prepare/drop signals and actual widget hit testing for
   three-view multi-selection, same-folder copies, folder/column destinations,
   clipboard preservation, recursive/nonlocal rejection and edge scrolling.
-  GTK URI serialization is round-tripped with escaped names. Physical mouse
-  events and inter-application DND remain manual checks. Optional
+  GTK URI serialization is round-tripped with escaped names. Inter-application
+  DND remains a separate manual check. Optional
   `DRAG_COPY_QA_SCREENSHOT=/tmp/drag-copy.png` captures the native drop highlight.
   Backend tests cover collision races, ambiguous receipts, long/hidden names,
   folders/symlinks, identical basenames, verified resume and cancellation.
+- `tests/ui_pointer_drag.py` uses real xdotool mouse/key input on an isolated
+  Xvfb display. Set `DISPLAY` to that display, `GDK_BACKEND=x11`,
+  `POINTER_QA_ISOLATED=1`, and optionally `XDOTOOL` to the executable.
+  Fast file gestures must survive GTK's 100 ms DragSource hold threshold without
+  FlowBox capturing a rubber band. `POINTER_QA_SCREENSHOT` captures only the
+  fixture window. The test does not modify system packages or configuration.
+- `tests/ui_tabs_drag.py` checks independent history/view/query/selection/scroll,
+  column trails, close/reopen/reorder/shortcuts, three-view multi-file drops,
+  tab hover switching, sidebar copies, geometry and refreshed source tabs.
 - Visibility QA uses real gated copies with controlled elapsed-time counters
   at 299/300 seconds, concurrent completion, manual history, pause/failure and
   completion during window construction. Realize a newly created Transfers
@@ -326,8 +432,25 @@ gdbus introspect --session \
   avoid queued Wayland input-method events reaching destroyed widgets.
 - Sidebar/menu QA uses isolated preferences and native Paned positions, verifies
   restored width, and checks pointer/keyboard anchors against real GTK bounds.
+  It restores all three views in Files/Open/Save windows and verifies that an
+  older window's unrelated save preserves the latest explicit view choice.
   Present test windows before destroying them; an unshown second window triggered
   a GTK destruction crash on this desktop. No desktop rules are changed by QA.
+- Sidebar action QA emits native GTK gesture signals and hit-tests real row
+  bounds, including a scrolled sidebar, in grid/list/column views. It checks
+  pointer/keyboard anchors, preserved selection/history, targeted actions, hidden
+  location persistence, restoration, idempotent bookmark removal and an actual
+  independent explorer process. Device capabilities, busy transfers, failure and
+  completion use simulated mounts; no live share is disconnected during QA.
+  `SIDEBAR_ACTIONS_QA_SCREENSHOT=/tmp/sidebar.png` captures the fixture window and
+  a separate `-menu.png` native popover. The QA automation keeps its menus open
+  despite desktop focus changes; normal menus dismiss on outside clicks.
+- Device removal uses Gio asynchronous operations with no force flag or force
+  prompt. File operations, media conversions and unfinished transfers in that
+  Files session block removal. Busy-device errors are shown without forcing it;
+  success returns an affected browser to Home. Pending operations cancel on
+  window destruction. Open in New Window starts an independent explorer process
+  so closing it cannot finish/cancel an originating portal request.
 - Navigation QA checks the wider default/minimum and old-width migration,
   synchronized eye/filter chips and removals, bounded long queries, connected
   chevron geometry/hit areas and bidirectional wheel scrolling without navigation.
@@ -340,6 +463,21 @@ gdbus introspect --session \
   window size/position, and browser height during selection and Space preview
   open/close with portrait, landscape, square images and long-name text. They
   float/resize only their disposable test window, without editing desktop rules.
+- Aspect QA checks portrait/landscape/square images and videos, attached control
+  bounds, window resizing and stale decoder callbacks. Fitting follows GTK's
+  reported paintable aspect; media orientation/pixel-aspect handling remains
+  owned by its decoder rather than a separate container-dimension probe.
+  `ASPECT_QA_SCREENSHOTS=/tmp/preview-aspect` captures its disposable windows.
+  Aspect, geometry, image zoom, Quick Look, label-palette and five-codec timing
+  checks passed. The installed module matches source; an actual portrait clip
+  was verified in the installed player with correctly fitted bounds and an
+  unmuted, nonzero system audio stream.
+- Playback QA compares media timestamps with monotonic elapsed time and sets a
+  distinct GLib application name before creating a player. PipeWire/PulseAudio
+  remembers stream mute and volume by application name outside the isolated home;
+  muting QA under the generic `python` identity can silence subsequent Files
+  previews even when GtkMediaStream reports unmuted at full volume. Inspect the
+  actual sink input matched by process ID when diagnosing missing sound.
 - Image zoom QA emits real GTK controller signals (not physical mouse events)
   and checks zoom limits, pointer anchoring, pan bounds, reset, loading spinner,
   clipped rendered bounds and unchanged layout for wide and tall fixtures.
@@ -393,6 +531,19 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- Tabs/drag verification (2026-09-07): 142 unit tests passed. Native drag-copy,
+  tab/state, background selection, keyboard selection, columns, explorer/picker,
+  transfers, Queue/All, visibility and Help suites passed. An isolated Xvfb
+  display with actual xdotool input verified plain/Shift/Ctrl clicks, fast
+  multi-file drags in all three views, Alt-copy, folder double-clicks, tab hover
+  switching and reordering, and a real cross-filesystem tab copy to `/dev/shm`.
+  Native GTK snapshots of the tab strip were visually inspected. Wayland
+  handler/payload checks passed; pointer automation was isolated from Tommy's
+  live desktop. External-application receivers remain a separate manual check.
+  Tabs/drag changes were installed locally; tab, explorer/picker and selection
+  QA also passed against the installed package. Tabs do not
+  persist between app sessions. Existing explicit cut/paste across volumes
+  still refuses a move; drag-and-drop chooses a verified copy automatically.
 - Transfer verification: 136 unit tests and native drag-copy, transfer-visibility,
   transfer-mode/transfer/file-management,
   columns, selection, drag selection, layout, preview geometry, Quick Look,

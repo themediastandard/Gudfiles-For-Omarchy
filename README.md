@@ -10,6 +10,20 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 
 ## Features
 
+- Folder tabs with separate history, view, filters, selection and scroll position
+- Drag files to folders, sidebar locations or tabs: move on the same disk, copy
+  between disks; hold Alt / Option to copy anywhere
+- Ctrl+T for a new tab, Ctrl+W to close, Ctrl+Shift+T to reopen, Ctrl+Tab to switch
+- Drag tabs to reorder; middle-click folders to open them in background tabs
+Click **Help** in the header or press **F1** for a searchable, theme-matched
+feature guide with categories and keyboard shortcuts. It opens in a separate
+compact window, including from Quick Look and Open/Save dialogs. **Ctrl+F**
+focuses its search; **Escape** closes only the guide.
+
+The guide is maintained in `omarchy_file_picker/help_catalog.py`. Add or update
+its entries whenever a user-facing feature or shortcut changes; navigation,
+search results and feature counts are generated from that catalog.
+
 - Thumbnail-first grid and compact list views
 - Dense list rows with no gaps between files
 - Image previews and freedesktop video thumbnail cache support
@@ -45,6 +59,8 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 - Automatic colors from the active Omarchy theme
 - Cohesive sidebar, browser, previews and dialogs using the same Omarchy palette
 - Space-bar Quick Look: animated expansion from the selected file and return
+- Camera RAW photos in Quick Look, including CR2/CR3, ARW, NEF, RAF, RW2,
+  DNG, ORF, PEF and X3F when supported by the installed RAW reader
 - Image, UTF-8 text and first-page PDF previews; arrow keys browse adjacent files
 - NAS dialog automatically discovers advertised SMB/NFS servers and GVfs
   network locations; select an SMB server to browse its shares, then Connect
@@ -60,6 +76,15 @@ setting. Images initially fit without cropping: scroll up/down over the image
 to zoom in/out (up to 8× the fitted size), drag to pan, and double-click to fit
 again. Each newly opened image resets to fit; zoom uses the bounded preview
 texture, not a full-resolution image editor. Loading displays a spinner.
+Camera RAW photos use these same controls through the `raw-preview` command
+from the workstation's camera RAW setup. The desktop MIME database identifies
+RAW files, including types Python's default image list omits. Decoding runs in
+the background with at most two processes, stops when the preview is closed or
+superseded, and keeps output in temporary storage. It never edits the original
+or creates sidecar files. The helper and its decoder packages are optional
+system dependencies and are not installed by `install.sh`; without the helper,
+Quick Look reports that RAW preview support is missing. Exact camera and
+compression support depends on the installed reader. Reopen Files after updating.
 Text is read-only and
 limited to 128 KB, and PDFs show their first page with the total page count.
 The selection preview strip and Space-bar preview stay within the existing
@@ -111,6 +136,18 @@ copies that finish before the panel opens do not flash a completed window;
 their history remains available from **Transfers**.
 Display preferences persist in `~/.config/omarchy-file-picker/preferences.json`;
 bookmarks use the shared GTK `~/.config/gtk-3.0/bookmarks` file.
+Your last chosen grid, list, or column view is saved as soon as you select it
+and restored when you open Files or an Open/Save dialog again.
+
+Right-click a sidebar location for **Open**, **Open in New Window**, **Copy
+Location**, and **Properties**. Local folders also offer **Show in Enclosing
+Folder**. **Remove from Sidebar** hides a default location or removes a shared
+bookmark without deleting its folder. Right-click the sidebar and choose
+**Restore Default Locations** to bring hidden defaults back. Mounted devices
+offer **Eject**, **Unmount**, or **Disconnect** when supported; unfinished
+transfers and file operations must finish or be cancelled first. Right-click
+keeps the current folder and file selection; `Shift+F10` opens the menu for a
+focused sidebar item.
 
 Keyboard actions include `F2` Rename, `Delete` Trash, `Shift+Delete` permanent
 delete, `Ctrl+X/C/V` Cut/Copy/Paste, `Ctrl+Shift+C` Copy Location,
@@ -118,14 +155,24 @@ delete, `Ctrl+X/C/V` Cut/Copy/Paste, `Ctrl+Shift+C` Copy Location,
 `Shift+F10` context menu. `Ctrl+A` selects all when the caller permits multiple
 files. Text-entry editing retains its normal clipboard shortcuts.
 
+In list view, **Up / Down** moves through file and folder selections, including
+immediately after switching views. **Shift** extends a range and **Ctrl** moves
+focus without changing the selection. The focused row stays visible; **Enter**
+opens a focused folder. Arrows in search, filename fields and the sidebar keep
+their usual behavior.
+
 Standalone Open enables multi-selection by default: click replaces the selection,
 Shift-click selects a continuous range in display order, and Ctrl-click adds or
-removes individual files. Both grid and list views support these gestures. Use
+removes individual files. Grid, list and column views support these gestures. Use
 `--single` for a single-selection standalone picker. Portal dialogs honor the
 calling application's single/multiple setting; Save stays a single destination.
 Click and drag from blank folder background to draw a selection rectangle in
-either view. Shift-drag adds to the selection, Ctrl-drag toggles covered items,
+all three views. Shift-drag adds to the selection, Ctrl-drag toggles covered items,
 and Escape cancels the drag. Dragging near the top/bottom edge scrolls the folder.
+
+Drag files normally to **move them on the same disk** or **copy them to another
+disk**. Drop onto a folder, sidebar location or tab. Hover over a tab to switch
+to it while dragging. Dropping in the original folder does nothing.
 
 Hold **Alt / Option** before dragging a file or selected group to copy it. Drop
 on blank space to duplicate in that folder, or onto another folder/column to
