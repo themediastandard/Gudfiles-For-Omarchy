@@ -7,6 +7,16 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- External file-manager requests use `org.omarchy.FilePicker.External`.
+  `ShowItems` groups requested items by parent folder and selects them after
+  layout, including folder entries, hidden files, symlinks and escaped names.
+  `ShowFolders` enters the requested folder in the same external window mode.
+  CLI `--select PATH` (repeat for siblings) reveals items; `--external` marks
+  temporary browsers. A standalone file argument also selects that file and
+  uses the external identity. Ordinary folder browsing remains the base class;
+  Open/Save requests retain the picker class and their existing semantics.
+  Hyprland floating behavior is configured in the user profile, matching the
+  external class, independently of the app title.
 - The top-bar Sort menu exposes Newest/Oldest first (date modified), name and
   type in both directions, Largest/Smallest first, and a Folders first toggle.
   It shares choices and the current-order checkmark with right-click → Sort By.
@@ -15,7 +25,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   from older windows preserve the newest saved sorting pair.
 - The desktop launcher accepts a local file argument and advertises common video
   MIME types, so Gudfiles can be the default application for opening videos. A
-  file launch opens the standalone browser at that video's containing folder.
+  file launch reveals and selects that video in its containing folder.
 - Open/Save picker windows use the distinct Wayland application ID
   `org.omarchy.FilePicker.Picker`; the standalone browser retains
   `org.omarchy.FilePicker`. This lets Hyprland float every picker regardless of
@@ -392,6 +402,7 @@ PYTHONPATH=. python tests/ui_selection_summary.py
 PYTHONPATH=. python tests/ui_sidebar_menu.py
 PYTHONPATH=. python tests/ui_sidebar_actions.py
 PYTHONPATH=. python tests/ui_explorer.py
+REVEAL_QA_HYPRLAND=1 PYTHONPATH=. python tests/ui_external_reveal.py
 PYTHONPATH=. python tests/ui_drag_selection.py
 PYTHONPATH=. python tests/ui_conversion_notice.py
 PYTHONPATH=. python tests/ui_mounts.py
@@ -688,6 +699,18 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- External reveal verification (2026-09-07): 181 unit tests passed. Native
+  reveal QA verifies grid/list/columns, offscreen items, hidden files, multiple
+  siblings, directory entries, symlinks, missing targets and cancelled startup
+  navigation. It checks full-row visibility, root focus and active-window native
+  cursor movement. The suite also passed against the installed package. Live
+  session-bus `ShowItems` activated the updated service and a floating external
+  browser with the exact escaped target; separate live launches confirmed tiled
+  ordinary browsing and floating Save pickers. Hyprland reload/config validation
+  passed. The shared `focus_file()` helper initializes GTK’s cursor;
+  frame-clock reveal waits for compositor and metadata layout to settle before
+  clamping scrolling. Ordinary explorer and Open/Save behavior checks also pass.
 
 - Sort/keyboard verification (2026-09-07): 175 unit tests passed. Native sorting
   QA passed in grid/list/columns and restored explorer/Open/Save preferences.

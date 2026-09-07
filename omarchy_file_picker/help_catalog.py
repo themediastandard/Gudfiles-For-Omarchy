@@ -42,6 +42,9 @@ CATEGORIES = (
 )
 
 FEATURES = (
+    Feature('browse', 'Show in Files from another app',
+            'Use Show in Files or Show in Folder in another app to open the containing folder with the requested items selected and scrolled into view. Hidden targets are shown too.',
+            keywords='chromium downloads reveal external selection'),
     Feature('browse', 'Folder tabs',
             'Use + or Ctrl + T for a new Gudfiles tab. Each tab keeps its folder history, view, filters, selection and scroll. Ctrl + W closes a tab; Ctrl + Shift + T reopens it. Drag tabs to reorder them.',
             'Ctrl + T / W', 'finder tabs close reopen'),

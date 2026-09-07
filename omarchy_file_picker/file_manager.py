@@ -31,12 +31,34 @@ FILE_MANAGER_XML = """
 """
 
 
-def path_for_show_request(uris: list[str]) -> Path | None:
+def paths_for_show_request(uris: list[str]) -> list[Path]:
+    paths = []
     for uri in uris:
         parsed = urlparse(uri)
         if parsed.scheme == "file" and parsed.netloc in ("", "localhost"):
-            return Path(unquote(parsed.path))
-    return None
+            path = Path(unquote(parsed.path))
+            if path.is_absolute() and '\0' not in str(path) and path not in paths:
+                paths.append(path)
+    return paths
+
+
+def path_for_show_request(uris: list[str]) -> Path | None:
+    return next(iter(paths_for_show_request(uris)), None)
+
+
+def show_request_commands(launcher: str, method: str, uris: list[str]) -> list[list[str]]:
+    groups: dict[Path, list[Path]] = {}
+    for path in paths_for_show_request(uris):
+        folder = path if method == 'ShowFolders' else path.parent
+        groups.setdefault(folder, []).append(path)
+    commands = []
+    for folder, targets in groups.items():
+        command = [launcher, '--external', '--demo', str(folder), '--multiple']
+        if method != 'ShowFolders':
+            for target in targets:
+                command.extend(['--select', str(target)])
+        commands.append(command)
+    return commands
 
 
 class FileManagerService:
@@ -82,12 +104,15 @@ class FileManagerService:
             invocation.return_dbus_error("org.freedesktop.DBus.Error.UnknownMethod", method_name)
             return
         uris, _startup_id = parameters.unpack()
-        target = path_for_show_request(list(uris))
-        if target is not None:
-            Gio.Subprocess.new(
-                [self.launcher, "--demo", str(target), "--multiple"],
-                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
-            )
+        try:
+            for command in show_request_commands(self.launcher, method_name, list(uris)):
+                Gio.Subprocess.new(
+                    command,
+                    Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
+                )
+        except GLib.Error as error:
+            invocation.return_dbus_error('org.freedesktop.DBus.Error.Failed', str(error))
+            return
         invocation.return_value(None)
 
     def run(self) -> int:

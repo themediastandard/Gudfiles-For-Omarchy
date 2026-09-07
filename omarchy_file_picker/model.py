@@ -50,6 +50,8 @@ class PickerRequest:
     choices: list[dict[str, Any]] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
     app_id: str = ""
+    external: bool = False
+    selected_paths: list[Path] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PickerRequest":

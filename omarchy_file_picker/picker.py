@@ -136,7 +136,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.special_mode: str | None = None
         self.history = [self.current_dir]
         self.history_index = 0
-        self.show_hidden = False
+        self.show_hidden = any(path.name.startswith('.') for path in request.selected_paths)
         self.view_mode = "grid"
         self.entries: list[Path] = []
         self.children_by_path: dict[Path, Gtk.FlowBoxChild] = {}
@@ -171,6 +171,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         else:
             self._set_view(self.file_preferences['view_mode'], persist=False)
         self.tabs.initialize()
+        if request.explorer and request.selected_paths:
+            from .reveal import reveal_initial_selection
+            reveal_initial_selection(self)
         if os.environ.get("OMARCHY_FILE_PICKER_DEMO_SELECT_FIRST") == "1":
             GLib.idle_add(self._select_first_file)
         automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
@@ -1813,7 +1816,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
 
 
 def application_id_for(request: PickerRequest) -> str:
-    return "org.omarchy.FilePicker" if request.explorer else "org.omarchy.FilePicker.Picker"
+    if not request.explorer:
+        return "org.omarchy.FilePicker.Picker"
+    return "org.omarchy.FilePicker.External" if request.external else "org.omarchy.FilePicker"
 
 
 class PickerApplication(Gtk.Application):
@@ -1835,6 +1840,9 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
     parser.add_argument("--request", type=Path, help="JSON portal request")
     parser.add_argument("--result", type=Path, help="JSON result destination")
     parser.add_argument("--demo", nargs="?", const=str(Path.home() / "Pictures"), help="Open standalone demo")
+    parser.add_argument('--external', action='store_true', help='Open a temporary external browser window')
+    parser.add_argument('--select', action='append', type=Path, default=[],
+                        help='Reveal and select an item in its parent folder (repeat for siblings)')
     parser.add_argument("--mode", choices=("open", "save", "save_files"), default="open")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--multiple", dest="multiple", action="store_true", default=None,
@@ -1846,11 +1854,21 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
     if args.request:
         request = PickerRequest.from_dict(json.loads(args.request.read_text(encoding="utf-8")))
     else:
-        folder = Path(args.demo or Path.cwd()).expanduser()
+        folder = Path(os.path.abspath(Path(args.demo or Path.cwd()).expanduser()))
         explorer = args.mode == 'open' and not args.directory and args.result is None
+        selected = [Path(os.path.abspath(path.expanduser())) for path in args.select] if explorer else []
+        if selected:
+            folder = selected[0].parent
+            if any(path.parent != folder for path in selected):
+                parser.error('--select items must share a parent folder')
+        elif explorer and args.demo and not folder.is_dir():
+            selected = [folder]
+        external = explorer and (args.external or bool(selected))
         request = PickerRequest(
             mode=args.mode,
             explorer=explorer,
+            external=external,
+            selected_paths=selected,
             title="GUDFILES" if explorer else ("Save File" if args.mode == "save" else "Open File"),
             accept_label="Save" if args.mode == "save" else ("Select Folder" if args.directory else "Open"),
             current_folder=folder if folder.is_dir() else folder.parent,
