@@ -13,7 +13,7 @@ import gi
 gi.require_version('GdkX11', '4.0')
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
 from omarchy_file_picker.model import PickerRequest
-from omarchy_file_picker.list_navigation import navigate_list
+from omarchy_file_picker.list_navigation import navigate_files
 from gi.repository import Gdk, Gio, GLib, Gtk, GdkX11
 
 
@@ -94,14 +94,14 @@ with tempfile.TemporaryDirectory(prefix='list-keys-') as temp, \
             assert window.get_focus()._picker_path == last
             window.search.grab_focus()
             before = window._selected_paths()
-            assert not navigate_list(window, Gdk.KEY_Up, Gdk.ModifierType(0))
+            assert not navigate_files(window, Gdk.KEY_Up, Gdk.ModifierType(0))
             send('key', 'Up')
             assert window._selected_paths() == before
             window.list_button.grab_focus()
-            assert not navigate_list(window, Gdk.KEY_Up, Gdk.ModifierType.ALT_MASK)
+            assert not navigate_files(window, Gdk.KEY_Up, Gdk.ModifierType.ALT_MASK)
             sidebar = window.location_buttons[0]
             sidebar.grab_focus()
-            assert not navigate_list(window, Gdk.KEY_Down, Gdk.ModifierType(0))
+            assert not navigate_files(window, Gdk.KEY_Down, Gdk.ModifierType(0))
             window.navigate(root)
             settle()
             click(window.list_button)

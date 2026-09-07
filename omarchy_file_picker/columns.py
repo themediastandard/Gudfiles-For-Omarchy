@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 from .drag_copy import disable_native_rubberband
+from .list_navigation import focus_file
 
 
 class ColumnBrowser(Gtk.ScrolledWindow):
@@ -93,7 +94,10 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             if self.focus_restore is column and column in self.columns:
                 self.activate(column, record=False)
                 selected = column.flow.get_selected_children()
-                self.owner.set_focus(selected[0] if selected else column.flow)
+                if selected:
+                    focus_file(self.owner, selected[0])
+                else:
+                    self.owner.set_focus(column.flow)
                 valid, bounds = column.panel.compute_bounds(self.box)
                 if valid:
                     adjustment = self.get_hadjustment()

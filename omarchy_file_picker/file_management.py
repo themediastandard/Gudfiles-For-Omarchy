@@ -19,6 +19,17 @@ SIDEBAR_MIN_WIDTH = 280
 SIDEBAR_DEFAULT_WIDTH = 300
 from .model import file_type, format_size
 
+SORT_OPTIONS = (
+    ('modified', True, 'Newest first'),
+    ('modified', False, 'Oldest first'),
+    ('name', False, 'Name A–Z'),
+    ('name', True, 'Name Z–A'),
+    ('size', True, 'Largest first'),
+    ('size', False, 'Smallest first'),
+    ('type', False, 'Type A–Z'),
+    ('type', True, 'Type Z–A'),
+)
+
 
 class FileManagement(TransferUI):
     """Native dialogs and actions shared by keyboard and context menus."""
@@ -70,7 +81,10 @@ class FileManagement(TransferUI):
             self.action_sounds.stop()
 
     def _set_file_preference(self, key, value, *, reload=True):
-        self.file_preferences[key] = value
+        self._set_file_preferences({key: value}, reload=reload)
+
+    def _set_file_preferences(self, changes, *, reload=True):
+        self.file_preferences.update(changes)
         try:
             self.preferences_path.parent.mkdir(parents=True, exist_ok=True)
             file = Gio.File.new_for_path(str(self.preferences_path))
@@ -87,16 +101,70 @@ class FileManagement(TransferUI):
                     raise
                 saved, etag = {}, None
             # Other Files windows may have saved newer choices. Change only this
-            # key on disk; keep this window's current display settings in memory.
-            updated = {**self.file_preferences, **saved, key: value}
+            # requested keys on disk; keep this window's display settings in memory.
+            updated = {**self.file_preferences, **saved, **changes}
             file.replace_contents(
                 json.dumps(updated).encode(), etag, False,
                 Gio.FileCreateFlags.PRIVATE, None,
             )
         except (OSError, GLib.Error) as error:
             self._show_error('Could not save display preferences', str(error))
+        if hasattr(self, 'sort_button'):
+            self._update_sort_button()
         if reload:
             self._load()
+
+    def _build_sort_button(self):
+        self.sort_button = Gtk.MenuButton(label='Sort')
+        self.sort_button.update_property([Gtk.AccessibleProperty.LABEL], ['Sort files'])
+        self.sort_popover = Gtk.Popover()
+        self.sort_popover.add_css_class('file-context-menu')
+        self.sort_popover.connect('show', self._populate_sort_menu)
+        self.sort_button.set_popover(self.sort_popover)
+        self._update_sort_button()
+        return self.sort_button
+
+    def _update_sort_button(self):
+        prefs = self.file_preferences
+        title = next(title for key, descending, title in SORT_OPTIONS
+                     if (key, descending) == (prefs['sort_key'], prefs['descending']))
+        detail = ' · Date modified' if prefs['sort_key'] == 'modified' else ''
+        self.sort_button.set_tooltip_text(f'Sort: {title}{detail}')
+
+    def _sort_menu_entries(self):
+        prefs = self.file_preferences
+        entries = []
+        for key, descending, title in SORT_OPTIONS:
+            selected = (key, descending) == (prefs['sort_key'], prefs['descending'])
+            entries.append((title, 'Date modified' if key == 'modified' else '',
+                            'object-select-symbolic' if selected else
+                            ('view-sort-descending-symbolic' if descending else 'view-sort-ascending-symbolic'),
+                            lambda k=key, d=descending: self._set_sort(k, d)))
+        entries.append(('Folders first', 'On' if prefs['folders_first'] else 'Off',
+                        'folder-symbolic', self._toggle_folders_first))
+        return entries
+
+    def _populate_sort_menu(self, popover):
+        menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        for side in ('top', 'bottom', 'start', 'end'):
+            getattr(menu, 'set_margin_' + side)(7)
+        for index, (title, detail, icon, callback) in enumerate(self._sort_menu_entries()):
+            if index == len(SORT_OPTIONS):
+                menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+            menu.append(self._menu_button(title, callback, icon_name=icon, detail=detail))
+        popover.set_child(menu)
+
+    def _set_sort(self, key, descending):
+        self.sort_popover.popdown()
+        # Save criterion and direction together so another window cannot restore
+        # half of the previous choice. Refresh once and keep the selected files.
+        self._set_file_preferences({'sort_key': key, 'descending': descending}, reload=False)
+        self._refresh_files()
+
+    def _toggle_folders_first(self):
+        self.sort_popover.popdown()
+        self._set_file_preference('folders_first', not self.file_preferences['folders_first'], reload=False)
+        self._refresh_files()
 
     def _bookmarks(self):
         result = []
@@ -444,13 +512,4 @@ class FileManagement(TransferUI):
                         'audio-volume-low-symbolic' if enabled else 'audio-volume-muted-symbolic',
                         self._toggle_sound_effects))
         submenu('View', 'view-grid-symbolic', options)
-        sorts = [(title, 'Selected' if prefs['sort_key'] == key else '', 'view-sort-ascending-symbolic',
-                  lambda k=key: self._set_file_preference('sort_key', k))
-                 for key, title in [('name', 'Name'), ('modified', 'Modified'), ('size', 'Size'), ('type', 'Type')]]
-        sorts.extend([
-            ('Ascending' if prefs['descending'] else 'Descending', '', 'view-sort-descending-symbolic',
-             lambda: self._set_file_preference('descending', not prefs['descending'])),
-            ('Mix Folders and Files' if prefs['folders_first'] else 'Folders First', '', 'folder-symbolic',
-             lambda: self._set_file_preference('folders_first', not prefs['folders_first'])),
-        ])
-        submenu('Sort By', 'view-sort-ascending-symbolic', sorts)
+        submenu('Sort By', 'view-sort-ascending-symbolic', self._sort_menu_entries())

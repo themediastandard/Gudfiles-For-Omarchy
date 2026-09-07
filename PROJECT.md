@@ -7,6 +7,12 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- The top-bar Sort menu exposes Newest/Oldest first (date modified), name and
+  type in both directions, Largest/Smallest first, and a Folders first toggle.
+  It shares choices and the current-order checkmark with right-click → Sort By.
+  Sorting preserves selection in grid/list/columns and saves criterion/direction
+  together; new explorer/Open/Save windows restore the choice. Unrelated writes
+  from older windows preserve the newest saved sorting pair.
 - The desktop launcher accepts a local file argument and advertises common video
   MIME types, so Gudfiles can be the default application for opening videos. A
   file launch opens the standalone browser at that video's containing folder.
@@ -69,10 +75,16 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   The existing commands,
   application/portal IDs and storage paths remain stable for compatibility.
 
-- List Up/Down moves the native row cursor immediately after switching views,
-  keeps the entire row visible and stops at the list edges. Shift extends ranges;
-  Ctrl moves focus without replacing selection. Search, filename fields, sidebar,
-  Quick Look and Alt navigation retain their own keyboard behavior.
+- File arrows follow the visible layout: Up/Down moves between grid rows or
+  adjacent items in list/column views; Left/Right moves across grid tiles or
+  between folder columns. The first arrow after a view/sort-button handoff moves
+  immediately. Full rows stay visible and edges keep focus in the files. Shift
+  extends ranges and Ctrl moves focus without replacing selection; menus, search,
+  filename fields, sidebar and Alt navigation retain their own controls.
+- Space preview accepts Down/Right for the next file and Up/Left for the previous
+  file in the current sort order. Closing restores the native cursor to the last
+  previewed file, including within a nested column trail. Focused preview text
+  and playback sliders retain their own arrow controls.
 - Help and Transfers use matching 32-pixel header icon buttons with quiet idle
   styling, hover/focus feedback, tooltips and accessible names. Unfinished transfers
   show a small count badge without changing the button width or header layout.
@@ -282,8 +294,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - `scripts/generate_sounds.py` — deterministic standard-library synthesis for
   the bundled sound assets; no external recordings or sound libraries.
 
-- `omarchy_file_picker/list_navigation.py` — list arrow routing through GTK's
-  native cursor/selection engine, with view-button focus handoff and row reveal.
+- `omarchy_file_picker/list_navigation.py` — spatial arrow routing through GTK's
+  native cursor/selection engine, view/sort handoff, row reveal and cursor-safe
+  focus restoration shared with columns and Quick Look.
 - `omarchy_file_picker/help_catalog.py` — feature descriptions, category metadata
   and search; the single content source for the in-app guide.
 - `omarchy_file_picker/help_window.py` — native help window, category navigation,
@@ -346,6 +359,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_sorting.py
 LIGHT_THEME_QA_SCREENSHOTS=/tmp/gudfiles-light PYTHONPATH=. python tests/ui_light_theme.py
 SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action_sounds.py
 HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
@@ -422,6 +436,19 @@ gdbus introspect --session \
   including view changes, full-row scrolling, boundaries, folder-only/Save modes
   and editable/sidebar safety. It uses the same `POINTER_QA_ISOLATED=1` guard and
   optional `XDOTOOL` path as the existing isolated pointer suite.
+- `focus_file()` restores a specific file with the child's `child_focus()` while
+  preserving selection and suppressing selection callbacks. Direct `grab_focus()`
+  after stepping through Quick Look left GTK's cursor on the originally opened
+  file, so the next arrow jumped from the wrong item. Column focus restoration
+  shares the helper. `tests/ui_arrow_navigation.py` uses the same isolated Xvfb
+  setup to exercise real spatial keys, Shift/Ctrl, view/sort handoff, menus,
+  scrolling, sorted preview navigation/close and nested column transitions.
+  Pointer fixtures scroll target rows into view and wait for GTK's scroll
+  animation before clicking; stale coordinates can click a different row.
+- `tests/ui_sorting.py` uses disposable timestamps and preferences to verify all
+  eight sort choices in all views, native row order, selection, folder grouping,
+  search/tabs and saved explorer/Open/Save choices. `SORT_QA_SCREENSHOTS=/tmp/sort`
+  optionally captures the window and native menu for visual review.
 - RAW support reuses the workstation's `raw-preview` helper rather than loading
   camera decoders into GTK. The helper, desktop RAW MIME database and decoder
   packages must already be installed; `install.sh` only installs the picker.
@@ -662,6 +689,21 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- Sort/keyboard verification (2026-09-07): 175 unit tests passed. Native sorting
+  QA passed in grid/list/columns and restored explorer/Open/Save preferences.
+  Real Xvfb + xdotool checks passed for spatial keys, Shift/Ctrl, view/sort
+  handoff, menus/search, scrolling/edges, preview arrows/close and nested column
+  transitions; the existing list and explorer/picker regressions also passed.
+  Sorting, arrow and explorer suites passed against the installed runtime.
+  The top bar and menu were visually inspected at desktop and 1200-pixel sizes.
+  Physical keyboard testing used X11; native Wayland sorting signals also passed.
+  Six updated modules were backed up before installation; runtime matches source.
+- Xvfb QA must use an explicit unused high display after checking its socket,
+  lock and abstract Unix endpoint. Do not use automatic `-displayfd` allocation
+  on this Hyprland desktop: it claimed `:0` and disrupted the live Xwayland
+  endpoint used by Parsec. The separate recovery task restored that endpoint;
+  installed-copy QA on `:97` completed without touching it. Canonical isolation
+  procedure: AI-OS `skills/desktop-media-qa/SKILL.md`.
 - Release-preparation verification (2026-09-07): 168 unit tests passed,
   including stable version ordering, malformed/unavailable/rate-limited release
   responses, deterministic archive bytes, installer upgrades/removal with
@@ -676,11 +718,10 @@ gdbus introspect --session \
   shell syntax, workflow YAML and Git whitespace checks passed. The live
   anonymous update check correctly reports no public release. These are local
   checks, not evidence of remote CI or fresh-machine portal/login acceptance.
-- The installed user-local desktop copy still contains the preceding visual,
-  title and About/License changes. Release/update changes are in source and the
-  verified generated package; no active app was replaced or service restarted
-  during packaging. Close Gudfiles before using the updated development
-  installer or migrating to the package.
+- The installed user-local runtime now matches source, including release/update
+  UI, sorting and keyboard improvements. Generated native release packages remain
+  the earlier packaging artifacts until rebuilt for publication. Close Gudfiles
+  before using the development installer or migrating to the system package.
 
 - Public distribution is pending. Confirm public hosting, tag the
   reviewed version, and verify an install plus portal activation across a login

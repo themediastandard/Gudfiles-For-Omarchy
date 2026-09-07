@@ -50,7 +50,7 @@ from .columns import ColumnBrowser
 from .selection_summary import show_selection_summary
 from .sidebar import SidebarMenus
 from .help_window import show_help
-from .list_navigation import navigate_list
+from .list_navigation import navigate_files
 from .tabs import BrowserTabs
 
 
@@ -503,6 +503,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.hidden_button = self._icon_button("view-conceal-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
         self.hidden_button.add_css_class('hidden-toggle')
         self.toolbar.append(self.hidden_button)
+        self.toolbar.append(self._build_sort_button())
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
         self.columns_button = self._icon_button('view-dual-symbolic', 'Column view', lambda _b: self._set_view('columns'))
@@ -626,8 +627,10 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
                 else:
                     self.quicklook.close()
                 return Gdk.EVENT_STOP
-            if keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
-                self.quicklook.step(-1 if keyval == Gdk.KEY_Left else 1)
+            if keyval in (Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Left, Gdk.KEY_Right) and not editing \
+                    and not isinstance(self.get_focus(), Gtk.Range) and not state & (
+                        Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK):
+                self.quicklook.step(-1 if keyval in (Gdk.KEY_Up, Gdk.KEY_Left) else 1)
                 return Gdk.EVENT_STOP
             # Preview must not accept/delete/rename a file behind the overlay.
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_Delete, Gdk.KEY_F2):
@@ -635,7 +638,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             return Gdk.EVENT_PROPAGATE
         editing = isinstance(self.get_focus(), (Gtk.Editable, Gtk.TextView))
         modifiers = state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK)
-        if navigate_list(self, keyval, state):
+        if navigate_files(self, keyval, state):
             return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_space and not editing and not modifiers:
             paths = self._selected_paths()

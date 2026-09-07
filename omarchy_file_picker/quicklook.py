@@ -14,6 +14,7 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Graphene, Gsk, Gtk, Pango
 
 from .model import file_type, format_size
 from .image_preview import ZoomImage
+from .list_navigation import focus_file
 from .raw_preview import is_raw_image, read_raw_preview
 
 
@@ -274,7 +275,7 @@ class QuickLook(Gtk.Widget):
             self._clear_content()
             self.owner.preview_overlay.get_child().set_sensitive(True)
             if child:
-                child.grab_focus()
+                focus_file(self.owner, child)
             else:
                 flow.grab_focus()
 
