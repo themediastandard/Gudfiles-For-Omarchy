@@ -85,6 +85,14 @@ with tempfile.TemporaryDirectory(prefix='picker-preview-size-') as temp:
                     settle(70)
                     check('preview opening/loaded')
                 assert window.quicklook.kind != 'loading'
+                if window.quicklook.kind == 'image':
+                    image = window.quicklook.content.get_first_child()
+                    image.scroll.emit('scroll', 0.0, -20.0)
+                    settle()
+                    check('image zoomed')
+                    image.click.emit('pressed', 2, 0.0, 0.0)
+                    settle()
+                    check('image reset to fit')
                 window.quicklook.close()
                 for _ in range(4):
                     settle(70)

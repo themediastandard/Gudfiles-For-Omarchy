@@ -45,7 +45,11 @@ NAS connection is sidebar-only, not a context-menu action.
 
 Press `Space` on a selected file to preview it, and `Space` again or `Escape`
 to close. The preview restores file focus and respects GTK's reduced-motion
-setting. Images are scaled to fit without cropping, text is read-only and
+setting. Images initially fit without cropping: scroll up/down over the image
+to zoom in/out (up to 8× the fitted size), drag to pan, and double-click to fit
+again. Each newly opened image resets to fit; zoom uses the bounded preview
+texture, not a full-resolution image editor. Loading displays a spinner.
+Text is read-only and
 limited to 128 KB, and PDFs show their first page with the total page count.
 The selection preview strip and Space-bar preview stay within the existing
 window layout; switching files or opening/closing previews does not resize it.

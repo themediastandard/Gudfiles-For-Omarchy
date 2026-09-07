@@ -47,6 +47,10 @@ as the desktop's XDG FileChooser portal backend.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
+- Image previews support pointer-anchored scroll zoom from fit to 8×, bounded
+  drag panning and double-click to fit. Each new image starts fitted. Drawing
+  is clipped inside a zero-request widget; the decoded texture remains bounded
+  to 1800×1400. Loading uses a spinner instead of the generic preview icon.
 - Installed GStreamer good/bad/ugly/libav codecs; generated H.264/AAC, HEVC/AAC,
   ProRes/PCM, VP9/Opus and AV1/AAC clips verify decoding, play, pause, seek,
   resume and stop on preview close. Actual user media and audible output remain
@@ -73,6 +77,7 @@ as the desktop's XDG FileChooser portal backend.
   GTK bookmarks and persisted display preferences.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
+- `omarchy_file_picker/image_preview.py` — clipped image zoom and pan controllers.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
@@ -85,6 +90,7 @@ as the desktop's XDG FileChooser portal backend.
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
+PYTHONPATH=. python tests/ui_image_zoom.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
@@ -139,6 +145,9 @@ gdbus introspect --session \
   window size/position, and browser height during selection and Space preview
   open/close with portrait, landscape, square images and long-name text. They
   float/resize only their disposable test window, without editing desktop rules.
+- Image zoom QA emits real GTK controller signals (not physical mouse events)
+  and checks zoom limits, pointer anchoring, pan bounds, reset, loading spinner,
+  clipped rendered bounds and unchanged layout for wide and tall fixtures.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in

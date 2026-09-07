@@ -12,6 +12,7 @@ gi.require_version('Graphene', '1.0')
 from gi.repository import Gdk, GdkPixbuf, GLib, Graphene, Gsk, Gtk, Pango
 
 from .model import file_type, format_size
+from .image_preview import ZoomImage
 
 
 def point(x, y):
@@ -208,10 +209,14 @@ class QuickLook(Gtk.Widget):
         while child := self.content.get_first_child():
             self.content.remove(child)
 
-    def _message(self, text):
+    def _message(self, text, loading=False):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, valign=Gtk.Align.CENTER, vexpand=True)
-        icon = Gtk.Image.new_from_icon_name('document-preview-symbolic')
-        icon.set_pixel_size(64)
+        if loading:
+            icon = Gtk.Spinner(halign=Gtk.Align.CENTER, width_request=32, height_request=32)
+            icon.start()
+        else:
+            icon = Gtk.Image.new_from_icon_name('document-preview-symbolic')
+            icon.set_pixel_size(64)
         box.append(icon)
         box.append(Gtk.Label(label=text, wrap=True, max_width_chars=60, justify=Gtk.Justification.CENTER))
         self.content.append(box)
@@ -226,7 +231,7 @@ class QuickLook(Gtk.Widget):
         except OSError:
             self.details = 'Unavailable file'
         self.caption.set_text(self.details + '  ·  Space to close  ·  ← → Browse')
-        self._message('Loading preview…')
+        self._message('Loading preview…', loading=True)
         self.kind = 'loading'
         def worker():
             try:
@@ -244,9 +249,13 @@ class QuickLook(Gtk.Widget):
         if kind in ('image', 'pdf'):
             texture = (Gdk.Texture.new_for_pixbuf(data) if kind == 'image' else
                        Gdk.Texture.new_from_bytes(GLib.Bytes.new(data[0])))
-            picture = Gtk.Picture.new_for_paintable(texture)
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.set_can_shrink(True)
+            if kind == 'image':
+                picture = ZoomImage(texture)
+                self.caption.set_text(f'{self.details}  ·  Scroll to zoom · Drag to pan · Double-click to fit · Space to close')
+            else:
+                picture = Gtk.Picture.new_for_paintable(texture)
+                picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+                picture.set_can_shrink(True)
             picture.set_vexpand(True)
             self.content.append(picture)
             if kind == 'pdf':
