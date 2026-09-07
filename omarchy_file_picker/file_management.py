@@ -240,7 +240,7 @@ class FileManagement(TransferUI):
                         self._copy_files(remaining or list(mapping.values()), cut=bool(remaining))
                         provider[0] = clip.get_content()
                     self.transfer_callbacks[job.id] = moved
-                    self._show_transfers()
+                    self._show_transfers(automatic_job=None if queued else job)
                 except (GLib.Error, ValueError) as error:
                     source.close(None)
                     self._show_error('Could not paste', str(error))

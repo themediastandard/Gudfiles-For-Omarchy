@@ -122,9 +122,34 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         panel.append(scroller)
         column = SimpleNamespace(path=path, panel=panel, flow=flow, scroller=scroller,
                                  entries=entries, children={})
+        empty = Gtk.Label(label='No matching files' if owner.search.get_text() or owner.creative_filter != ('all', 0, '')
+                          else 'Empty folder', valign=Gtk.Align.START, can_target=False)
+        empty.add_css_class('column-empty')
+        column.empty = empty
+        panel.remove(scroller)
+        overlay = Gtk.Overlay()
+        overlay.set_child(scroller)
+        overlay.add_overlay(empty)
+        overlay.set_measure_overlay(empty, False)
+        panel.append(overlay)
+        self._populate(column)
+        column.handler = flow.connect('selected-children-changed', self._selection, column)
+        flow.connect('child-activated', owner._on_child_activated)
+        keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        keys.connect('key-pressed', self._key, column)
+        flow.add_controller(keys)
+        self.columns.append(column)
+        self.box.append(panel)
+        self.reveal_pending = True
+        return column
+
+    def _populate(self, column):
+        owner = self.owner
         for item in column.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = item
+            child._picker_is_dir = item.is_dir()
             row = Gtk.Box(spacing=8, height_request=28)
             row.append(Gtk.Image.new_from_gicon(Gio.content_type_get_icon('inode/directory') if item.is_dir()
                        else Gio.content_type_get_icon(Gio.content_type_guess(str(item), None)[0])))
@@ -140,28 +165,41 @@ class ColumnBrowser(Gtk.ScrolledWindow):
                 arrow.set_pixel_size(12)
                 row.append(arrow)
             child.set_child(row)
-            flow.append(child)
+            column.flow.append(child)
             column.children[item] = child
-        if not column.entries:
-            empty = Gtk.Label(label='No matching files' if owner.search.get_text() or owner.creative_filter != ('all', 0, '')
-                              else 'Empty folder', valign=Gtk.Align.START, can_target=False)
-            empty.add_css_class('column-empty')
-            panel.remove(scroller)
-            overlay = Gtk.Overlay()
-            overlay.set_child(scroller)
-            overlay.add_overlay(empty)
-            overlay.set_measure_overlay(empty, False)
-            panel.append(overlay)
-        column.handler = flow.connect('selected-children-changed', self._selection, column)
-        flow.connect('child-activated', owner._on_child_activated)
-        keys = Gtk.EventControllerKey()
-        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        keys.connect('key-pressed', self._key, column)
-        flow.add_controller(keys)
-        self.columns.append(column)
-        self.box.append(panel)
-        self.reveal_pending = True
-        return column
+        column.empty.set_visible(not column.entries)
+
+    def refresh_paths(self, paths):
+        """Refresh completed transfers in any visible column, preserving its trail."""
+        owner = self.owner
+        self.cancel_pending()
+        self.busy = True
+        try:
+            for column in self.columns:
+                if column.path not in paths:
+                    continue
+                selected = {c._picker_path for c in column.flow.get_selected_children()}
+                focus = owner.get_focus()
+                focused_path = getattr(focus, '_picker_path', None) if focus and focus.is_ancestor(column.flow) else None
+                for path in column.children:
+                    owner.rating_badges.pop(path, None)
+                cache = dict(owner.ratings.cache)
+                column.entries = owner._directory_entries(column.path)
+                cache.update(owner.ratings.cache)
+                owner.ratings.cache = cache
+                column.flow.remove_all()
+                column.children.clear()
+                self._populate(column)
+                for path in selected:
+                    if path in column.children:
+                        column.flow.select_child(column.children[path])
+                if focused_path:
+                    owner.set_focus(column.children.get(focused_path, column.flow))
+            if self.active:
+                self.activate(self.active, record=False)
+                owner._on_selection_changed(self.active.flow)
+        finally:
+            self.busy = False
 
     def activate_focused(self):
         focus = self.owner.get_focus()
@@ -218,7 +256,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
     def _open_selection(self):
         self.pending = 0
         owner = self.owner
-        if owner.view_mode != 'columns' or not self.active or owner.drag_selection.active or owner.context_popover:
+        if (owner.view_mode != 'columns' or not self.active or owner.drag_selection.active or
+                owner.drag_copy.active or owner.context_popover):
             return False
         selected = owner._selected_paths()
         target = selected[0] if len(selected) == 1 and selected[0].is_dir() else None

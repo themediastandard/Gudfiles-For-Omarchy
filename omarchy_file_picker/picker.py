@@ -39,6 +39,7 @@ from .file_actions import create_untitled_text, sort_entries
 from .dialogs import PickerDialog, confirmation, entry_field, file_summary, text_label
 from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
+from .drag_copy import DragCopy
 from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri, mounted_local_path
 from .creative import CreativeTools
@@ -297,6 +298,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.browser_overlay.add_overlay(self.drag_selection)
         self.browser_overlay.set_measure_overlay(self.drag_selection, False)
         self.browser_overlay.set_clip_overlay(self.drag_selection, True)
+        self.drag_copy = DragCopy(self)
 
         empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         empty.set_halign(Gtk.Align.CENTER)
@@ -559,6 +561,10 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.add_controller(keys)
 
     def _on_preview_key(self, _controller, keyval, _keycode, state):
+        if self.drag_copy.active:
+            if keyval == Gdk.KEY_Escape:
+                self.drag_copy.cancel()
+            return Gdk.EVENT_STOP
         if self.view_mode == 'columns' and not self.quicklook.get_visible():
             self.columns.activate_focused()
         if self.drag_selection.active:
@@ -730,6 +736,7 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         for path in self.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = path  # type: ignore[attr-defined]
+            child._picker_is_dir = path.is_dir()
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
             self.flow.append(child)
             self.children_by_path[path] = child

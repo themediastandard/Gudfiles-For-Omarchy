@@ -219,6 +219,12 @@ def build_css(colors: dict[str, str]) -> str:
       border-color: {colors['accent']};
       color: {colors['foreground']};
     }}
+    .drop-copy-target {{ box-shadow: inset 0 0 0 2px {colors['accent']}; }}
+    .file-copy-drag {{
+      background: {colors['background']}; color: {colors['foreground']};
+      border: 1px solid {colors['accent']}; border-radius: 8px; padding: 10px 12px;
+    }}
+    .file-copy-drag image {{ color: {colors['accent']}; }}
     .thumbnail-frame {{
       background: {colors['dark_background']};
       border-radius: 7px;

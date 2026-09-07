@@ -9,6 +9,8 @@ from gi.repository import GLib, Gtk, Pango
 from .model import format_size
 from .transfers import BUSY, TERMINAL, TransferQueue
 
+KEEP_OPEN_SECONDS = 5 * 60
+
 
 def text_label(text='', css=None):
     label = Gtk.Label(label=text, xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
@@ -73,6 +75,7 @@ class TransferRow(Gtk.Box):
         self.update()
 
     def _primary(self):
+        self.owner.transfer_auto_close = False
         if self.job.state == 'running':
             self.owner.transfer_queue.pause(self.job)
         else:
@@ -80,6 +83,7 @@ class TransferRow(Gtk.Box):
         self.owner._poll_transfers()
 
     def _restart(self):
+        self.owner.transfer_auto_close = False
         self.owner.transfer_queue.restart(self.job)
         self.owner._poll_transfers()
 
@@ -151,6 +155,8 @@ class TransferUI:
         self.transfer_cancel_close = False
         self.transfer_cleanup_blocked = False
         self.transfer_timer = 0
+        self.transfer_auto_close = False
+        self.transfer_auto_jobs = set()
 
     def _build_transfer_button(self):
         self.transfer_queue.set_mode(self.file_preferences.get('transfer_mode', 'queue'))
@@ -167,7 +173,27 @@ class TransferUI:
         self.connect('unrealize', self._dispose_transfers)
         return self.transfer_button
 
-    def _show_transfers(self):
+    def _show_transfers(self, *, automatic_job=None):
+        visible = self.transfer_window is not None and self.transfer_window.get_visible()
+        if automatic_job is None:
+            # Explicitly opening Transfers always leaves the panel in the
+            # user's hands, including when an automatic panel is already open.
+            self.transfer_auto_close = False
+            self.transfer_auto_jobs.clear()
+        elif not visible:
+            # A tiny copy may finish before GTK handles this request. Avoid
+            # flashing an already-completed panel; history stays in Transfers.
+            with self.transfer_queue.lock:
+                quick_done = (automatic_job.state in TERMINAL and
+                              automatic_job not in self.transfer_queue.active_jobs and
+                              automatic_job.elapsed_seconds < KEEP_OPEN_SECONDS)
+            if quick_done:
+                self._poll_transfers()
+                return self.transfer_window
+            self.transfer_auto_close = True
+            self.transfer_auto_jobs = {automatic_job}
+        elif self.transfer_auto_close:
+            self.transfer_auto_jobs.add(automatic_job)
         if self.transfer_window is None:
             window = Gtk.Window(title='Transfers', transient_for=self, application=self.get_application())
             window.add_css_class('transfer-window')
@@ -199,7 +225,7 @@ class TransferUI:
             toolbar.append(self.transfer_summary)
             self.transfer_start = button('Start queue', lambda: self.transfer_queue.start(), 'transfer-action')
             toolbar.append(self.transfer_start)
-            self.transfer_pause = button('Pause', self.transfer_queue.pause)
+            self.transfer_pause = button('Pause', self._pause_transfers)
             toolbar.append(self.transfer_pause)
             root.append(toolbar)
             scroll = Gtk.ScrolledWindow(vexpand=True)
@@ -237,21 +263,54 @@ class TransferUI:
             note.set_wrap(True)
             note.set_ellipsize(Pango.EllipsizeMode.NONE)
             note.set_lines(2)
+            self.transfer_note = note
             footer.append(note)
             footer.append(button('Clear finished', self._clear_transfers))
             root.append(footer)
             self.transfer_window = window
+            # A copy can finish while this window is being built. Realize its
+            # surface even if the first poll hides it before presentation:
+            # GTK's Wayland application teardown expects a valid surface.
+            window.realize()
         self._poll_transfers()
-        self.transfer_window.present()
+        if not self._can_auto_hide_transfers():
+            self.transfer_window.present()
         return self.transfer_window
+
+    def _can_auto_hide_transfers(self):
+        return (self.transfer_auto_close and self.transfer_closing is None and
+                not self.transfer_queue.unfinished)
+
+    def _update_transfer_visibility(self):
+        if self.transfer_auto_close:
+            with self.transfer_queue.lock:
+                now = time.monotonic()
+                keep_open = any(
+                    job.state in {'paused', 'failed'} or
+                    job.elapsed_seconds + (now - job.active_since if job.active_since else 0) >= KEEP_OPEN_SECONDS
+                    for job in self.transfer_auto_jobs)
+            if keep_open:
+                self.transfer_auto_close = False
+        self.transfer_note.set_text(
+            'Closes when quick transfers finish. Transfers lasting 5 minutes stay open.'
+            if self.transfer_auto_close else
+            'Queue stays in this Files session. Closing this panel keeps transfers running.')
+        if self._can_auto_hide_transfers():
+            self.transfer_window.set_visible(False)
 
     def _clear_transfers(self):
         self.transfer_queue.clear_finished()
         self._poll_transfers()
 
+    def _pause_transfers(self):
+        self.transfer_auto_close = False
+        self.transfer_queue.pause()
+        self._poll_transfers()
+
     def _set_transfer_mode(self, mode):
         if self.transfer_cancel_close:
             return
+        self.transfer_auto_close = False
         self.transfer_queue.set_mode(mode)
         self._set_file_preference('transfer_mode', mode, reload=False)
         self._poll_transfers()
@@ -285,7 +344,11 @@ class TransferUI:
             if previous != state and state in TERMINAL | {'failed', 'paused'}:
                 # A browsing user may have navigated away: don't select outputs
                 # from a different directory or steal their current selection.
-                if self.current_dir in self.transfer_changed_dirs.pop(job.id, set()):
+                changed = self.transfer_changed_dirs.pop(job.id, set())
+                if (getattr(self, 'view_mode', None) == 'columns' and
+                        any(column.path in changed for column in self.columns.columns)):
+                    self.columns.refresh_paths(changed)
+                elif self.current_dir in changed:
                     self._refresh_files()
                 if state in TERMINAL:
                     self.transfer_callbacks.pop(job.id, None)
@@ -341,6 +404,7 @@ class TransferUI:
             self.transfer_close_confirm.set_sensitive(not self.transfer_cancel_close)
             self.transfer_keep.set_sensitive(not self.transfer_cancel_close)
             self.transfer_leave.set_visible(self.transfer_cleanup_blocked)
+            self._update_transfer_visibility()
         if self.transfer_cancel_close and not active_at_snapshot and not queue.active_jobs:
             next_job = next((job for job in jobs if job.state not in TERMINAL), None)
             if next_job is not None:

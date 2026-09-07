@@ -104,6 +104,11 @@ Each transfer has its own pause/resume/cancel controls, and All includes
 **Pause all**. Queues last for the current Files session; closing Files asks
 before cancelling unfinished work. Moves are limited to the same filesystem;
 verified copies can cross volumes when the destination supports safe publication.
+Automatically opened transfer panels close when quick transfers finish. Once a
+transfer reaches five minutes of running time, its panel stays open afterward.
+Manually opened panels, pauses and errors stay visible. Tiny
+copies that finish before the panel opens do not flash a completed window;
+their history remains available from **Transfers**.
 Display preferences persist in `~/.config/omarchy-file-picker/preferences.json`;
 bookmarks use the shared GTK `~/.config/gtk-3.0/bookmarks` file.
 
@@ -121,6 +126,13 @@ calling application's single/multiple setting; Save stays a single destination.
 Click and drag from blank folder background to draw a selection rectangle in
 either view. Shift-drag adds to the selection, Ctrl-drag toggles covered items,
 and Escape cancels the drag. Dragging near the top/bottom edge scrolls the folder.
+
+Hold **Alt / Option** before dragging a file or selected group to copy it. Drop
+on blank space to duplicate in that folder, or onto another folder/column to
+copy there. This works in grid, list and column views. Copies use the remembered
+Queue/All mode and its pause/resume controls; originals and the clipboard stay
+intact. Existing names get `copy`, `copy 2`, and so on, preserving file extensions.
+Ordinary file clicks and background selection keep their existing behavior.
 
 Successful conversions show a compact theme-matched notification inside the
 picker, not a modal popup. It disappears after eight seconds or when dismissed.

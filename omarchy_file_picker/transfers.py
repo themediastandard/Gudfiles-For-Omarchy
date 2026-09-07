@@ -106,6 +106,7 @@ class Item:
     entries: list[Entry]
     completed: bool = False
     publishing: bool = False
+    target_name: str = ''
 
 
 @dataclass(eq=False)
@@ -113,6 +114,7 @@ class TransferJob:
     sources: list[Path]
     destination: Path
     cut: bool = False
+    duplicate: bool = field(default=False, kw_only=True)
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     state: str = 'queued'
     phase: str = 'Ready when you are'
@@ -124,6 +126,8 @@ class TransferJob:
     written_bytes: int = 0
     current_name: str = ''
     started: float = 0
+    elapsed_seconds: float = 0
+    active_since: float = 0
     items: list[Item] = field(default_factory=list)
     destination_id: tuple | None = None
     stage_name: str = ''
@@ -140,6 +144,31 @@ class TransferJob:
 
 
 class TransferEngine:
+    def _copy_name(self, job, dest_fd, source, is_directory, reserved):
+        """Choose on the worker; publication still atomically refuses races."""
+        suffix = '' if is_directory else source.suffix
+        stem = source.name[:-len(suffix)] if suffix else source.name
+        name_limit = os.fpathconf(dest_fd, 'PC_NAME_MAX')
+        if name_limit < 1:
+            name_limit = 255
+        for number in range(MAX_ENTRIES):
+            job.checkpoint()
+            if number:
+                ending = (' copy' if number == 1 else f' copy {number}') + suffix
+                short_stem = stem
+                while short_stem and len(os.fsencode(short_stem + ending)) > name_limit:
+                    short_stem = short_stem[:-1]
+                name = short_stem + ending
+            else:
+                name = source.name
+            if name in reserved:
+                continue
+            try:
+                entry_stat(dest_fd, name)
+            except FileNotFoundError:
+                return name
+        raise ValueError('Too many copies with this name. Rename the source before duplicating it.')
+
     def _scan(self, job, root_fd, name):
         entries = []
 
@@ -172,23 +201,27 @@ class TransferEngine:
         if job.items:
             return
         job.phase = 'Scanning files'
+        if job.cut and job.duplicate:
+            raise ValueError('Duplication only supports copies.')
         sources = job.sources
         resolved = [source.parent.resolve(strict=True) / source.name for source in sources]
         targets = [p.name for p in sources]
-        if len(set(resolved)) != len(resolved) or len(set(targets)) != len(targets):
+        if len(set(resolved)) != len(resolved) or (not job.duplicate and len(set(targets)) != len(targets)):
             raise ValueError('Duplicate source or destination names. Split these into separate batches.')
         for source in resolved:
             if not source.name or any(parent in resolved for parent in source.parents):
                 raise ValueError('Transfer a folder and its selected contents in separate batches.')
-            try:
-                entry_stat(dest_fd, source.name)
-            except FileNotFoundError:
-                pass
-            else:
-                raise FileExistsError(f'{source.name} already exists in the destination. Nothing was overwritten.')
+            if not job.duplicate:
+                try:
+                    entry_stat(dest_fd, source.name)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise FileExistsError(f'{source.name} already exists in the destination. Nothing was overwritten.')
             if source == job.destination or source in job.destination.parents:
                 raise ValueError('A folder cannot be transferred into itself.')
         items = []
+        reserved = set()
         entry_count = 0
         for source in sources:
             job.checkpoint()
@@ -200,7 +233,10 @@ class TransferEngine:
                 entry_count += len(entries)
                 if entry_count > MAX_ENTRIES:
                     raise ValueError(f'A batch is limited to {MAX_ENTRIES:,} entries. Split this transfer.')
-                items.append(Item(source, identity(os.fstat(fd)), entries))
+                target = (self._copy_name(job, dest_fd, source, stat.S_ISDIR(entries[0].stamp[2]), reserved)
+                          if job.duplicate else source.name)
+                reserved.add(target)
+                items.append(Item(source, identity(os.fstat(fd)), entries, target_name=target))
         job.sources = sources
         job.items = items
         job.total_bytes = sum(entry.size for item in items for entry in item.entries)
@@ -392,14 +428,29 @@ class TransferEngine:
             pass
 
     def _publish(self, job, dest_fd, source_fd, name, item, expected_id):
+        while True:
+            try:
+                return self._publish_named(job, dest_fd, source_fd, name, item, expected_id)
+            except OSError as error:
+                if (not job.duplicate or error.errno != errno.EEXIST or
+                        identity(entry_stat(source_fd, name)) != expected_id):
+                    raise
+                # EEXIST left our staged inode in place. Keep the raced-in file
+                # and choose another name; other errors retain the exact receipt.
+                item.publishing = False
+                reserved = {other.target_name for other in job.items if other is not item}
+                item.target_name = self._copy_name(job, dest_fd, item.source,
+                    stat.S_ISDIR(item.entries[0].stamp[2]), reserved)
+
+    def _publish_named(self, job, dest_fd, source_fd, name, item, expected_id):
         item.publishing = True
         try:
-            rename_noreplace(source_fd, name, dest_fd, item.source.name)
+            rename_noreplace(source_fd, name, dest_fd, item.target_name)
         except OSError:
             # A network filesystem can report an error after the rename committed.
             # Recognize only the exact owned inode, with the old name absent.
             try:
-                done = identity(entry_stat(dest_fd, item.source.name)) == expected_id
+                done = identity(entry_stat(dest_fd, item.target_name)) == expected_id
                 try:
                     entry_stat(source_fd, name)
                     done = False
@@ -409,22 +460,22 @@ class TransferEngine:
                 done = False
             if not done:
                 raise
-        if identity(entry_stat(dest_fd, item.source.name)) != expected_id:
+        if identity(entry_stat(dest_fd, item.target_name)) != expected_id:
             # A source-name race must not migrate annotations for the wrong
             # item. Restore without overwriting if possible; never delete it.
             try:
-                rename_noreplace(dest_fd, item.source.name, source_fd, name)
+                rename_noreplace(dest_fd, item.target_name, source_fd, name)
             except OSError:
-                raise RestartRequired(f'The item changed during publication. Inspect {job.destination / item.source.name}; nothing was deleted.')
+                raise RestartRequired(f'The item changed during publication. Inspect {job.destination / item.target_name}; nothing was deleted.')
             raise RestartRequired('The item changed during publication. Its replacement was restored; nothing was deleted.')
         self._record_completed(job, item)
 
     @staticmethod
     def _record_completed(job, item):
         item.completed, item.publishing = True, False
-        job.completed[item.source] = job.destination / item.source.name
+        job.completed[item.source] = job.destination / item.target_name
         if job.on_completed:
-            job.on_completed(item.source, job.destination / item.source.name)
+            job.on_completed(item.source, job.destination / item.target_name)
 
     def _reconcile(self, job, dest_fd, old_fd, name, item, expected_id):
         if not item.publishing:
@@ -434,14 +485,14 @@ class TransferEngine:
         except FileNotFoundError:
             old_id = None
         try:
-            target_id = identity(entry_stat(dest_fd, item.source.name))
+            target_id = identity(entry_stat(dest_fd, item.target_name))
         except FileNotFoundError:
             target_id = None
         if old_id != expected_id and target_id == expected_id:
             self._record_completed(job, item)
             return True
         if old_id != expected_id:
-            raise RestartRequired(f'Completion could not be confirmed. Inspect {job.destination / item.source.name}; nothing else was changed.')
+            raise RestartRequired(f'Completion could not be confirmed. Inspect {job.destination / item.target_name}; nothing else was changed.')
         item.publishing = False
         return False
 
@@ -587,6 +638,10 @@ class TransferQueue:
         normalize = lambda path: Path(os.path.normpath(path))
         reads = {normalize(path) for path in job.sources}
         writes = {normalize(job.destination / path.name) for path in job.sources}
+        if job.duplicate:
+            # Copy names are chosen offthread and can change after a collision.
+            # Reserve their containing folder until this batch has settled.
+            writes = {normalize(job.destination)}
         if job.cut:
             writes.update(reads)
         ancestors = lambda paths: set().union(*(set(path.parents) | {path} for path in paths))
@@ -597,11 +652,14 @@ class TransferQueue:
         b, bw, ancestors_b, ancestors_bw = self.footprints[second]
         return bool(aw & ancestors_b or ancestors_aw & b or bw & ancestors_a or ancestors_bw & a)
 
-    def add(self, sources, destination, cut=False, *, start=False):
+    def add(self, sources, destination, cut=False, *, start=False, duplicate=False):
         with self.lock:
             if len(self.jobs) >= 100:
                 raise ValueError('The queue is full. Clear finished transfers before adding more.')
-            job = TransferJob([Path(p).absolute() for p in sources], Path(destination).absolute(), cut)
+            if cut and duplicate:
+                raise ValueError('Duplication only supports copies.')
+            job = TransferJob([Path(p).absolute() for p in sources], Path(destination).absolute(), cut,
+                              duplicate=duplicate)
             if not job.sources:
                 raise ValueError('Select at least one item.')
             self.jobs.append(job)
@@ -663,6 +721,7 @@ class TransferQueue:
 
     def _launch(self, job, operation):
         self.active_jobs.append(job)
+        job.active_since = time.monotonic()
         job.stop.clear()
         job.cancel_requested = operation == 'cancel'
         job.state = 'cancelling' if operation == 'cancel' else 'running'
@@ -691,6 +750,8 @@ class TransferQueue:
                 job.restart_required = isinstance(error, RestartRequired)
             finally:
                 with self.lock:
+                    job.elapsed_seconds += time.monotonic() - job.active_since
+                    job.active_since = 0
                     self.active_jobs.remove(job)
                     if job.state == 'failed' and self.mode == 'queue':
                         self.held = True

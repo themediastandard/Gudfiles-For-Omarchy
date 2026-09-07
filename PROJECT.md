@@ -38,6 +38,15 @@ as the desktop's XDG FileChooser portal backend.
 - Blank-background drags select intersecting files in all three views with a
   theme-colored rectangle, Shift-add, Ctrl-toggle, edge scrolling and Escape
   restoration. File-origin click gestures remain native GTK.
+- Alt/Option file drags copy the selected group through the transfer manager in
+  all three views. Blank space duplicates into that folder; folder rows and
+  column backgrounds target the folder under the pointer. Native COPY-only
+  payloads, a plus badge, destination highlighting and edge scrolling preserve
+  originals and clipboard contents. Alt presses preserve multi-selection and
+  suppress column expansion during the drag; ordinary clicks stay GTK-native.
+  Copies retain available names or choose `copy`/`copy 2` names, preserving file
+  extensions and dotted folder names. Dynamic targets are reserved per folder
+  in All mode; publication races choose another name without overwriting.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Multi-selection metadata shows a theme-colored stack of folders/documents,
@@ -85,6 +94,14 @@ as the desktop's XDG FileChooser portal backend.
   leaves independent transfers running; Pause all holds scheduling and pauses
   every active worker. Completed items remain at their destinations.
   The separate window scrolls its rows without resizing the Files browser.
+- Automatically opened transfer panels hide when quick work finishes; copies
+  already complete before opening do not flash a window. Five minutes of actual
+  running time (accumulated across attempts) keeps the panel open afterward.
+  Manually opened panels, pauses and errors stay visible. All mode waits for
+  every unfinished batch; history remains available from the header. Closing
+  a panel manually never causes it to reopen on completion.
+- Completed transfers refresh affected visible columns without changing the
+  active column, selections or ancestor trail.
 - Copy resume checks every retained byte against an unchanged source and verifies
   the completed data before publication. Changed sources/corrupt partials refuse
   resume and require an explicit restart of unfinished items. Same-volume moves
@@ -163,6 +180,8 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/columns.py` — adjacent directory columns and active selection/focus.
 - `omarchy_file_picker/selection_summary.py` — collective selection icon/count strip.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
+- `omarchy_file_picker/drag_copy.py` — Alt-drag capture, native COPY payloads,
+  folder/column drop targets, highlighting and scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
 - `data/` — user-local portal, D-Bus, desktop, and systemd templates.
@@ -175,6 +194,8 @@ python -m unittest discover -v
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
 PYTHONPATH=. python tests/ui_transfer_modes.py
+PYTHONPATH=. python tests/ui_transfer_visibility.py
+PYTHONPATH=. python tests/ui_drag_copy.py
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_image_zoom.py
@@ -285,6 +306,19 @@ gdbus introspect --session \
   `TRANSFER_MODES_QA_SCREENSHOT=/tmp/transfer-modes.png` captures the native All
   mode layout. Scheduler tests cover failure isolation, related paths, dependent
   ordering, cancellation cleanup slots and mode changes while scheduling is held.
+- Drag-copy QA uses GTK prepare/drop signals and actual widget hit testing for
+  three-view multi-selection, same-folder copies, folder/column destinations,
+  clipboard preservation, recursive/nonlocal rejection and edge scrolling.
+  GTK URI serialization is round-tripped with escaped names. Physical mouse
+  events and inter-application DND remain manual checks. Optional
+  `DRAG_COPY_QA_SCREENSHOT=/tmp/drag-copy.png` captures the native drop highlight.
+  Backend tests cover collision races, ambiguous receipts, long/hidden names,
+  folders/symlinks, identical basenames, verified resume and cancellation.
+- Visibility QA uses real gated copies with controlled elapsed-time counters
+  at 299/300 seconds, concurrent completion, manual history, pause/failure and
+  completion during window construction. Realize a newly created Transfers
+  surface before polling: GTK 4.22 Wayland session removal dereferences a null
+  toplevel when an automatic panel completes before ever being presented.
 - Portal routing changes are user-local and backed up before replacement.
 - The stock GTK portal remains the fallback for all non-FileChooser interfaces.
 - Context popovers are parented to the stable browser stack, not replaceable
@@ -359,7 +393,8 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
-- Transfer verification: 125 unit tests and the native transfer-mode/transfer/file-management,
+- Transfer verification: 136 unit tests and native drag-copy, transfer-visibility,
+  transfer-mode/transfer/file-management,
   columns, selection, drag selection, layout, preview geometry, Quick Look,
   sidebar/menu, active filters, breadcrumbs, explorer and selection-summary
   suites passed. Live NAS transfer failure/recovery and real user media remain
@@ -367,8 +402,9 @@ gdbus introspect --session \
   refuses to trust an unrelated replacement mount/source/partial file.
   A real disposable cross-filesystem copy and move refusal were also verified
   between the local fixture filesystem and `/dev/shm`.
-  The changed Python modules were installed locally; transfer-mode, transfer, file-management
-  and explorer/picker-mode QA passed against that installed package. Installed
+  The changed Python modules were installed locally; drag-copy, visibility,
+  transfer-mode, transfer, columns, file-management, explorer/picker-mode and
+  selection-summary QA passed against that installed package. Installed
   modules match the source, including the concurrent selection-summary updates.
 - Transfer queues and recovery metadata are in memory. An app crash/forced exit
   can leave hidden partial folders and does not restore the queue on relaunch.
