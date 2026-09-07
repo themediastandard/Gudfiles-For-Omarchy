@@ -1840,6 +1840,8 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
     parser.add_argument("--request", type=Path, help="JSON portal request")
     parser.add_argument("--result", type=Path, help="JSON result destination")
     parser.add_argument("--demo", nargs="?", const=str(Path.home() / "Pictures"), help="Open standalone demo")
+    parser.add_argument('--desktop', nargs='?', const='',
+                        help='Desktop launcher entry; a supplied file or folder opens externally')
     parser.add_argument('--external', action='store_true', help='Open a temporary external browser window')
     parser.add_argument('--select', action='append', type=Path, default=[],
                         help='Reveal and select an item in its parent folder (repeat for siblings)')
@@ -1851,6 +1853,9 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
                            help="Restrict standalone Open to one selection")
     parser.add_argument("--directory", action="store_true")
     args = parser.parse_args(argv)
+    if args.desktop is not None:
+        args.demo = args.desktop or str(Path.home() / 'Pictures')
+        args.external = args.external or bool(args.desktop)
     if args.request:
         request = PickerRequest.from_dict(json.loads(args.request.read_text(encoding="utf-8")))
     else:
@@ -1861,7 +1866,7 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
             folder = selected[0].parent
             if any(path.parent != folder for path in selected):
                 parser.error('--select items must share a parent folder')
-        elif explorer and args.demo and not folder.is_dir():
+        elif explorer and args.demo and args.desktop != '' and not folder.is_dir():
             selected = [folder]
         external = explorer and (args.external or bool(selected))
         request = PickerRequest(

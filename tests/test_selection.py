@@ -2,11 +2,29 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from omarchy_file_picker.picker import application_id_for, parse_args
 
 
 class SelectionDefaultsTests(unittest.TestCase):
+    def test_desktop_launcher_floats_only_when_given_a_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            file = folder / 'video.mp4'
+            file.touch()
+            request = parse_args(['--desktop', str(folder), '--multiple'])[0]
+            self.assertTrue(request.external)
+            self.assertEqual(request.current_folder, folder)
+            request = parse_args(['--desktop', str(file), '--multiple'])[0]
+            self.assertTrue(request.external)
+            self.assertEqual(request.selected_paths, [file])
+        with patch.object(Path, 'home', return_value=Path('/tmp')):
+            request = parse_args(['--desktop', '--multiple'])[0]
+            self.assertTrue(request.explorer)
+            # An absent default Pictures folder is still an ordinary launch.
+            self.assertFalse(request.external)
+
     def test_file_launch_selects_the_item_and_uses_external_window_class(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'clip.mp4'

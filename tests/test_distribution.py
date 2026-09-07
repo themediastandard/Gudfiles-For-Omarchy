@@ -166,7 +166,7 @@ class InstallChecks(unittest.TestCase):
         desktop = configparser.ConfigParser(interpolation=None)
         desktop.read(ROOT / 'data/org.omarchy.FilePicker.desktop')
         entry = desktop['Desktop Entry']
-        self.assertEqual(entry['Exec'], 'gudfiles --demo %f --multiple')
+        self.assertEqual(entry['Exec'], 'gudfiles --desktop %f --multiple')
         mime_types = set(entry['MimeType'].split(';'))
         self.assertTrue({'video/mp4', 'video/x-matroska', 'video/webm', 'video/quicktime'} <= mime_types)
         self.assertIn('inode/directory', mime_types)

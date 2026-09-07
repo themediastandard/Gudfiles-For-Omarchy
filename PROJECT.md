@@ -11,6 +11,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   `ShowItems` groups requested items by parent folder and selects them after
   layout, including folder entries, hidden files, symlinks and escaped names.
   `ShowFolders` enters the requested folder in the same external window mode.
+  Desktop launches with an explicit file/folder also use external mode;
+  a plain launcher click remains ordinary browsing.
   CLI `--select PATH` (repeat for siblings) reveals items; `--external` marks
   temporary browsers. A standalone file argument also selects that file and
   uses the external identity. Ordinary folder browsing remains the base class;
@@ -700,14 +702,16 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
-- External reveal verification (2026-09-07): 181 unit tests passed. Native
+- External reveal verification (2026-09-07): 182 unit tests passed. Native
   reveal QA verifies grid/list/columns, offscreen items, hidden files, multiple
   siblings, directory entries, symlinks, missing targets and cancelled startup
   navigation. It checks full-row visibility, root focus and active-window native
   cursor movement. The suite also passed against the installed package. Live
   session-bus `ShowItems` activated the updated service and a floating external
   browser with the exact escaped target; separate live launches confirmed tiled
-  ordinary browsing and floating Save pickers. Hyprland reload/config validation
+  ordinary browsing and floating Save pickers. Native desktop-entry launches
+  also verified floating file/folder targets and a tiled no-argument launcher.
+  Hyprland reload/config validation
   passed. The shared `focus_file()` helper initializes GTK’s cursor;
   frame-clock reveal waits for compositor and metadata layout to settle before
   clamping scrolling. Ordinary explorer and Open/Save behavior checks also pass.
