@@ -3,6 +3,8 @@
 A visual, keyboard-friendly file manager and file picker that follows the active
 Omarchy theme and serves as an XDG desktop portal backend.
 
+Source: [themediastandard/gudfiles](https://github.com/themediastandard/gudfiles).
+
 Launching it directly opens explorer mode: no bottom filter/action bar, files
 open with their default applications, and the explorer stays open. App-requested
 Open/Save dialogs retain their filter, Cancel and Open/Save controls. Explicit

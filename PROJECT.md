@@ -277,6 +277,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Development
 
+Canonical repository: https://github.com/themediastandard/gudfiles (`main`).
+The local `origin` remote points there; existing application IDs and installation
+paths remain unchanged.
+
 ```bash
 python -m unittest discover -v
 SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action_sounds.py
