@@ -21,6 +21,7 @@ def managed_files(home):
         home / '.local/share/dbus-1/services/org.freedesktop.impl.portal.desktop.omarchy.FilePicker.service',
         home / '.local/share/xdg-desktop-portal/portals/omarchy-file-picker.portal',
         home / '.config/systemd/user/omarchy-file-picker-portal.service',
+        home / '.local/share/dbus-1/services/org.freedesktop.FileManager1.service',
     ]
 
 
@@ -80,10 +81,12 @@ def change_install(home, *, remove=False):
             ('org.freedesktop.impl.portal.desktop.omarchy.FilePicker.service', files[4]),
             ('omarchy-file-picker.portal', files[5]),
             ('omarchy-file-picker-portal.service', files[6]),
+            ('org.freedesktop.FileManager1.service', files[7]),
         ):
             binary = str(home / '.local/bin').replace('\\', '\\\\').replace('"', '\\"')
             content = (ROOT / f'data/{name}').read_text()
             content = content.replace('@BIN_DIR@/omarchy-file-picker-portal', f'"{binary}/omarchy-file-picker-portal"')
+            content = content.replace('@BIN_DIR@', binary)
             atomic_write(target, content)
     return backup
 

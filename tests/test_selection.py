@@ -3,10 +3,15 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from omarchy_file_picker.picker import parse_args
+from omarchy_file_picker.picker import application_id_for, parse_args
 
 
 class SelectionDefaultsTests(unittest.TestCase):
+    def test_picker_and_explorer_have_distinct_window_classes(self):
+        self.assertEqual(application_id_for(parse_args([])[0]), 'org.omarchy.FilePicker')
+        self.assertEqual(application_id_for(parse_args(['--mode', 'save'])[0]),
+                         'org.omarchy.FilePicker.Picker')
+
     def test_explorer_only_for_standalone_browsing(self):
         self.assertTrue(parse_args([])[0].explorer)
         self.assertTrue(parse_args(['--demo'])[0].explorer)

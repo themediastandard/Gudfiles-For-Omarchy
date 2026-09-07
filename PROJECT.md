@@ -7,6 +7,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- The desktop launcher accepts a local file argument and advertises common video
+  MIME types, so Gudfiles can be the default application for opening videos. A
+  file launch opens the standalone browser at that video's containing folder.
+- Open/Save picker windows use the distinct Wayland application ID
+  `org.omarchy.FilePicker.Picker`; the standalone browser retains
+  `org.omarchy.FilePicker`. This lets Hyprland float every picker regardless of
+  caller-supplied title while leaving ordinary Gudfiles windows tiled.
 - Gudfiles 0.1.0 has local distribution preparation: an Arch `gudfiles` package,
   pinned AUR recipe and `.SRCINFO`, SHA-256 checksums, deterministic allowlisted
   runtime archive, release notes and a packaging-only CI workflow. No public
@@ -334,7 +341,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 Canonical repository: https://github.com/themediastandard/gudfiles (`main`).
 The local `origin` remote points there and is the default push destination.
 `main` tracks `origin/main`; the older `personal` remote remains a historical
-reference. Existing application IDs and installation paths remain unchanged.
+reference. The primary application and portal IDs and installation paths remain
+unchanged; picker windows add the dedicated child application ID documented above.
 
 ```bash
 python -m unittest discover -v

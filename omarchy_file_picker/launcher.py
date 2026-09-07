@@ -39,6 +39,9 @@ def main(argv=None):
         if result.url:
             print(result.url)
         return 1 if result.status == 'error' else 0
+    if args == ['--file-manager-service']:
+        from .file_manager import main as file_manager_main
+        return file_manager_main()
     if args in (['--enable-portal'], ['--disable-portal']):
         from .portal_setup import configure
         try:

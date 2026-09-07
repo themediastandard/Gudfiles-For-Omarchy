@@ -1809,9 +1809,13 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         return True
 
 
+def application_id_for(request: PickerRequest) -> str:
+    return "org.omarchy.FilePicker" if request.explorer else "org.omarchy.FilePicker.Picker"
+
+
 class PickerApplication(Gtk.Application):
     def __init__(self, request: PickerRequest, result_path: Path | None):
-        super().__init__(application_id="org.omarchy.FilePicker", flags=Gio.ApplicationFlags.NON_UNIQUE)
+        super().__init__(application_id=application_id_for(request), flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.request = request
         self.result_path = result_path
 

@@ -41,6 +41,8 @@ def install(destdir):
         ('omarchy-file-picker.portal', 'xdg-desktop-portal/portals/omarchy-file-picker.portal'),
         ('org.freedesktop.impl.portal.desktop.omarchy.FilePicker.service',
          'dbus-1/services/org.freedesktop.impl.portal.desktop.omarchy.FilePicker.service'),
+        ('org.freedesktop.FileManager1.service',
+         'dbus-1/services/org.freedesktop.FileManager1.service'),
     ):
         copy(f'data/{source}', f'usr/share/{target}', replacements=(('@BIN_DIR@', '/usr/bin'),))
     copy('data/omarchy-file-picker-portal.service', 'usr/lib/systemd/user/omarchy-file-picker-portal.service',

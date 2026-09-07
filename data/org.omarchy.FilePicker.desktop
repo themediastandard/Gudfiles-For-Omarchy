@@ -1,9 +1,10 @@
 [Desktop Entry]
 Name=Gudfiles
 Comment=Browse, organize and preview files
-Exec=gudfiles --demo --multiple
+Exec=gudfiles --demo %f --multiple
 Icon=folder-pictures-symbolic
 Terminal=false
 Type=Application
 Categories=Utility;FileTools;
+MimeType=inode/directory;video/mp4;video/x-matroska;video/webm;video/quicktime;video/mpeg;video/x-msvideo;video/x-ms-wmv;video/ogg;
 StartupWMClass=org.omarchy.FilePicker

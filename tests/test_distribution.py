@@ -162,6 +162,27 @@ class InstallChecks(unittest.TestCase):
         self.assertFalse(any(dest.rglob('*.pyc')))
         self.assertFalse(any(dest.rglob('*.sqlite3')))
 
+    def test_desktop_launcher_accepts_a_video_and_advertises_common_video_types(self):
+        desktop = configparser.ConfigParser(interpolation=None)
+        desktop.read(ROOT / 'data/org.omarchy.FilePicker.desktop')
+        entry = desktop['Desktop Entry']
+        self.assertEqual(entry['Exec'], 'gudfiles --demo %f --multiple')
+        mime_types = set(entry['MimeType'].split(';'))
+        self.assertTrue({'video/mp4', 'video/x-matroska', 'video/webm', 'video/quicktime'} <= mime_types)
+        self.assertIn('inode/directory', mime_types)
+
+    def test_file_manager_dbus_service_is_installed_for_both_scopes(self):
+        installer = script('user-install')
+        installer.change_install(self.home)
+        user_service = self.home / '.local/share/dbus-1/services/org.freedesktop.FileManager1.service'
+        self.assertIn(f'Exec="{self.home}/.local/bin/gudfiles" --file-manager-service',
+                      user_service.read_text())
+
+        dest = self.home / 'pkg'
+        script('install-system').install(dest)
+        system_service = dest / 'usr/share/dbus-1/services/org.freedesktop.FileManager1.service'
+        self.assertIn('Exec="/usr/bin/gudfiles" --file-manager-service', system_service.read_text())
+
 
 if __name__ == '__main__':
     unittest.main()
