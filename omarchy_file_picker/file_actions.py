@@ -39,7 +39,7 @@ def rename_item(source: Path, name: str) -> Path:
     return target
 
 
-def transfer_items(sources: list[Path], directory: Path, cut: bool = False) -> list[Path]:
+def transfer_items(sources: list[Path], directory: Path, cut: bool = False, *, moved=None) -> list[Path]:
     """Refuse overwrites and self/descendant copies; retain source on copy failure."""
     targets = [directory / source.name for source in sources]
     if len(set(targets)) != len(targets):
@@ -65,6 +65,8 @@ def transfer_items(sources: list[Path], directory: Path, cut: bool = False) -> l
                 None, None, None,
             )
         completed.append(target)
+        if cut and moved is not None:
+            moved(source, target)
     return completed
 
 

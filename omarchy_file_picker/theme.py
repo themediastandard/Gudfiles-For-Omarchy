@@ -127,6 +127,7 @@ def build_css(colors: dict[str, str]) -> str:
     .picker-dialog button.network-location:hover {{ background: {colors['lighter_background']}; }}
     .picker-dialog button.flat {{ background: transparent; background-image: none; border: 0; }}
     button {{
+      color: {colors['foreground']};
       border-radius: 7px;
       min-height: 34px;
       box-shadow: none;
@@ -265,6 +266,81 @@ def build_css(colors: dict[str, str]) -> str:
       min-width: 24px;
       padding: 3px;
     }}
+    .rating-controls button, .rating-controls menubutton > button {{
+      background: transparent; background-image: none; border: 0; box-shadow: none;
+      padding: 0 3px; min-height: 24px; min-width: 20px; border-radius: 5px;
+      color: {colors['light_foreground']}; text-shadow: none;
+    }}
+    .rating-controls button:hover, .rating-controls menubutton > button:hover {{
+      background: {colors['lighter_background']};
+    }}
+    .rating-controls .rating-star {{ font-size: 17px; }}
+    .rating-controls .rating-star.active, .creative-filter.active > button {{ color: {colors['accent']}; }}
+    .rating-controls .rating-reject.active {{ color: {colors['red']}; background: alpha({colors['red']}, 0.10); }}
+    .rating-badge {{
+      font-size: 11px; font-weight: 600; color: {colors['foreground']};
+      background: alpha({colors['background']}, 0.92); border-radius: 5px; padding: 2px 5px; margin: 3px;
+    }}
+    .file-list .rating-badge {{ background: transparent; margin: 0; padding: 0 4px; }}
+    .rating-badge.rejected {{ color: {colors['red']}; }}
+    .label-red, .label-red > button, .rating-controls .label-red > button {{ color: #d96868; }}
+    .label-orange, .label-orange > button, .rating-controls .label-orange > button {{ color: #c68b37; }}
+    .label-green, .label-green > button, .rating-controls .label-green > button {{ color: #579a70; }}
+    .label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: #598dc8; }}
+    .label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: #a47ac4; }}
+    popover.creative-popover > contents, popover.media-details-popover > contents {{
+      background: {colors['background']}; color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']}; border-radius: 10px;
+      padding: 16px; box-shadow: 0 6px 20px alpha(#000000, 0.14);
+    }}
+    .creative-heading {{ font-weight: 600; font-size: 14px; }}
+    .creative-choice, .color-swatch {{
+      background: transparent; background-image: none; border: 1px solid transparent;
+      border-radius: 6px; min-height: 28px; min-width: 24px; padding: 2px 8px;
+      box-shadow: none; text-shadow: none;
+    }}
+    .creative-choice {{ color: {colors['foreground']}; }}
+    .color-swatch:not(.label-red):not(.label-orange):not(.label-green):not(.label-blue):not(.label-purple) {{ color: {colors['light_foreground']}; }}
+    .creative-choice:hover, .color-swatch:hover {{ background: {colors['lighter_background']}; }}
+    .creative-choice.active, .color-swatch.active {{
+      background: alpha({colors['accent']}, 0.09); border-color: alpha({colors['accent']}, 0.4);
+    }}
+    .creative-choice.active {{ color: {colors['accent']}; }}
+    .color-swatch {{ font-size: 19px; padding: 0 6px; }}
+    .hover-scrub-track {{ color: {colors['accent']}; }}
+    .media-details-row {{ font-size: 12px; }}
+    .media-details-button > button {{
+      background: transparent; background-image: none; border: 0; box-shadow: none;
+      min-width: 20px; min-height: 20px; padding: 0 3px; color: {colors['light_foreground']};
+    }}
+    .media-details-button > button:hover {{ background: {colors['lighter_background']}; }}
+    .media-details-key {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .media-details-value {{ color: {colors['foreground']}; font-size: 12px; }}
+    .rename-header {{ padding: 0; }}
+    .rename-description {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .rename-fields {{ padding: 0; }}
+    .rename-preview {{ background: {colors['dark_background']}; border-radius: 8px; }}
+    .rename-preview-heading {{ font-size: 11px; font-weight: 600; color: {colors['light_foreground']}; padding: 8px 12px; }}
+    .rename-preview-row {{ padding: 8px 12px; border-bottom: 1px solid alpha({colors['foreground']}, 0.07); }}
+    .rename-before {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .rename-after {{ color: {colors['foreground']}; font-size: 12px; }}
+    .rename-status {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .rename-footer {{ padding-top: 14px; border-top: 1px solid {colors['darker_background']}; }}
+    .batch-rename-dialog .linked button {{
+      background: {colors['background']}; color: {colors['foreground']};
+      background-image: none; box-shadow: none; text-shadow: none; border-color: {colors['darker_background']};
+    }}
+    .batch-rename-dialog .linked button:checked {{ background: {colors['selection']}; color: {colors['accent']}; }}
+    .batch-rename-dialog spinbutton {{
+      background: {colors['background']}; color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']}; border-radius: 6px; box-shadow: none;
+    }}
+    .batch-rename-dialog spinbutton text {{ background: transparent; color: {colors['foreground']}; padding: 4px 8px; }}
+    .batch-rename-dialog spinbutton button {{
+      background: transparent; background-image: none; color: {colors['foreground']};
+      border: 0; border-left: 1px solid {colors['darker_background']}; min-width: 24px; min-height: 28px;
+    }}
+    .batch-rename-dialog spinbutton button:hover {{ background: {colors['lighter_background']}; }}
     .error {{ color: {colors['red']}; }}
     separator {{ background: {colors['darker_background']}; }}
     """

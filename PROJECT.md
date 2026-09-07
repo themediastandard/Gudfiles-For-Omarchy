@@ -22,6 +22,17 @@ as the desktop's XDG FileChooser portal backend.
   restoration. File-origin click gestures remain native GTK.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
+- Video grid/metadata thumbnails support silent hover-scrubbing with delayed
+  entry, a thin position indicator, background decoding and poster restoration.
+- Selection details asynchronously show available media resolution, FPS, codec,
+  duration, bit depth, audio and camera/EXIF values in a compact information card.
+- Local stars/color/rejected annotations appear as small badges and compact
+  controls in the metadata strip and Quick Look. Keys 0–5/X work outside text
+  entry; toolbar star filters by rated/rejected, minimum rating and color.
+  Folders remain navigable; filtered preview culling advances or closes cleanly.
+- Multi-selection F2/Batch Rename opens a styled Before/After preview with
+  pattern/replace modes, sequence start/padding and preserved extensions.
+  Preview is debounced/latest-only offthread; apply revalidates before mutation.
 - Compact context actions create folders and text files; cascading media menus
   expose resize presets and format conversions without replacing originals.
 - Conversion completion uses one dismissible in-window notification, expiring
@@ -78,6 +89,10 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `omarchy_file_picker/quicklook.py` — frame-clock animation and preview loading.
 - `omarchy_file_picker/image_preview.py` — clipped image zoom and pan controllers.
+- `omarchy_file_picker/hover_scrub.py` — bounded silent thumbnail extraction/cache.
+- `omarchy_file_picker/media_details.py` — asynchronous media/EXIF probing and card.
+- `omarchy_file_picker/ratings.py` / `creative.py` — local annotation store and controls.
+- `omarchy_file_picker/batch_rename.py` — preview planning, no-overwrite apply and dialog.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
@@ -91,6 +106,10 @@ python -m unittest discover -v
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_image_zoom.py
+PYTHONPATH=. python tests/ui_hover_scrub.py
+PYTHONPATH=. python tests/ui_media_details.py
+PYTHONPATH=. python tests/ui_creative.py
+PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
@@ -128,6 +147,18 @@ gdbus introspect --session \
   installation and are not installed by `install.sh`.
 - Media actions use the ImageMagick and FFmpeg packages already shipped in the
   current Omarchy environment; NAS access uses GVfs SMB/NFS support.
+- Hover uses 48 sampled positions, a 220ms delay, one worker and a 72-frame/
+  12MiB memory LRU, with subprocess deadlines and stale-result rejection. It
+  never writes the source or a disk frame cache. Metadata uses one worker plus
+  one latest pending request, a stat-keyed cache and bounded parsing.
+- Annotations live in user-local `ratings.sqlite3`, with serialized SQLite
+  read/modify/write transactions. No embedded media/XMP writes. Picker renames
+  and confirmed cut/paste moves migrate annotations (including partial success
+  and folder descendants); external path changes are not tracked.
+- Batch tokens are `{name}`, `{n}`, `{date}`; date means modification date.
+  `renameat2(RENAME_NOREPLACE)` is required, with no overwrite-prone fallback.
+  Duplicate/existing targets and swaps are rejected; failure/cancel stops and
+  reports completed items instead of implying transactional rollback.
 - Portal routing changes are user-local and backed up before replacement.
 - The stock GTK portal remains the fallback for all non-FileChooser interfaces.
 - Context popovers are parented to the stable browser stack, not replaceable
@@ -148,6 +179,14 @@ gdbus introspect --session \
 - Image zoom QA emits real GTK controller signals (not physical mouse events)
   and checks zoom limits, pointer anchoring, pan bounds, reset, loading spinner,
   clipped rendered bounds and unchanged layout for wide and tall fixtures.
+- Creative QA uses generated media and isolated preferences/catalogs. It tests
+  real hover frame differences, media/EXIF values, labels/filtering/culling,
+  editable-shortcut safety, preserved selection/geometry, and real batch rename
+  with collision/race/partial-failure protection. Native screenshots are inspected
+  for controls, filter card and rename dialog; no physical pointer injection.
+  `CREATIVE_QA_SCREENSHOTS=1` enables optional creative UI captures. GTK can
+  return no paintable node when a widget is not drawable; keep its native
+  surface visible for capture. Screenshots are separate from behavior QA.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in

@@ -40,6 +40,9 @@ from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
 from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri, mounted_local_path
+from .creative import CreativeTools
+from .hover_scrub import HoverScrub
+from .media_details import MediaDetailsService, make_details_widget
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -115,7 +118,7 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
     return widget
 
 
-class PickerWindow(FileManagement, Gtk.ApplicationWindow):
+class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None):
         super().__init__(application=app, title=request.title)
         self.request = request
@@ -131,6 +134,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.location_buttons: list[Gtk.Button] = []
         self.choice_widgets: dict[str, Gtk.Widget] = {}
         self._init_file_management()
+        self._init_creative()
+        self.media_details = MediaDetailsService()
+        self.connect('unrealize', lambda *_: self.media_details.close())
         self.active_processes: set[Gio.Subprocess] = set()
         self.context_popover: Gtk.Popover | None = None
         self.context_submenus: list[Gtk.Popover] = []
@@ -438,9 +444,10 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.toolbar.append(location_button)
 
         self.search = Gtk.SearchEntry(placeholder_text="Search this folder")
-        self.search.set_size_request(290, -1)
+        self.search.set_size_request(240, -1)
         self.search.connect("search-changed", lambda _entry: self._load())
         self.toolbar.append(self.search)
+        self.toolbar.append(self._creative_filter_button())
 
         self.hidden_button = self._icon_button("view-more-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
         self.toolbar.append(self.hidden_button)
@@ -533,6 +540,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                 self.drag_selection.cancel()
             return Gdk.EVENT_STOP
         if self.quicklook.get_visible():
+            editing = isinstance(self.get_focus(), (Gtk.Editable, Gtk.TextView))
+            if not editing and self._creative_shortcut(keyval, state, [self.quicklook.path]):
+                return Gdk.EVENT_STOP
             if keyval in (Gdk.KEY_space, Gdk.KEY_Escape):
                 if self.quicklook.target == 0:
                     self.quicklook.show_file(self.quicklook.path)
@@ -571,8 +581,13 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             if self.file_job_active and (keyval in (Gdk.KEY_F2, Gdk.KEY_Delete) or
                     (control and keyval in (Gdk.KEY_v, Gdk.KEY_V, Gdk.KEY_n, Gdk.KEY_N))):
                 return Gdk.EVENT_STOP
-            if keyval == Gdk.KEY_F2 and len(selected) == 1:
-                self._show_rename_dialog(selected[0])
+            if keyval == Gdk.KEY_F2 and selected:
+                if len(selected) == 1:
+                    self._show_rename_dialog(selected[0])
+                else:
+                    self._show_batch_rename_dialog(selected)
+                return Gdk.EVENT_STOP
+            if self._creative_shortcut(keyval, state, selected):
                 return Gdk.EVENT_STOP
             if keyval == Gdk.KEY_Delete and selected:
                 self._confirm_remove(selected, permanent=shift)
@@ -657,6 +672,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                 query=query,
                 directories_only=self.request.directory,
             )
+        self.entries = self._creative_entries(self.entries)
         self.entries = sort_entries(self.entries, self.file_preferences['sort_key'],
                                     self.file_preferences['descending'], self.file_preferences['folders_first'])
         self._rebuild_pathbar()
@@ -670,6 +686,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         for child in list(self.children_by_path.values()):
             self.flow.remove(child)
         self.children_by_path.clear()
+        self.rating_badges.clear()
         for path in self.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = path  # type: ignore[attr-defined]
@@ -679,7 +696,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             self.children_by_path[path] = child
         self.browser_stack.set_visible_child_name("files" if self.entries else "empty")
         self.empty_detail.set_text(
-            "No matching files." if self.search.get_text() else "This folder is empty."
+            "No matching files." if self.search.get_text() or self.creative_filter != ('all', 0, '') else "This folder is empty."
         )
         self._clear_metadata()
         self._update_accept_state()
@@ -692,7 +709,15 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         frame.add_css_class("thumbnail-frame")
         frame.set_halign(Gtk.Align.CENTER)
         frame.set_valign(Gtk.Align.CENTER)
-        frame.append(picture_for(path, 156, 98))
+        thumbnail = Gtk.Overlay()
+        poster = picture_for(path, 156, 98)
+        thumbnail.set_child(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
+        badge = self._rating_badge(path)
+        badge.set_halign(Gtk.Align.END)
+        badge.set_valign(Gtk.Align.START)
+        thumbnail.add_overlay(badge)
+        thumbnail.set_measure_overlay(badge, False)
+        frame.append(thumbnail)
         item.append(frame)
         name = label(path.name, "filename", xalign=0.5)
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
@@ -727,6 +752,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         name.set_hexpand(True)
         row.append(name)
+        row.append(self._rating_badge(path))
         kind = label(file_type(path), "muted")
         kind.set_size_request(150, -1)
         kind.set_ellipsize(Pango.EllipsizeMode.END)
@@ -786,6 +812,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.path_entry.set_text(str(path))
 
     def _clear_metadata(self) -> None:
+        self.media_details.cancel()
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
         image = Gtk.Image.new_from_icon_name("document-open-symbolic")
@@ -797,9 +824,11 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.metadata.append(copy)
 
     def _update_metadata(self, path: Path) -> None:
+        self.media_details.cancel()
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
-        self.metadata.append(picture_for(path, 132, 76, crop=True))
+        poster = picture_for(path, 132, 76, crop=True)
+        self.metadata.append(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         primary.set_size_request(140, -1)
         primary.set_hexpand(True)
@@ -808,12 +837,14 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         title.set_max_width_chars(32)
         title.set_tooltip_text(path.name)
         primary.append(title)
-        for detail in (file_type(path), str(path.parent)):
+        for detail in (f'{file_type(path)} · {path.parent}',):
             detail_label = label(detail, "muted")
             detail_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             detail_label.set_max_width_chars(36)
             detail_label.set_tooltip_text(detail)
             primary.append(detail_label)
+        paths = self._selected_paths() or [path]
+        primary.append(self._rating_controls(paths))
         self.metadata.append(primary)
         try:
             stat = path.stat()
@@ -831,13 +862,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             facts.append(fact)
         append_fact(f"Size    {size}")
         append_fact(f"Modified    {modified}")
-        if path.suffix.casefold() in IMAGE_TYPES:
-            try:
-                _format, width, height = GdkPixbuf.Pixbuf.get_file_info(str(path))
-                if width and height:
-                    append_fact(f"Dimensions    {width} × {height}")
-            except (GLib.Error, TypeError):
-                pass
+        facts.append(make_details_widget(self.media_details, path))
         self.metadata.append(facts)
 
     def _on_selection_changed(self, flow: Gtk.FlowBox) -> None:
@@ -1508,6 +1533,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             return
         if self.sidebar_save_timer:
             self._save_sidebar_width()
+        self.media_details.close()
         if self.request.explorer:
             self.get_application().quit()
             return

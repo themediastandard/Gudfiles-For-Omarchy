@@ -142,11 +142,23 @@ class FileManagement:
                 error_label.set_text(str(error))
                 return
             self._dismiss_dialog(dialog)
+            migrate = getattr(self, '_creative_paths_renamed', None)
+            if migrate and target != path:
+                migrate({path: target})
             self._refresh_files([target])
         dialog.connect('response', response)
         dialog.present()
         entry.grab_focus()
         entry.select_region(0, len(path.stem) if path.is_file() else -1)
+
+    def _show_batch_rename_dialog(self, paths):
+        if not paths or self.file_job_active:
+            return
+        from .batch_rename import BatchRenameDialog
+        dialog = BatchRenameDialog(self, paths)
+        dialog.present()
+        dialog.pattern.grab_focus()
+        return dialog
 
     def _confirm_remove(self, paths, permanent=False):
         if not paths: return
@@ -206,7 +218,7 @@ class FileManagement:
                     paths, cut = parse_file_clipboard(chunks.decode(), mime)
                     if not paths: raise ValueError('The clipboard does not contain local files.')
                     self._run_file_job('Moving files' if cut else 'Copying files',
-                        lambda: transfer_items(paths, destination, cut),
+                        lambda: self._transfer_files(paths, destination, cut),
                         # Convert a completed cut to copy without clearing unrelated newer clipboard data.
                         lambda: self._copy_files([destination / p.name for p in paths])
                         if cut and original_provider is not None and clip.get_content() == original_provider else None)
@@ -216,6 +228,22 @@ class FileManagement:
             stream.read_bytes_async(8192, GLib.PRIORITY_DEFAULT, None, data_ready)
         clipboard.read_async(['x-special/gnome-copied-files', 'text/uri-list'],
                              GLib.PRIORITY_DEFAULT, None, read)
+
+    def _transfer_files(self, paths, destination, cut):
+        """Run on the file-job worker; preserve confirmed moves even after a later failure."""
+        mapping = {}
+        try:
+            return transfer_items(paths, destination, cut, moved=lambda source, target: mapping.__setitem__(source, target))
+        finally:
+            if mapping:
+                def migrate():
+                    callback = getattr(self, '_creative_paths_renamed', None)
+                    if callback:
+                        callback(mapping)
+                    return False
+                # Enqueued before _run_file_job's completion/refresh, on the same
+                # main-loop priority; never mutate the visible ratings cache here.
+                GLib.idle_add(migrate)
 
     def _open_file_manager(self, path):
         try:
@@ -276,8 +304,9 @@ class FileManagement:
                    'document-open-symbolic')
             if self.special_mode == 'recent' and len(paths) == 1:
                 action('Visit File', lambda: self._visit_file(paths[0]), 'go-jump-symbolic')
-            action('Rename…', lambda: self._show_rename_dialog(paths[0]), 'document-edit-symbolic',
-                   enabled=len(paths) == 1 and os.access(paths[0].parent, os.W_OK), detail='F2')
+            action('Batch Rename…' if len(paths) > 1 else 'Rename…',
+                   lambda: self._show_batch_rename_dialog(paths) if len(paths) > 1 else self._show_rename_dialog(paths[0]),
+                   'document-edit-symbolic', enabled=all(os.access(path.parent, os.W_OK) for path in paths), detail='F2')
             separator()
             action('Cut', lambda: self._copy_files(paths, True), 'edit-cut-symbolic', detail='Ctrl+X')
             action('Copy', lambda: self._copy_files(paths), 'edit-copy-symbolic', detail='Ctrl+C')

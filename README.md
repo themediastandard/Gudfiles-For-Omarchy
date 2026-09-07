@@ -13,6 +13,11 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 - Thumbnail-first grid and compact list views
 - Dense list rows with no gaps between files
 - Image previews and freedesktop video thumbnail cache support
+- Silent hover-scrubbing across video thumbnails, with a subtle position indicator
+- Media details: dimensions, frame rate, codec, duration, bit depth, audio and
+  camera metadata when available
+- Stars, color labels and rejects with compact controls, thumbnail badges and filters
+- Preview-first batch rename with naming patterns, numbering and find/replace
 - Pinned folders, recent files, and mounted volumes
 - Drag the divider beside the sidebar to resize it; its width is remembered
 - Compact, icon-led right-click menu with grouped media submenus
@@ -102,6 +107,38 @@ and Escape cancels the drag. Dragging near the top/bottom edge scrolls the folde
 
 Successful conversions show a compact theme-matched notification inside the
 picker, not a modal popup. It disappears after eight seconds or when dismissed.
+
+## Creative workflow
+
+Move across a video thumbnail to skim it silently after a short hover delay;
+move away to restore its poster. This also works on the selected thumbnail in
+list view. Press Space for normal playback. Hover uses bounded background FFmpeg
+extraction rather than starting an audio/video player for every tile.
+
+The selection strip shows a compact media summary; its information button
+opens a two-column details card. Only metadata actually available is shown.
+
+Use the stars and color dot beneath the filename, or in Quick Look's header,
+to mark selects. Press `1`–`5` to rate, `0` to clear stars, and `X` to toggle
+rejected. These actions apply to selected files (the current file in Quick Look)
+and do not delete or alter media. The toolbar star opens rating/color filters;
+folders remain visible for navigation. When culling a filtered selection in
+Quick Look, a file that stops matching advances to a remaining neighbor, or
+closes the preview when no matching files remain.
+
+Annotations are local to this app in
+`~/.local/share/omarchy-file-picker/ratings.sqlite3`, not embedded metadata or
+XMP sidecars. They follow renames and cut/paste moves performed in the picker,
+including descendants of renamed folders. External moves/renames are not tracked;
+annotations are associated with paths, not a portable asset database.
+
+Select multiple items and press `F2` or choose **Batch Rename…**. The dialog
+previews Before/After names before enabling Rename. Patterns support `{name}`,
+`{n}` and `{date}` (modification date), with sequence start/padding; Find & replace
+changes the filename stem. Extensions are preserved. Duplicate/existing targets
+are blocked, including rename swaps. Renames use Linux's no-overwrite operation;
+unsupported filesystems fail safely. Stop/failure keeps completed renames and
+reports what happened; the batch is not an all-or-nothing transaction.
 
 See [stock-picker-comparison.md](stock-picker-comparison.md) for the stock GTK
 action comparison and intentional differences.

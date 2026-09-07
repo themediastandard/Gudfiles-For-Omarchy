@@ -93,6 +93,8 @@ class QuickLook(Gtk.Widget):
         self.title = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.MIDDLE)
         self.title.add_css_class('metadata-title')
         bar.append(self.title)
+        self.rating_box = Gtk.Box()
+        bar.append(self.rating_box)
         for icon, step, name in [('go-previous-symbolic', -1, 'Previous file'),
                                   ('go-next-symbolic', 1, 'Next file')]:
             button = Gtk.Button.new_from_icon_name(icon)
@@ -226,6 +228,7 @@ class QuickLook(Gtk.Widget):
         generation = self.generation
         self._clear_content()
         self.title.set_text(path.name)
+        self.refresh_ratings()
         try:
             self.details = f'{file_type(path)}  ·  {format_size(path.stat().st_size)}'
         except OSError:
@@ -240,6 +243,12 @@ class QuickLook(Gtk.Widget):
                 kind, data = 'info', f'Preview unavailable: {error}'
             GLib.idle_add(self._loaded, generation, kind, data)
         threading.Thread(target=worker, daemon=True).start()
+
+    def refresh_ratings(self):
+        while child := self.rating_box.get_first_child():
+            self.rating_box.remove(child)
+        if self.path:
+            self.rating_box.append(self.owner._rating_controls([self.path]))
 
     def _loaded(self, generation, kind, data):
         if generation != self.generation or not self.get_visible():
