@@ -33,7 +33,7 @@ from .actions import (
     video_convert_command,
 )
 from .model import PickerRequest, file_type, format_size, list_directory, recent_files, safe_uri
-from .theme import build_css, load_colors
+from .theme import build_css, load_colors, prepare_colors
 from .file_management import FileManagement, SIDEBAR_MIN_WIDTH
 from .file_actions import create_untitled_text, sort_entries
 from .dialogs import PickerDialog, confirmation, entry_field, file_summary, text_label
@@ -197,7 +197,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         return False
 
     def _install_theme(self) -> None:
-        colors = load_colors()
+        colors = prepare_colors(load_colors())
         self.colors = colors
         provider = Gtk.CssProvider()
         provider.load_from_string(build_css(colors))
@@ -211,15 +211,15 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _build_header(self) -> None:
         header = Gtk.HeaderBar()
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        title_label = label(self.request.title, "metadata-title", xalign=0.5)
-        subtitle_text = "Choose a folder" if self.request.directory else (
-            "Choose where to save" if self.request.mode.startswith("save") else "Choose files to open"
-        )
-        if self.request.explorer:
-            subtitle_text = "Browse files and folders"
-        subtitle = label(subtitle_text, "muted", xalign=0.5)
+        title_box.set_valign(Gtk.Align.CENTER)
+        title_label = label("GUDFILES" if self.request.explorer else self.request.title,
+                            "metadata-title", xalign=0.5)
         title_box.append(title_label)
-        title_box.append(subtitle)
+        if not self.request.explorer:
+            subtitle_text = "Choose a folder" if self.request.directory else (
+                "Choose where to save" if self.request.mode.startswith("save") else "Choose files to open"
+            )
+            title_box.append(label(subtitle_text, "muted", xalign=0.5))
         header.set_title_widget(title_box)
         self.help_button = Gtk.Button.new_from_icon_name('help-browser-symbolic')
         self.help_button.set_valign(Gtk.Align.CENTER)
@@ -1821,7 +1821,10 @@ class PickerApplication(Gtk.Application):
 
 
 def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
-    parser = argparse.ArgumentParser(description="Gudfiles — visual file manager and file picker")
+    parser = argparse.ArgumentParser(description="Gudfiles — visual file manager and file picker",
+                                     epilog='Other gudfiles commands: --doctor, --check-updates, --enable-portal, --disable-portal.')
+    from . import __version__
+    parser.add_argument('--version', action='version', version=f'Gudfiles {__version__}')
     parser.add_argument("--request", type=Path, help="JSON portal request")
     parser.add_argument("--result", type=Path, help="JSON result destination")
     parser.add_argument("--demo", nargs="?", const=str(Path.home() / "Pictures"), help="Open standalone demo")
@@ -1841,7 +1844,7 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
         request = PickerRequest(
             mode=args.mode,
             explorer=explorer,
-            title="Gudfiles" if explorer else ("Save File" if args.mode == "save" else "Open File"),
+            title="GUDFILES" if explorer else ("Save File" if args.mode == "save" else "Open File"),
             accept_label="Save" if args.mode == "save" else ("Select Folder" if args.directory else "Open"),
             current_folder=folder if folder.is_dir() else folder.parent,
             current_name="untitled.txt" if args.mode == "save" else "",

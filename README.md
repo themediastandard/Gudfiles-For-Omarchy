@@ -5,6 +5,12 @@ Omarchy theme and serves as an XDG desktop portal backend.
 
 Source: [themediastandard/gudfiles](https://github.com/themediastandard/gudfiles).
 
+Designed and built by [The Media Standard](https://themediastandard.com) for
+creatives using Linux. Gudfiles is free for personal and commercial use under
+the [Gudfiles Free Use License](LICENSE). Modification and redistribution require
+prior written permission from The Media Standard. **Help → About & License**
+includes the credit, website and full license, available offline.
+
 Launching it directly opens explorer mode: no bottom filter/action bar, files
 open with their default applications, and the explorer stays open. App-requested
 Open/Save dialogs retain their filter, Cancel and Open/Save controls. Explicit
@@ -241,19 +247,32 @@ action comparison and intentional differences.
 
 ## Install
 
+Public downloads and updates are being prepared for **Gudfiles 0.1.0**. See the
+[Omarchy installation guide](docs/INSTALL.md) for package installation, normal
+Omarchy updates, optional portal setup and migration from the development copy.
+The [release guide](docs/RELEASING.md) covers building and publishing each version.
+No public release or AUR availability is implied until those steps are complete.
+
+For a user-local development install:
+
 ```bash
 ./install.sh
 ```
 
-This installs entirely in `~/.local` and `~/.config`. It backs up an existing
-Hyprland portal routing file, makes this picker the FileChooser backend, leaves
-the GTK portal as fallback, and restarts the affected user services.
+This installs entirely in `~/.local` and `~/.config`, checks required runtime
+support and backs up previous code. Finish transfers and close Gudfiles first.
+Portal selection is optional: run `gudfiles --enable-portal`, then log out and
+back in after finishing work. Installation does not restart active services.
+Do not use this installer over a system package.
 
 Revert with:
 
 ```bash
 ./uninstall.sh
 ```
+
+The updated uninstaller preserves ratings, preferences and shared bookmarks,
+backs up code, and restores owned portal routing. Log out and back in afterward.
 
 ## Action sounds
 

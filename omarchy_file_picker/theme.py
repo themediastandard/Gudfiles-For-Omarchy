@@ -33,7 +33,70 @@ def load_colors(path: Path | None = None) -> dict[str, str]:
     return colors
 
 
+def _rgb(color: str) -> tuple[int, ...]:
+    return tuple(int(color.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _mix(ink: str, surface: str, amount: float) -> str:
+    return '#%02x%02x%02x' % tuple(round(a * amount + b * (1 - amount))
+                                  for a, b in zip(_rgb(ink), _rgb(surface)))
+
+
+def contrast_ratio(first: str, second: str) -> float:
+    def luminance(color):
+        channels = [value / 255 for value in _rgb(color)]
+        linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in channels]
+        return sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+    a, b = sorted((luminance(first), luminance(second)))
+    return (b + 0.05) / (a + 0.05)
+
+
+def _readable(ink: str, surface: str, minimum: float = 4.5) -> str:
+    """Retain the hue, deepening only light-theme ink that is too faint."""
+    for step in range(101):
+        candidate = _mix('#000000', ink, step / 100)
+        if contrast_ratio(candidate, surface) >= minimum:
+            return candidate
+    return '#000000'
+
+
+def prepare_colors(colors: dict[str, str]) -> dict[str, str]:
+    """Map terminal-oriented light palettes to quiet, readable native surfaces.
+
+    The desktop palette is never rewritten. Keep accent fills and media intact;
+    use separate ink for small accent text on pale backgrounds.
+    """
+    c = colors.copy()
+    c['accent_ink'], c['error_ink'] = c['accent'], c['red']
+    if c.get('mode') == 'light':
+        fg, bg = c['foreground'], c['background']
+        c['dark_background'] = _mix(fg, bg, 0.035)
+        c['darker_background'] = _mix(fg, bg, 0.14)
+        c['lighter_background'] = _mix(fg, bg, 0.07)
+        c['selection'] = _mix(c['accent'], bg, 0.12)
+        text_surface = min((bg, c['selection'], c['lighter_background']),
+                           key=lambda color: contrast_ratio('#000000', color))
+        secondary = _readable(_mix(fg, bg, 0.70), text_surface)
+        c['dark_foreground'] = c['light_foreground'] = c['muted'] = secondary
+        c['accent_ink'] = _readable(c['accent'], _mix(c['accent'], bg, 0.22))
+        c['error_ink'] = _readable(c['red'], _mix(c['red'], bg, 0.10))
+    return c
+
+
+def label_colors(colors: dict[str, str]) -> dict[str, str]:
+    swatches = {'red': '#d96868', 'orange': '#c68b37', 'green': '#579a70',
+                'blue': '#598dc8', 'purple': '#a47ac4'}
+    if colors.get('mode') == 'light':
+        c = prepare_colors(colors)
+        surface = min((c['background'], c['selection'], c['lighter_background']),
+                      key=lambda color: contrast_ratio('#000000', color))
+        return {name: _readable(color, surface) for name, color in swatches.items()}
+    return swatches
+
+
 def build_css(colors: dict[str, str]) -> str:
+    colors = prepare_colors(colors)
+    swatches = label_colors(colors)
     return f"""
     * {{
       font-family: 'Adwaita Sans', sans-serif;
@@ -55,19 +118,19 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     headerbar button.header-utility image {{ -gtk-icon-size: 16px; }}
     headerbar button.header-utility:hover {{ background: alpha({colors['foreground']}, 0.07); color: {colors['foreground']}; }}
-    headerbar button.header-utility:active {{ background: alpha({colors['accent']}, 0.14); color: {colors['accent']}; }}
+    headerbar button.header-utility:active {{ background: alpha({colors['accent']}, 0.14); color: {colors['accent_ink']}; }}
     headerbar button.header-utility:focus-visible {{ outline: 2px solid alpha({colors['accent']}, 0.65); outline-offset: 1px; }}
-    headerbar button.header-utility.active {{ color: {colors['accent']}; }}
+    headerbar button.header-utility.active {{ color: {colors['accent_ink']}; }}
     headerbar .header-transfer-badge {{
       font-size: 9px; font-weight: 700; min-width: 10px; padding: 0 2px;
       margin-top: -7px; margin-right: -7px; border-radius: 5px;
-      background: {colors['background']}; color: {colors['accent']};
+      background: {colors['background']}; color: {colors['accent_ink']};
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
     .files-help .help-heading {{ padding: 20px 22px 16px; }}
     .files-help .help-title {{ font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }}
     .files-help .help-emblem {{
-      color: {colors['accent']}; background: alpha({colors['accent']}, 0.10);
+      color: {colors['accent_ink']}; background: alpha({colors['accent']}, 0.10);
       border: 1px solid alpha({colors['accent']}, 0.16); border-radius: 12px; padding: 12px;
     }}
     .files-help .help-description {{ color: {colors['light_foreground']}; font-size: 12px; }}
@@ -88,11 +151,10 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     .files-help .help-nav-title {{ font-size: 12px; font-weight: 550; }}
     .files-help button.help-category:hover, .files-help button.flat:hover {{ background: alpha({colors['foreground']}, 0.06); }}
-    .files-help button.help-category:checked {{ background: alpha({colors['accent']}, 0.12); color: {colors['accent']}; border-color: alpha({colors['accent']}, 0.18); }}
-    .files-help .help-tip {{ color: {colors['light_foreground']}; font-size: 11px; margin: 24px 10px 0; }}
+    .files-help button.help-category:checked {{ background: alpha({colors['accent']}, 0.12); color: {colors['accent_ink']}; border-color: alpha({colors['accent']}, 0.18); }}
     .files-help .help-content {{ padding: 22px; }}
     .files-help .help-section-title {{ font-size: 20px; font-weight: 700; letter-spacing: -0.4px; }}
-    .files-help .help-group-heading {{ color: {colors['accent']}; margin-top: 4px; }}
+    .files-help .help-group-heading {{ color: {colors['accent_ink']}; margin-top: 4px; }}
     .files-help .help-group-title {{ font-size: 12px; font-weight: 650; }}
     .files-help .help-card {{ border: 1px solid {colors['darker_background']}; border-radius: 10px; background: alpha({colors['foreground']}, 0.02); }}
     .files-help .help-card separator {{ background: {colors['darker_background']}; min-height: 1px; margin: 0 14px; }}
@@ -105,6 +167,14 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     .files-help .help-empty {{ padding: 30px 14px; color: {colors['light_foreground']}; }}
     .files-help .help-footer {{ padding: 11px 22px; border-top: 1px solid {colors['darker_background']}; }}
+    .files-help .help-about-title {{ font-size: 28px; font-weight: 750; letter-spacing: 0.6px; }}
+    .files-help .help-about-card {{ padding: 18px; }}
+    .files-help .help-license-text {{ color: {colors['light_foreground']}; font-size: 12px; }}
+    .files-help button.help-link, .files-help button.help-link:visited {{
+      background: transparent; border: 0; padding: 3px 0; min-height: 22px;
+      color: {colors['accent_ink']};
+    }}
+    .files-help button.help-link:hover {{ color: {colors['foreground']}; }}
     .transfer-window .transfer-toolbar {{ padding: 14px 16px; border-bottom: 1px solid {colors['darker_background']}; }}
     .transfer-window .transfer-row {{
       background: alpha({colors['foreground']}, 0.025); border: 1px solid {colors['darker_background']};
@@ -112,15 +182,15 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     .transfer-window .transfer-title {{ font-size: 14px; font-weight: 650; }}
     .transfer-window .transfer-subtitle {{ color: {colors['light_foreground']}; font-size: 12px; }}
-    .transfer-window .transfer-icon, .transfer-window .transfer-status.running {{ color: {colors['accent']}; }}
+    .transfer-window .transfer-icon, .transfer-window .transfer-status.running {{ color: {colors['accent_ink']}; }}
     .transfer-window .transfer-status {{ color: {colors['light_foreground']}; font-size: 10px; font-weight: 700; }}
-    .transfer-window .transfer-status.failed {{ color: {colors['red']}; }}
-    .transfer-window .transfer-status.completed {{ color: {colors['accent']}; }}
+    .transfer-window .transfer-status.failed {{ color: {colors['error_ink']}; }}
+    .transfer-window .transfer-status.completed {{ color: {colors['accent_ink']}; }}
     .transfer-window button {{ min-height: 28px; padding: 2px 10px; background-image: none; box-shadow: none; text-shadow: none; }}
     .transfer-window button.flat {{ background: transparent; border: 1px solid transparent; }}
     .transfer-window button.flat:hover {{ background: alpha({colors['foreground']}, 0.07); }}
     .transfer-window button.transfer-action {{
-      background: alpha({colors['accent']}, 0.12); color: {colors['accent']};
+      background: alpha({colors['accent']}, 0.12); color: {colors['accent_ink']};
       border: 1px solid alpha({colors['accent']}, 0.25);
     }}
     .transfer-window button.transfer-action:hover {{ background: alpha({colors['accent']}, 0.22); }}
@@ -152,8 +222,8 @@ def build_css(colors: dict[str, str]) -> str:
       background: transparent; background-image: none; border: 0;
       color: {colors['light_foreground']}; min-height: 24px; padding: 0 4px; font-size: 12px;
     }}
-    button.clear-active-filters:hover {{ color: {colors['accent']}; }}
-    button.hidden-toggle.active {{ color: {colors['accent']}; background: alpha({colors['accent']}, 0.10); }}
+    button.clear-active-filters:hover {{ color: {colors['accent_ink']}; }}
+    button.hidden-toggle.active {{ color: {colors['accent_ink']}; background: alpha({colors['accent']}, 0.10); }}
     .footer {{
       padding: 12px 16px;
       border-top: 1px solid {colors['darker_background']};
@@ -188,7 +258,7 @@ def build_css(colors: dict[str, str]) -> str:
     .location-button:hover {{ background: {colors['lighter_background']}; }}
     .location-button.active {{
       background: {colors['selection']};
-      color: {colors['accent']};
+      color: {colors['accent_ink']};
     }}
     .quicklook-card {{
       background: {colors['background']};
@@ -212,7 +282,7 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     button.suggested-action {{
       background: {colors['accent']};
-      color: white;
+      color: {button_foreground(colors['accent'])};
       border-color: {colors['accent']};
       font-weight: 700;
     }}
@@ -240,7 +310,7 @@ def build_css(colors: dict[str, str]) -> str:
     .path-segment:hover {{ background: transparent; }}
     .path-segment.current {{
       font-weight: 700;
-      color: {colors['accent']};
+      color: {colors['accent_ink']};
     }}
     flowbox {{
       background: {colors['background']};
@@ -253,12 +323,12 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 10px; }}
-    .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent']}; }}
+    .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
     .view-switcher {{ background: {colors['dark_background']}; border-radius: 8px; }}
     .browser-column {{ background: {colors['background']}; border-right: 1px solid {colors['lighter_background']}; }}
     .browser-column:not(.active-column) flowboxchild:selected {{ background: alpha({colors['foreground']}, 0.06); border-color: transparent; }}
     .column-heading {{ padding: 10px 14px; font-size: 12px; font-weight: 600; color: {colors['muted']}; border-bottom: 1px solid {colors['lighter_background']}; }}
-    .active-column .column-heading {{ color: {colors['accent']}; }}
+    .active-column .column-heading {{ color: {colors['accent_ink']}; }}
     .column-empty {{ padding: 22px 14px; color: {colors['muted']}; }}
     flowbox.column-files {{ padding: 6px; }}
     .column-files .rating-badge {{ padding: 0; }}
@@ -303,7 +373,7 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['background']}; color: {colors['foreground']};
       border: 1px solid {colors['accent']}; border-radius: 8px; padding: 10px 12px;
     }}
-    .file-copy-drag image {{ color: {colors['accent']}; }}
+    .file-copy-drag image {{ color: {colors['accent_ink']}; }}
     .thumbnail-frame {{
       background: {colors['dark_background']};
       border-radius: 7px;
@@ -379,7 +449,7 @@ def build_css(colors: dict[str, str]) -> str:
       border-radius: 8px;
       padding: 12px 14px;
     }}
-    .conversion-success {{ color: {colors['accent']}; }}
+    .conversion-success {{ color: {colors['accent_ink']}; }}
     .conversion-notice button {{
       background: transparent;
       border: 0;
@@ -397,21 +467,21 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['lighter_background']};
     }}
     .rating-controls .rating-star {{ font-size: 17px; }}
-    .rating-controls .rating-star.active, .creative-filter.active > button {{ color: {colors['accent']}; }}
-    .rating-controls .rating-reject.active {{ color: {colors['red']}; background: alpha({colors['red']}, 0.10); }}
+    .rating-controls .rating-star.active, .creative-filter.active > button {{ color: {colors['accent_ink']}; }}
+    .rating-controls .rating-reject.active {{ color: {colors['error_ink']}; background: alpha({colors['red']}, 0.10); }}
     .rating-badge {{
       font-size: 11px; font-weight: 600; color: {colors['foreground']};
       background: alpha({colors['background']}, 0.92); border-radius: 5px; padding: 2px 5px; margin: 3px;
     }}
     .file-list .rating-badge {{ background: transparent; margin: 0; padding: 0 4px; }}
-    .rating-badge.rejected {{ color: {colors['red']}; }}
+    .rating-badge.rejected {{ color: {colors['error_ink']}; }}
     /* Popovers remain descendants of rating-controls: swatches must outrank
        its generic button foreground, not merely inherit a label color. */
-    .label-red, .color-swatch.label-red, .label-red > button, .rating-controls .label-red > button {{ color: #d96868; }}
-    .label-orange, .color-swatch.label-orange, .label-orange > button, .rating-controls .label-orange > button {{ color: #c68b37; }}
-    .label-green, .color-swatch.label-green, .label-green > button, .rating-controls .label-green > button {{ color: #579a70; }}
-    .label-blue, .color-swatch.label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: #598dc8; }}
-    .label-purple, .color-swatch.label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: #a47ac4; }}
+    .label-red, .color-swatch.label-red, .label-red > button, .rating-controls .label-red > button {{ color: {swatches['red']}; }}
+    .label-orange, .color-swatch.label-orange, .label-orange > button, .rating-controls .label-orange > button {{ color: {swatches['orange']}; }}
+    .label-green, .color-swatch.label-green, .label-green > button, .rating-controls .label-green > button {{ color: {swatches['green']}; }}
+    .label-blue, .color-swatch.label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: {swatches['blue']}; }}
+    .label-purple, .color-swatch.label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: {swatches['purple']}; }}
     popover.creative-popover > contents, popover.media-details-popover > contents {{
       background: {colors['background']}; color: {colors['foreground']};
       border: 1px solid {colors['darker_background']}; border-radius: 10px;
@@ -429,9 +499,9 @@ def build_css(colors: dict[str, str]) -> str:
     .creative-choice.active, .color-swatch.active {{
       background: alpha({colors['accent']}, 0.09); border-color: alpha({colors['accent']}, 0.4);
     }}
-    .creative-choice.active {{ color: {colors['accent']}; }}
+    .creative-choice.active {{ color: {colors['accent_ink']}; }}
     .color-swatch {{ font-size: 19px; padding: 0 6px; }}
-    .hover-scrub-track {{ color: {colors['accent']}; }}
+    .hover-scrub-track {{ color: {colors['accent_ink']}; }}
     .media-details-row {{ font-size: 12px; }}
     .media-details-button > button {{
       background: transparent; background-image: none; border: 0; box-shadow: none;
@@ -440,23 +510,21 @@ def build_css(colors: dict[str, str]) -> str:
     .media-details-button > button:hover {{ background: {colors['lighter_background']}; }}
     .media-details-key {{ color: {colors['light_foreground']}; font-size: 12px; }}
     .media-details-value {{ color: {colors['foreground']}; font-size: 12px; }}
-    .error {{ color: {colors['red']}; }}
+    .error {{ color: {colors['error_ink']}; }}
     separator {{ background: {colors['darker_background']}; }}
-    """ + dialog_css(colors)
+    """ + dialog_css(colors) + light_controls_css(colors)
 
 
 def button_foreground(color):
     """Use dark ink on pastel accents and white ink on deeper accents."""
     try:
-        rgb = [int(color.lstrip('#')[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-        linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
-        luminance = sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
-        return '#111318' if luminance > 0.179 else '#ffffff'
-    except (ValueError, TypeError):
+        return max(('#111318', '#ffffff'), key=lambda ink: contrast_ratio(ink, color))
+    except (ValueError, TypeError, AttributeError):
         return '#ffffff'
 
 
 def dialog_css(c):
+    c = prepare_colors(c)
     muted = c['light_foreground'] if c.get('mode') == 'light' else f"alpha({c['foreground']}, 0.85)"
     return f"""
     window.picker-dialog {{ border-radius: 14px; }}
@@ -510,7 +578,7 @@ def dialog_css(c):
       border-radius: 10px; padding: 16px;
     }}
     .picker-dialog .dialog-file-icon {{
-      background: alpha({c['accent']}, 0.12); color: {c['accent']}; border-radius: 10px; padding: 12px;
+      background: alpha({c['accent']}, 0.12); color: {c['accent_ink']}; border-radius: 10px; padding: 12px;
     }}
     .picker-dialog .dialog-file-name {{ color: {c['bright_foreground']}; font-size: 15px; font-weight: 600; }}
     .picker-dialog .dialog-section-title {{ color: {muted}; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }}
@@ -523,11 +591,11 @@ def dialog_css(c):
     .picker-dialog .dialog-detail-key {{ color: {muted}; font-size: 12px; }}
     .picker-dialog .dialog-detail-value {{ color: {c['foreground']}; font-size: 13px; }}
     .picker-dialog .dialog-path-row {{ padding: 10px 14px; }}
-    .picker-dialog .dialog-path-row image {{ color: {c['accent']}; }}
+    .picker-dialog .dialog-path-row image {{ color: {c['accent_ink']}; }}
     .picker-dialog .dialog-path-row label {{ font-size: 13px; }}
     .picker-dialog .dialog-error {{
       margin: 0 24px 18px; padding: 10px 12px; border-radius: 8px;
-      color: {c['red']}; background: alpha({c['red']}, 0.08); font-size: 12px;
+      color: {c['error_ink']}; background: alpha({c['red']}, 0.08); font-size: 12px;
     }}
     .picker-dialog .error-detail {{ padding: 14px; font-size: 13px; }}
     .picker-dialog .rename-preview {{
@@ -537,12 +605,12 @@ def dialog_css(c):
     .picker-dialog .rename-preview-heading label {{ color: {muted}; font-size: 11px; font-weight: 600; }}
     .picker-dialog .rename-preview-row {{ padding: 10px 14px; border-bottom: 1px solid alpha({c['foreground']}, 0.07); }}
     .picker-dialog .rename-before {{ color: {muted}; font-size: 12px; }}
-    .picker-dialog .rename-after {{ color: {c['accent']}; font-size: 12px; }}
+    .picker-dialog .rename-after {{ color: {c['accent_ink']}; font-size: 12px; }}
     .picker-dialog .rename-status {{ color: {muted}; font-size: 12px; }}
-    .picker-dialog .rename-status.error {{ color: {c['red']}; }}
+    .picker-dialog .rename-status.error {{ color: {c['error_ink']}; }}
     .picker-dialog .linked {{ background: alpha({c['foreground']}, 0.05); border-radius: 8px; padding: 3px; }}
     .picker-dialog .linked button {{ border: 0; background: transparent; border-radius: 6px; padding: 3px 14px; }}
-    .picker-dialog .linked button:checked {{ background: alpha({c['accent']}, 0.15); color: {c['accent']}; }}
+    .picker-dialog .linked button:checked {{ background: alpha({c['accent']}, 0.15); color: {c['accent_ink']}; }}
     .picker-dialog spinbutton {{
       background: {c['dark_background']}; color: {c['foreground']};
       border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 7px; box-shadow: none;
@@ -560,4 +628,74 @@ def dialog_css(c):
     .picker-dialog button.network-location:hover {{ background: alpha({c['accent']}, 0.09); border-color: alpha({c['accent']}, 0.30); }}
     .picker-dialog .network-locations .muted, .picker-dialog .muted {{ color: {muted}; }}
     .picker-dialog .network-heading {{ font-size: 13px; font-weight: 600; }}
+    """
+
+
+def light_controls_css(c):
+    if c.get('mode') != 'light':
+        return ''
+    return f"""
+    /* Complete the native control palette, including popup surfaces and states
+       which would otherwise retain the desktop GTK theme's colors. */
+    .files-help windowhandle.titlebar, .picker-dialog windowhandle.titlebar {{
+      background: {c['background']}; color: {c['foreground']};
+      border: 0; box-shadow: none;
+    }}
+    button {{ background-image: none; text-shadow: none; }}
+    button {{
+      background-color: {c['dark_background']}; border-color: {c['darker_background']};
+    }}
+    button:hover {{ background-color: {c['lighter_background']}; }}
+    button:disabled {{ color: {c['dark_foreground']}; opacity: 0.45; }}
+    button:focus-visible, flowboxchild:focus-visible {{
+      outline: 2px solid {c['accent_ink']}; outline-offset: -2px;
+    }}
+    .toolbar button {{ background: transparent; border-color: transparent; }}
+    .toolbar button:hover {{ background: {c['lighter_background']}; }}
+    .toolbar button.active {{ background: {c['selection']}; color: {c['accent_ink']}; }}
+    .toolbar .view-switcher {{ background: {c['dark_background']}; }}
+    .toolbar .path-segment:hover {{ background: transparent; }}
+    .location-button, .browser-tab button, .browser-tabs button.tab-new,
+    button.context-action, menubutton.context-action > button,
+    .rating-controls button, .rating-controls menubutton > button,
+    .creative-choice, .color-swatch, .quicklook-bar button {{ background: transparent; }}
+    .location-button:hover, button.context-action:hover,
+    menubutton.context-action > button:hover, menubutton.context-action > button:checked,
+    .rating-controls button:hover, .rating-controls menubutton > button:hover,
+    .creative-choice:hover, .color-swatch:hover, .quicklook-bar button:hover {{
+      background: {c['lighter_background']};
+    }}
+    .location-button.active, .creative-choice.active, .color-swatch.active {{ background: {c['selection']}; }}
+    .browser-tab button.tab-close {{ background: alpha({c['foreground']}, 0.075); }}
+    .browser-tab button.tab-close:hover {{ background: alpha({c['foreground']}, 0.17); }}
+    entry:focus-within, searchentry:focus-within {{
+      border-color: {c['accent']}; outline: none;
+      box-shadow: 0 0 0 2px alpha({c['accent']}, 0.14);
+    }}
+    entry placeholder, searchentry placeholder,
+    entry .placeholder, searchentry .placeholder {{ color: {c['dark_foreground']}; opacity: 1; }}
+    selection {{ background: {c['selection']}; color: {c['foreground']}; }}
+    dropdown > button {{ background: {c['dark_background']}; color: {c['foreground']}; }}
+    popover > contents, popover > arrow, tooltip {{
+      background: {c['background']}; color: {c['foreground']}; border-color: {c['darker_background']};
+    }}
+    popover listview, popover listview row {{ background: {c['background']}; color: {c['foreground']}; }}
+    popover listview row:hover, popover listview row:selected {{ background: {c['selection']}; color: {c['foreground']}; }}
+    scrollbar {{ background: transparent; }}
+    scrollbar slider {{ background: alpha({c['foreground']}, 0.25); border: 0; }}
+    scrollbar slider:hover {{ background: alpha({c['foreground']}, 0.4); }}
+    .quicklook-content video controls.osd {{
+      background: alpha({c['background']}, 0.96); color: {c['foreground']};
+      border: 1px solid {c['darker_background']}; box-shadow: none;
+    }}
+    .quicklook-content video controls.osd button {{
+      background: transparent; border-color: transparent; color: {c['foreground']};
+    }}
+    .quicklook-content video controls.osd button:hover {{ background: {c['lighter_background']}; }}
+    .quicklook-content video controls.osd label {{ color: {c['foreground']}; }}
+    .quicklook-content video scale trough {{ background: {c['darker_background']}; border-color: transparent; }}
+    .quicklook-content video scale highlight {{ background: {c['accent']}; border-color: transparent; }}
+    .quicklook-content video scale slider {{ background: {c['accent_ink']}; border-color: {c['background']}; box-shadow: none; }}
+    .picker-dialog button.suggested-action:hover {{ background: {c['accent']}; }}
+    .picker-dialog button.destructive-action:hover {{ background: {c['red']}; }}
     """

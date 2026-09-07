@@ -1,13 +1,10 @@
 #!/bin/sh
 set -eu
-
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIR=$(dirname "$SCRIPT_DIR")
-
 if [ -d "$PROJECT_DIR/omarchy_file_picker" ]; then
   export PYTHONPATH="$PROJECT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 else
   export PYTHONPATH="@APP_DIR@${PYTHONPATH:+:$PYTHONPATH}"
 fi
-
-exec /usr/bin/python -m omarchy_file_picker.portal "$@"
+exec /usr/bin/python -m omarchy_file_picker.launcher "$@"

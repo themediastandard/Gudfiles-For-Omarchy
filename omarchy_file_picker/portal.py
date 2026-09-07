@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import signal
 import sys
 import tempfile
@@ -109,11 +108,9 @@ class ActiveRequest:
             None,
             None,
         )
-        picker = shutil.which("omarchy-file-picker")
-        if not picker:
-            picker = str(Path(__file__).resolve().parents[1] / "bin/omarchy-file-picker")
         launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE)
-        self.process = launcher.spawnv([picker, "--request", str(self.request_path), "--result", str(self.result_path)])
+        # Use this backend's package, even if an older user launcher is on PATH.
+        self.process = launcher.spawnv([sys.executable, "-m", "omarchy_file_picker.picker", "--request", str(self.request_path), "--result", str(self.result_path)])
         self.process.wait_async(None, self._on_finished)
 
     def _handle_request_method(

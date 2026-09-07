@@ -7,6 +7,47 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Gudfiles 0.1.0 has local distribution preparation: an Arch `gudfiles` package,
+  pinned AUR recipe and `.SRCINFO`, SHA-256 checksums, deterministic allowlisted
+  runtime archive, release notes and a packaging-only CI workflow. No public
+  download or AUR listing has been published. Source stays private. `release.json` currently uses the
+  proposed `themediastandard/gudfiles-releases` destination; owner confirmation
+  is pending. Shipped Python remains readable regardless of repository privacy.
+- Help → About & License displays the version and a manual asynchronous GitHub
+  release check. It sends no user files/settings, does not install anything, and
+  distinguishes package installs from local development copies. Official AUR
+  updates require both a GitHub release and an updated AUR recipe. The AUR RPC
+  returned no `gudfiles` entry on 2026-09-07; availability must be checked again
+  before publication.
+- Public packaging stages code under `/usr/lib/gudfiles` and leaves user data
+  outside package ownership. `gudfiles` is the primary command; legacy commands
+  and desktop/portal IDs remain compatible. The portal spawns its own Python
+  module so an old PATH launcher cannot select a different installation.
+- Portal routing is explicit per-user opt-in via `gudfiles --enable-portal` and
+  reversible with `--disable-portal`. It records the previous FileChooser value
+  and preserves other portal preferences. Applying it requires a later logout
+  and login; installation does not restart active user services.
+- The updated development `install.sh` replaces only code, backs up previous
+  files and checks required runtime imports. It refuses a detected system
+  package and ordinary running Gudfiles processes. `uninstall.sh` retains the
+  ratings database including WAL/SHM, preferences and shared GTK bookmarks,
+  restores owned legacy/opt-in routing, and removes only app-owned files. Use
+  this updated uninstaller when migrating older copies to the package.
+
+- Help → About & License credits The Media Standard, links to
+  `https://themediastandard.com`, and describes Gudfiles as made for creatives
+  using Linux. The Gudfiles Free Use License permits personal/commercial use
+  without a fee while reserving modification and redistribution permissions.
+  Full terms are readable and selectable offline in Help. Root `LICENSE` is
+  canonical and `install.sh` copies it beside the installed Python package.
+
+- Light mode derives quiet surfaces and readable secondary/accent/error text
+  from the active Omarchy palette. Sidebar, breadcrumbs, selection, menus,
+  placeholders, Help/dialog title bars, transfer controls and native video
+  controls share the palette. Color labels retain their hues with deeper light
+  shades; filled actions choose the more legible dark/white foreground. Desktop
+  theme files, primary palette identity and media pixels remain untouched.
+
 - Four short original action sounds confirm successful drop/copy batches, Trash,
   permanent deletion and conversions. Right-click → View → Sound Effects saves
   a shared mute preference, read back by existing windows without changing their
@@ -15,8 +56,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   is optional, asynchronous, limited to one sound at a time with a 300 ms gap,
   and killed after 2.5 seconds or when muted/its window closes.
 
-- Product name is Gudfiles in the launcher, standalone window, Help, transfer
-  messages, notifications and installation output. The existing commands,
+- Product name is Gudfiles in the launcher, Help, transfer messages, notifications
+  and installation output. The standalone window uses a single centered GUDFILES
+  heading without a browsing subtitle; Open/Save pickers retain their task headings.
+  The existing commands,
   application/portal IDs and storage paths remain stable for compatibility.
 
 - List Up/Down moves the native row cursor immediately after switching views,
@@ -238,6 +281,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   and search; the single content source for the in-app guide.
 - `omarchy_file_picker/help_window.py` — native help window, category navigation,
   shortcut badges, search states and owner-bound lifetime.
+- `omarchy_file_picker/about.py` / `LICENSE` — creator credit, website and the
+  free-use license; shared by the About page and installed application.
 - `omarchy_file_picker/picker.py` — native chooser UI and result protocol.
 - `omarchy_file_picker/portal.py` — XDG FileChooser D-Bus backend.
 - `omarchy_file_picker/model.py` — request parsing, filters, filesystem helpers.
@@ -274,15 +319,26 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   and explicit server/share browsing in the NAS dialog.
 - `data/` — user-local portal, D-Bus, desktop, and systemd templates.
 - `install.sh` / `uninstall.sh` — reversible user installation.
+- `scripts/user-install.py` — user-local development installation and migration.
+- `scripts/install-system.py` — package layout staging, never user configuration.
+- `scripts/prepare-release.py` / `scripts/verify-release.py` — deterministic
+  archive, pinned AUR metadata, native package build and asset verification.
+- `packaging/PKGBUILD.in`, `releases/`, `.github/workflows/package-check.yml` —
+  release inputs and CI; `docs/INSTALL.md` / `docs/RELEASING.md` own distribution
+  instructions. `dist/` contains ignored generated review artifacts.
+- `omarchy_file_picker/updates.py`, `launcher.py`, `portal_setup.py`,
+  `release.json` — manual updates, diagnostic commands and per-user portal choice.
 
 ## Development
 
 Canonical repository: https://github.com/themediastandard/gudfiles (`main`).
-The local `origin` remote points there; existing application IDs and installation
-paths remain unchanged.
+The local `origin` remote points there and is the default push destination.
+`main` tracks `origin/main`; the older `personal` remote remains a historical
+reference. Existing application IDs and installation paths remain unchanged.
 
 ```bash
 python -m unittest discover -v
+LIGHT_THEME_QA_SCREENSHOTS=/tmp/gudfiles-light PYTHONPATH=. python tests/ui_light_theme.py
 SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action_sounds.py
 HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 PYTHONPATH=. python tests/ui_dialogs.py
@@ -367,8 +423,21 @@ gdbus introspect --session \
 - Help QA uses disposable files/preferences and native GTK signals. It verifies
   light/active themes, categories, global and shortcut searches, long/no-result
   queries, repeat open/close, F1 across views and Quick Look, picker isolation,
-  and owner teardown. Optional captures show the actual GTK windows.
+  and owner teardown. About checks cover the exact creator/URL/license text,
+  link activation without launching a browser, license search, expansion and
+  bounded compact layouts. Optional captures show the actual GTK windows.
 - No files under `/usr/share/omarchy` are modified.
+- `theme.prepare_colors()` adapts light terminal palettes to native UI roles
+  without rewriting the raw palette. Use accent fills for backgrounds and
+  `accent_ink`/`error_ink` for small text; verify secondary text and label hues
+  against both selection and hover surfaces. Native GTK `windowhandle.titlebar`,
+  placeholder opacity, popup arrows and `video controls.osd` need explicit light
+  styling; styling only the main window leaves inherited toolkit colors behind.
+  `tests/ui_light_theme.py` checks actual GTK foregrounds and captures five light
+  palettes, three views, menus, Help, Transfers, rename and previews. Its optional
+  FFmpeg fixture has no audio and uses a distinct QA application identity.
+  Xvfb is useful for isolated visual checks; Help's compact-window size assertions
+  assume native Wayland geometry and should run on the desktop session.
 - The implementation depends only on Omarchy's existing GTK 4/PyGObject stack.
 - PDF preview uses optional Poppler GI/Cairo. Media playback needs GStreamer
   codecs; missing dependencies produce an inline explanation. Discovery uses
@@ -533,7 +602,8 @@ gdbus introspect --session \
   with collision/race/partial-failure protection. Native screenshots are inspected
   for controls, filter card and rename dialog; no physical pointer injection.
   Swatch QA asserts actual GTK label foregrounds for all five colors in metadata,
-  Quick Look and filter palettes under light and the active desktop theme.
+  Quick Look and filter palettes under light, active and an explicit dark theme.
+  Light swatches also require at least 4.5:1 contrast on the selection surface.
   Palette CSS must outrank generic rating-control button colors because these
   popovers remain descendants of the controls, including under dark themes.
   `CREATIVE_QA_SCREENSHOTS=1` enables optional creative UI captures. GTK can
@@ -576,6 +646,44 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Release-preparation verification (2026-09-07): 168 unit tests passed,
+  including stable version ordering, malformed/unavailable/rate-limited release
+  responses, deterministic archive bytes, installer upgrades/removal with
+  ratings/WAL/SHM/settings/bookmarks retained, legacy routing restoration and
+  preserving later portal edits. `makepkg --cleanbuild` produced the native
+  package with dependency and SHA-256 checks; `verify-release.py` verified its
+  metadata, licenses and data boundaries. Packaged explorer/Open/Save, transfer
+  and native Wayland Help checks passed, including asynchronous update checks
+  while changing Help categories and retrying errors. Help screenshots were
+  visually inspected. An isolated Bubblewrap overlay verified the real
+  `/usr/lib/gudfiles` launcher layout without modifying the host. Desktop-file,
+  shell syntax, workflow YAML and Git whitespace checks passed. The live
+  anonymous update check correctly reports no public release. These are local
+  checks, not evidence of remote CI or fresh-machine portal/login acceptance.
+- The installed user-local desktop copy still contains the preceding visual,
+  title and About/License changes. Release/update changes are in source and the
+  verified generated package; no active app was replaced or service restarted
+  during packaging. Close Gudfiles before using the updated development
+  installer or migrating to the package.
+
+- Public distribution is pending. Confirm public hosting, tag the
+  reviewed version, and verify an install plus portal activation across a login
+  on a disposable current Omarchy machine before public launch. Publish the
+  official assets first, then the AUR recipe using an authorized AUR account;
+  neither AUR account access nor a public listing is currently established.
+  Check the packaging workflow's result for the source commit being released. Developer installation
+  and rollback are not substitutes for a fresh-machine package acceptance test.
+
+- Light-theme verification (2026-09-07): 158 unit tests and native five-palette
+  visual/contrast checks passed, including all three views, menus, Help, Transfers,
+  rename, text preview and video-control ink. Dialog, explorer/Open/Save, native
+  Wayland Help, Queue/All transfer, label-palette and NAS discovery/validation
+  checks passed. Screenshots were visually reviewed. Installed `theme.py` and
+  `picker.py` match source; the five-palette suite also passed against the installed
+  package. A fresh installed Gudfiles window was opened and visually checked in
+  the active light theme. Physical pointer interaction and full accessibility
+  compliance are outside this visual pass.
 
 - Initial video sizing verification (2026-09-07): 154 unit tests and native
   opening-frame, aspect, geometry, image zoom, Help and Quick Look checks passed.

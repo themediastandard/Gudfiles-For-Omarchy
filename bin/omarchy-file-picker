@@ -10,5 +10,4 @@ else
   export PYTHONPATH="@APP_DIR@${PYTHONPATH:+:$PYTHONPATH}"
 fi
 
-exec python -m omarchy_file_picker.picker "$@"
-
+exec /usr/bin/python -m omarchy_file_picker.launcher "$@"

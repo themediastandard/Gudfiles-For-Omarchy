@@ -1,7 +1,11 @@
 """A compact, searchable native guide, independent of browser/file actions."""
+import threading
 from gi.repository import Gdk, GLib, Gtk, Pango
 
 from .help_catalog import CATEGORIES, FEATURES, matching_features
+from .about import CREATOR, WEBSITE, TAGLINE, LICENSE_NAME, LICENSE_SUMMARY, license_text
+from . import __version__
+from .updates import check_for_updates, releases_url, update_instructions
 
 
 def text(value, css, *, wrap=False):
@@ -24,6 +28,8 @@ class HelpWindow(Gtk.Window):
         self.add_css_class('files-help')
         self.category = None
         self.visible_features = []
+        self.update_running = False
+        self.update_result = None
 
         heading = Gtk.Box(spacing=14)
         heading.add_css_class('help-heading')
@@ -66,7 +72,8 @@ class HelpWindow(Gtk.Window):
         nav.append(text('EXPLORE', 'help-eyebrow'))
         self.nav_buttons = {}
         for key, title, icon_name in [(None, 'All features', 'view-grid-symbolic')] + [
-                (group.key, group.title, group.icon) for group in CATEGORIES]:
+                (group.key, group.title, group.icon) for group in CATEGORIES] + [
+                ('about', 'About & License', 'help-about-symbolic')]:
             button = Gtk.ToggleButton()
             button.add_css_class('help-category')
             if self.nav_buttons:
@@ -78,10 +85,6 @@ class HelpWindow(Gtk.Window):
             button.connect('clicked', self._choose_category, key)
             nav.append(button)
             self.nav_buttons[key] = button
-        nav.append(Gtk.Box(vexpand=True))
-        tip = text('A good first trick\nSelect a file and press Space for Quick Look.',
-                   'help-tip', wrap=True)
-        nav.append(tip)
         nav_scroll.set_child(nav)
         body.append(nav_scroll)
 
@@ -133,6 +136,9 @@ class HelpWindow(Gtk.Window):
         while child := self.content.get_first_child():
             self.content.remove(child)
         query = self.search.get_text().strip()
+        if self.category == 'about' and not query:
+            self._render_about()
+            return
         self.visible_features = matching_features(query, self.category)
         groups = [group for group in CATEGORIES if self.category in (None, group.key)]
         title = 'Search results' if query else groups[0].title if self.category else 'Get to know Gudfiles'
@@ -188,6 +194,83 @@ class HelpWindow(Gtk.Window):
             section.append(card)
             self.content.append(section)
         self.scroll.get_vadjustment().set_value(0)
+
+    def _render_about(self):
+        self.visible_features = []
+        intro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        intro.append(text('GUDFILES', 'help-about-title'))
+        intro.append(text(TAGLINE, 'help-description', wrap=True))
+        self.content.append(intro)
+
+        updates = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
+                          css_classes=['help-card', 'help-about-card'])
+        updates.append(text(f'Version {__version__}', 'help-feature-title'))
+        self.update_status = text('', 'help-description', wrap=True)
+        updates.append(self.update_status)
+        actions = Gtk.Box(spacing=10)
+        self.update_button = Gtk.Button(label='Check for Updates')
+        self.update_button.connect('clicked', self._check_updates)
+        actions.append(self.update_button)
+        self.release_link = Gtk.LinkButton(uri=releases_url(), label='Release notes',
+                                           css_classes=['help-link'])
+        actions.append(self.release_link)
+        updates.append(actions)
+        self.content.append(updates)
+        self._update_controls()
+
+        credit = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,
+                         css_classes=['help-card', 'help-about-card'])
+        credit.append(text('Designed and built by', 'help-description', wrap=True))
+        credit.append(text(CREATOR, 'help-section-title', wrap=True))
+        self.website_link = Gtk.LinkButton(uri=WEBSITE, label='themediastandard.com',
+                                          halign=Gtk.Align.START, css_classes=['help-link'])
+        credit.append(self.website_link)
+        self.content.append(credit)
+
+        license_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
+                               css_classes=['help-card', 'help-about-card'])
+        license_card.append(text('Free to use', 'help-feature-title'))
+        license_card.append(text(LICENSE_SUMMARY, 'help-description', wrap=True))
+        license_card.append(text('© 2026 The Media Standard', 'help-description'))
+        self.content.append(license_card)
+
+        self.license_expander = Gtk.Expander(label='Read the full license',
+                                            css_classes=['help-card', 'help-about-card'])
+        full_license = text(license_text(), 'help-license-text', wrap=True)
+        full_license.set_selectable(True)
+        full_license.set_margin_top(14)
+        self.license_expander.set_child(full_license)
+        self.content.append(self.license_expander)
+        self.summary.set_text(LICENSE_NAME)
+        self.scroll.get_vadjustment().set_value(0)
+
+    def _update_controls(self):
+        self.update_button.set_sensitive(not self.update_running)
+        self.update_button.set_label('Checking…' if self.update_running else 'Check for Updates')
+        self.update_status.set_text('Checking the official releases…' if self.update_running else
+                                    self.update_result.message if self.update_result else
+                                    update_instructions())
+        self.release_link.set_visible(bool(self.update_result and self.update_result.url))
+        if self.update_result and self.update_result.url:
+            self.release_link.set_uri(self.update_result.url)
+
+    def _check_updates(self, *_):
+        if self.update_running:
+            return
+        self.update_running = True
+        self._update_controls()
+
+        def complete(result):
+            self.update_running = False
+            self.update_result = result
+            if self.get_realized() and self.category == 'about':
+                self._update_controls()
+            return GLib.SOURCE_REMOVE
+
+        def worker():
+            GLib.idle_add(complete, check_for_updates())
+
+        threading.Thread(target=worker, name='gudfiles-update-check', daemon=True).start()
 
 
 def show_help(owner):

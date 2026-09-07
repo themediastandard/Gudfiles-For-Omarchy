@@ -1,0 +1,33 @@
+# Maintainer: The Media Standard <https://themediastandard.com>
+pkgname=gudfiles
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='A visual file manager and file chooser for creatives using Linux'
+arch=('any')
+url='https://themediastandard.com'
+license=('LicenseRef-Gudfiles-Free-Use')
+depends=('python>=3.11' 'python-gobject' 'python-cairo' 'gtk4' 'adwaita-icon-theme'
+         'xdg-desktop-portal' 'xdg-desktop-portal-gtk' 'xdg-utils')
+optdepends=('ffmpeg: video conversion, hover previews and media details'
+            'ffmpegthumbnailer: video thumbnails'
+            'imagemagick: image conversion and resizing'
+            'poppler-glib: PDF previews'
+            'gst-plugins-good: media playback codecs'
+            'gst-plugins-bad: additional media playback codecs'
+            'gst-plugins-ugly: additional media playback codecs'
+            'gst-libav: FFmpeg media playback codecs'
+            'gvfs: volumes, Trash and network locations'
+            'gvfs-smb: SMB network shares'
+            'gvfs-nfs: NFS network shares'
+            'avahi: network server discovery'
+            'libpulse: optional action sounds')
+provides=('omarchy-file-picker')
+conflicts=('omarchy-file-picker')
+options=('!strip' '!debug')
+source=("https://github.com/@REPOSITORY@/releases/download/v${pkgver}/gudfiles-${pkgver}.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "gudfiles-${pkgver}"
+  python scripts/install-system.py "$pkgdir"
+}

@@ -8,7 +8,7 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import GLib, Gtk
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
-from omarchy_file_picker.theme import DEFAULT_COLORS, load_colors
+from omarchy_file_picker.theme import DEFAULT_COLORS, load_colors, label_colors, prepare_colors, contrast_ratio
 
 EXPECTED = {'red': '#d96868', 'orange': '#c68b37', 'green': '#579a70',
             'blue': '#598dc8', 'purple': '#a47ac4'}
@@ -30,6 +30,7 @@ def descendants(widget):
 
 
 def verify(container, stage):
+    expected = label_colors(theme)
     found = set()
     for button in descendants(container):
         if not isinstance(button, Gtk.Button) or not button.has_css_class('color-swatch'):
@@ -40,12 +41,16 @@ def verify(container, stage):
         found.add(name)
         color = button.get_child().get_color()
         actual = '#%02x%02x%02x' % tuple(round(v * 255) for v in (color.red, color.green, color.blue))
-        assert actual == EXPECTED[name], (stage, name, actual, EXPECTED[name])
+        assert actual == expected[name], (stage, name, actual, expected[name])
+        if theme.get('mode') == 'light':
+            assert contrast_ratio(actual, prepare_colors(theme)['selection']) >= 4.5
     assert found == set(EXPECTED), (stage, found)
 
 
 app = None
-for theme in (DEFAULT_COLORS, desktop_colors):
+for theme in (DEFAULT_COLORS, desktop_colors,
+              {**DEFAULT_COLORS, 'mode': 'dark', 'background': '#1e1e2e',
+               'foreground': '#cdd6f4', 'accent': '#89b4fa'}):
     with tempfile.TemporaryDirectory(prefix='picker-label-colors-') as temp, \
             patch.object(Path, 'home', return_value=Path(temp)), \
             patch('omarchy_file_picker.picker.load_colors', return_value=theme):

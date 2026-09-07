@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Gudfiles
 Comment=Browse, organize and preview files
-Exec=omarchy-file-picker --demo --multiple
+Exec=gudfiles --demo --multiple
 Icon=folder-pictures-symbolic
 Terminal=false
 Type=Application

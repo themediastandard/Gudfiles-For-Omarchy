@@ -196,6 +196,9 @@ FEATURES = (
     Feature('picker', 'Help, always close by',
             'Click Help in the header or press F1 to open this guide. Search by feature or shortcut. In this window, Ctrl + F focuses search and Escape closes the guide.',
             'F1', 'keyboard shortcuts guide manual'),
+    Feature('picker', 'About Gudfiles & its license',
+            'Choose About & License in Help for the installed version, Check for Updates, The Media Standard credit, website and full license. Gudfiles is free for personal and commercial use; modification and redistribution require written permission.',
+            keywords='free use copyright linux creatives themediastandard.com version updates release'),
 )
 
 

@@ -5,6 +5,7 @@ Uses disposable files/preferences and GTK controller signals, not pointer input.
 """
 import os
 import tempfile
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +13,9 @@ from omarchy_file_picker.picker import PickerApplication, PickerWindow
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.help_catalog import CATEGORIES, FEATURES
 from omarchy_file_picker.help_window import HelpWindow, show_help
+from omarchy_file_picker.about import WEBSITE, LICENSE_NAME, license_text
+from omarchy_file_picker import __version__
+from omarchy_file_picker.updates import UpdateResult
 from omarchy_file_picker.theme import DEFAULT_COLORS, load_colors
 from gi.repository import Gdk, Gio, GLib, Gtk
 
@@ -82,6 +86,65 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                     assert guide.category == group.key and guide.nav_buttons[group.key].get_active()
                     assert guide.visible_features and all(f.category == group.key for f in guide.visible_features)
                     assert (guide.get_width(), guide.get_height()) == original_size
+                guide.nav_buttons['about'].emit('clicked')
+                settle()
+                assert guide.category == 'about' and guide.nav_buttons['about'].get_active()
+                assert guide.website_link.get_uri() == WEBSITE
+                values = [w.get_text() for w in widgets(guide) if isinstance(w, Gtk.Label)]
+                assert 'The Media Standard' in values and 'Made for creatives using Linux.' in values
+                assert guide.summary.get_text() == LICENSE_NAME
+                assert guide.license_expander.get_child().get_text() == license_text()
+                assert 'prior written permission' in license_text()
+                assert (guide.get_width(), guide.get_height()) == original_size
+                capture(guide, name + '-about')
+                assert f'Version {__version__}' in values
+                # Keep a worker pending while GTK navigates, then finish it.
+                gate = threading.Event()
+                checked = UpdateResult('available', 'Gudfiles 0.2.0 is available.',
+                                       'https://github.com/themediastandard/gudfiles-releases/releases/tag/v0.2.0')
+                def delayed_check():
+                    assert gate.wait(5)
+                    return checked
+                with patch('omarchy_file_picker.help_window.check_for_updates', side_effect=delayed_check) as check:
+                    guide.update_button.emit('clicked')
+                    assert guide.update_running and not guide.update_button.get_sensitive()
+                    guide._check_updates()
+                    guide.nav_buttons['preview'].emit('clicked')
+                    settle()
+                    assert guide.category == 'preview'
+                    guide.nav_buttons['about'].emit('clicked')
+                    settle()
+                    assert not guide.update_button.get_sensitive()
+                    gate.set()
+                    settle()
+                    assert check.call_count == 1
+                assert not guide.update_running and guide.update_button.get_sensitive()
+                assert guide.update_status.get_text() == checked.message
+                assert guide.release_link.get_uri() == checked.url
+                for status in ('current', 'error', 'unpublished'):
+                    result = UpdateResult(status, f'Test {status}')
+                    with patch('omarchy_file_picker.help_window.check_for_updates', return_value=result):
+                        guide.update_button.emit('clicked')
+                        settle()
+                    assert guide.update_status.get_text() == result.message
+                    assert not guide.release_link.get_visible()
+                guide.update_result = None
+                guide._update_controls()
+                # Verify the activation signal without launching a real browser.
+                links = []
+                guide.website_link.connect('activate-link', lambda link: links.append(link.get_uri()) or True)
+                guide.website_link.emit('activate-link')
+                assert links == [WEBSITE]
+                guide.license_expander.set_expanded(True)
+                settle()
+                assert license_text() in [w.get_text() for w in widgets(guide) if isinstance(w, Gtk.Label)]
+                assert guide.scroll.get_hadjustment().get_upper() <= guide.scroll.get_hadjustment().get_page_size()
+                assert (guide.get_width(), guide.get_height()) == original_size
+                capture(guide, name + '-license')
+                guide.search.set_text('redistribution')
+                settle()
+                assert guide.category is None and guide.nav_buttons[None].get_active()
+                assert [f.title for f in guide.visible_features] == ['About Gudfiles & its license']
                 guide.search.set_text('  cTrL+Shift+V  ')
                 settle()
                 assert [f.title for f in guide.visible_features] == ['Stage work for later']
@@ -115,6 +178,14 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 assert ok and bounds.get_y() + bounds.get_height() <= compact.get_height()
                 assert compact.scroll.get_hadjustment().get_upper() <= compact.scroll.get_hadjustment().get_page_size()
                 capture(compact, name + '-compact')
+                compact.nav_buttons['about'].emit('clicked')
+                settle()
+                compact.license_expander.set_expanded(True)
+                settle()
+                assert compact.scroll.get_hadjustment().get_upper() <= compact.scroll.get_hadjustment().get_page_size()
+                ok, bounds = compact.footer.compute_bounds(compact)
+                assert ok and bounds.get_y() + bounds.get_height() <= compact.get_height()
+                capture(compact, name + '-about-compact')
                 compact.set_focus(None)
                 compact.set_visible(False)
                 GLib.idle_add(lambda: compact.destroy() or False)

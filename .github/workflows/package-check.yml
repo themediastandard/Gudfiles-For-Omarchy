@@ -1,0 +1,39 @@
+name: Package checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arch-package:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install build and runtime dependencies
+        run: pacman -Syu --noconfirm --needed git python python-gobject python-cairo gtk4 adwaita-icon-theme xdg-desktop-portal xdg-desktop-portal-gtk xdg-utils
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test and build as an unprivileged user
+        run: |
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- python -m unittest discover -q
+          runuser -u builder -- python scripts/prepare-release.py --build-package
+          runuser -u builder -- python scripts/verify-release.py "dist/$(python -c 'from omarchy_file_picker import __version__; print(__version__)')"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gudfiles-release-review
+          retention-days: 14
+          include-hidden-files: true
+          path: |
+            dist/*/*.tar.gz
+            dist/*/*.pkg.tar.zst
+            dist/*/SHA256SUMS
+            dist/*/PKGBUILD
+            dist/*/.SRCINFO
+            dist/*/RELEASE-NOTES.md
