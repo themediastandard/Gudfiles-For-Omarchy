@@ -1,5 +1,30 @@
 """A bounded, collective preview for multiple selected items (no directory scan)."""
+import stat
+
 from gi.repository import Gdk, Gtk, Pango
+
+from .model import format_size
+
+
+def selection_totals(paths):
+    """Count selected entries and logical file bytes, without reading contents."""
+    folders = files = total = unavailable = 0
+    for path in paths:
+        try:
+            info = path.stat()
+        except OSError:
+            files += 1
+            unavailable += 1
+            continue
+        if stat.S_ISDIR(info.st_mode):
+            folders += 1
+        else:
+            files += 1
+            if stat.S_ISREG(info.st_mode):
+                total += info.st_size
+            else:
+                unavailable += 1
+    return folders, files, total, unavailable
 
 
 class SelectionStack(Gtk.DrawingArea):
@@ -86,8 +111,7 @@ class SelectionStack(Gtk.DrawingArea):
 
 def show_selection_summary(owner, paths):
     """Called after canceling single-file detail work and clearing the strip."""
-    folders = sum(path.is_dir() for path in paths)
-    files = len(paths) - folders
+    folders, files, total, unavailable = selection_totals(paths)
     kind = 'folders' if not files else 'files' if not folders else 'mixed'
     owner.metadata.append(SelectionStack(owner.colors, kind))
     primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
@@ -107,3 +131,21 @@ def show_selection_summary(owner, paths):
     primary.append(detail)
     primary.append(owner._rating_controls(paths))
     owner.metadata.append(primary)
+    if files:
+        facts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
+        caption = Gtk.Label(label='Combined size (files only)' if folders else 'Combined size', xalign=0)
+        caption.add_css_class('muted')
+        facts.append(caption)
+        size_text = format_size(total)
+        if unavailable:
+            size_text = 'Unavailable' if unavailable == files else f'{size_text} known'
+        value = Gtk.Label(label=size_text, xalign=0)
+        value.add_css_class('metadata-title')
+        facts.append(value)
+        if unavailable:
+            warning = Gtk.Label(label=f'{unavailable:,} ' + ('item unavailable' if unavailable == 1 else 'items unavailable'), xalign=0)
+            warning.add_css_class('muted')
+            facts.append(warning)
+        else:
+            value.set_tooltip_text(f'{total:,} bytes' + (' · Folder contents excluded' if folders else ''))
+        owner.metadata.append(facts)

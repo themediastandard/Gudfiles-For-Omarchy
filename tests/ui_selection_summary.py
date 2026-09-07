@@ -66,6 +66,11 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
                 icon = window.metadata.get_first_child()
                 assert isinstance(icon, SelectionStack) and icon.kind == kind
                 assert title in texts(window.metadata) and detail in texts(window.metadata)
+                if kind in ('files', 'mixed'):
+                    assert ('Combined size (files only)' if kind == 'mixed' else 'Combined size') in texts(window.metadata)
+                    assert '14 B' in texts(window.metadata)
+                else:
+                    assert not any(text.startswith('Combined size') for text in texts(window.metadata))
                 assert (window.get_width(), window.get_height()) == size
                 assert window.metadata_viewport.get_height() == strip_height
                 assert window.browser_stack.get_height() == browser_height
@@ -78,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
                 with patch('omarchy_file_picker.picker.make_details_widget') as details:
                     window._update_metadata(paths[0])
                     details.assert_not_called()
-                if kind == 'folders' and len(paths) == 3 and os.environ.get('SELECTION_SUMMARY_QA_SCREENSHOT'):
+                if kind == 'mixed' and os.environ.get('SELECTION_SUMMARY_QA_SCREENSHOT'):
                     settle()
                     snapshot = Gtk.Snapshot.new()
                     Gtk.WidgetPaintable.new(window.metadata_viewport).snapshot(snapshot,
@@ -86,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
                     node = snapshot.to_node()
                     if node:
                         window.get_renderer().render_texture(node, None).save_to_png(os.environ['SELECTION_SUMMARY_QA_SCREENSHOT'])
+            for totals, expected in (((1, 2, 7, 1), ('7 B known', '1 item unavailable')),
+                                     ((1, 2, 0, 2), ('Unavailable', '2 items unavailable')),
+                                     ((1, 2, 0, 0), ('0 B',))):
+                with patch('omarchy_file_picker.selection_summary.selection_totals', return_value=totals):
+                    window._update_metadata(paths[0])
+                    assert all(text in texts(window.metadata) for text in expected)
             window.flow.unselect_all()
             window.flow.select_child(window.children_by_path[files[0]])
             settle()
@@ -94,6 +105,6 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
             window.flow.unselect_all()
             settle()
             assert 'Select a file to preview' in texts(window.metadata)
-            print('PASS:', mode, 'folder/file/mixed counts, stacked icon, group labels, single/empty reset and stable geometry')
+            print('PASS:', mode, 'folder/file/mixed counts, combined/zero/unavailable sizes, stacked icon, group labels, single/empty reset and stable geometry')
     finally:
         window.destroy()
