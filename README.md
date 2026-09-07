@@ -93,6 +93,17 @@ reconnecting or changing NAS credentials. Unavailable folders show an error.
 Rename and paste refuse filename collisions instead of overwriting existing
 files. Trash and permanent deletion both require confirmation. Clipboard file
 operations support local file URIs, including mounted shares exposed as paths.
+
+Open **Transfers** from the header to choose **Queue** (one transfer at a time)
+or **All** (up to three independent transfer batches together). The choice is
+remembered. Related file operations stay in order; switching back to Queue lets
+active transfers finish before starting more. Use `Ctrl+Shift+V` to stage a
+clipboard batch without starting it, then **Start queue** or **Start all** when
+ready. A mode change does not start staged batches or resume paused transfers.
+Each transfer has its own pause/resume/cancel controls, and All includes
+**Pause all**. Queues last for the current Files session; closing Files asks
+before cancelling unfinished work. Moves are limited to the same filesystem;
+verified copies can cross volumes when the destination supports safe publication.
 Display preferences persist in `~/.config/omarchy-file-picker/preferences.json`;
 bookmarks use the shared GTK `~/.config/gtk-3.0/bookmarks` file.
 

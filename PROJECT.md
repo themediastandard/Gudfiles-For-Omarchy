@@ -367,7 +367,7 @@ gdbus introspect --session \
   refuses to trust an unrelated replacement mount/source/partial file.
   A real disposable cross-filesystem copy and move refusal were also verified
   between the local fixture filesystem and `/dev/shm`.
-  The changed Python modules were installed locally; transfer, file-management
+  The changed Python modules were installed locally; transfer-mode, transfer, file-management
   and explorer/picker-mode QA passed against that installed package. Installed
   modules match the source, including the concurrent selection-summary updates.
 - Transfer queues and recovery metadata are in memory. An app crash/forced exit
