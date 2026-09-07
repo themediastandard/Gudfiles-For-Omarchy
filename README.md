@@ -40,6 +40,8 @@ Press `Space` on a selected file to preview it, and `Space` again or `Escape`
 to close. The preview restores file focus and respects GTK's reduced-motion
 setting. Images are scaled to fit without cropping, text is read-only and
 limited to 128 KB, and PDFs show their first page with the total page count.
+The selection preview strip and Space-bar preview stay within the existing
+window layout; switching files or opening/closing previews does not resize it.
 Video/audio playback uses GTK/GStreamer and needs the appropriate codecs
 (`gst-plugins-good` and `gst-libav` on Arch). Missing codecs show an explanation
 instead of opening another app. These optional system packages are not installed

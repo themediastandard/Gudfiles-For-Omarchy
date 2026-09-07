@@ -34,6 +34,9 @@ as the desktop's XDG FileChooser portal backend.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
+- Selection previews occupy a reserved 113-pixel strip. Neither the strip's
+  content nor the Quick Look overlay participates in window size requests;
+  long titles and metadata ellipsize with full values available in tooltips.
 - NAS dialog uses flat theme-colored controls, automatically searches Avahi/
   GVfs network advertisements, and offers explicit SMB share browsing, Refresh,
   saved/mounted locations, inline errors and cancellable mounting.
@@ -64,6 +67,7 @@ as the desktop's XDG FileChooser portal backend.
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
+PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
@@ -99,6 +103,10 @@ gdbus introspect --session \
   Keep path ancestors in a horizontal scroller (current folder auto-revealed),
   preserve the full typed path, and use tooltips for truncated labels. The layout
   regression exercises deep paths, long names/types and user-selected sizes.
+- Preview geometry tests verify both minimum and natural size requests, native
+  window size/position, and browser height during selection and Space preview
+  open/close with portrait, landscape, square images and long-name text. They
+  float/resize only their disposable test window, without editing desktop rules.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in

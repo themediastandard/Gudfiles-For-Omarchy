@@ -140,6 +140,8 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self._build_content()
         self.quicklook = QuickLook(self)
         self.preview_overlay.add_overlay(self.quicklook)
+        self.preview_overlay.set_measure_overlay(self.quicklook, False)
+        self.preview_overlay.set_clip_overlay(self.quicklook, True)
         self.volume_monitor.connect("mount-added", lambda *_args: self._refresh_sidebar())
         self.volume_monitor.connect("mount-removed", lambda *_args: self._refresh_sidebar())
         self._install_shortcuts()
@@ -259,7 +261,16 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
 
         self.metadata = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
         self.metadata.add_css_class("metadata-strip")
-        browser.append(self.metadata)
+        # Preview content must never contribute a new minimum/natural window
+        # size. Reserve the same strip even when selection or image shape changes.
+        self.metadata_viewport = Gtk.Overlay()
+        reserved_strip = Gtk.Box()
+        reserved_strip.set_size_request(-1, 113)  # 92 content + padding and border.
+        self.metadata_viewport.set_child(reserved_strip)
+        self.metadata_viewport.add_overlay(self.metadata)
+        self.metadata_viewport.set_measure_overlay(self.metadata, False)
+        self.metadata_viewport.set_clip_overlay(self.metadata, True)
+        browser.append(self.metadata_viewport)
 
         self.footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.footer.add_css_class("footer")
@@ -738,10 +749,12 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             self.metadata.remove(child)
         self.metadata.append(picture_for(path, 132, 76, crop=True))
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-        primary.set_size_request(240, -1)
+        primary.set_size_request(140, -1)
         primary.set_hexpand(True)
         title = label(path.name, "metadata-title")
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        title.set_max_width_chars(32)
+        title.set_tooltip_text(path.name)
         primary.append(title)
         for detail in (file_type(path), str(path.parent)):
             detail_label = label(detail, "muted")
@@ -758,13 +771,19 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             size, modified = "—", "—"
         facts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         facts.set_hexpand(True)
-        facts.append(label(f"Size    {size}", "muted"))
-        facts.append(label(f"Modified    {modified}", "muted"))
+        def append_fact(text):
+            fact = label(text, 'muted')
+            fact.set_ellipsize(Pango.EllipsizeMode.END)
+            fact.set_max_width_chars(28)
+            fact.set_tooltip_text(text)
+            facts.append(fact)
+        append_fact(f"Size    {size}")
+        append_fact(f"Modified    {modified}")
         if path.suffix.casefold() in IMAGE_TYPES:
             try:
                 _format, width, height = GdkPixbuf.Pixbuf.get_file_info(str(path))
                 if width and height:
-                    facts.append(label(f"Dimensions    {width} × {height}", "muted"))
+                    append_fact(f"Dimensions    {width} × {height}")
             except (GLib.Error, TypeError):
                 pass
         self.metadata.append(facts)
