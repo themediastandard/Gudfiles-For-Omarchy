@@ -94,6 +94,9 @@ Text is read-only and
 limited to 128 KB, and PDFs show their first page with the total page count.
 The selection preview strip and Space-bar preview stay within the existing
 window layout; switching files or opening/closing previews does not resize it.
+Video previews open at their decoded display aspect from the first visible frame.
+A slow-loading video shows a small spinner until its dimensions are ready, rather
+than opening a wide player and reshaping it afterward.
 Video/audio playback uses GTK/GStreamer and needs the appropriate codecs
 on Arch. Install the playback stack with:
 

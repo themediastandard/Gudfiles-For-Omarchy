@@ -79,7 +79,7 @@ FEATURES = (
             'Gudfiles reads your active Omarchy colors at launch, including its previews, menus and dialogs.'),
 
     Feature('preview', 'Quick Look',
-            'Select a file and press Space for an in-window preview. Space or Escape closes it; Left / Right browses neighboring files.',
+            'Select a file and press Space for an in-window preview. Videos open at their correct display aspect; a slow load shows a spinner until dimensions are ready. Space or Escape closes it; Left / Right browses neighboring files.',
             'Space', 'preview quicklook'),
     Feature('preview', 'Zoom in on images',
             'Scroll over an image preview to zoom up to 8× its fitted size. Drag to pan and double-click to fit again. Each image starts fitted.',

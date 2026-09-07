@@ -199,8 +199,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Image, PDF and video preview cards fit the displayed media's aspect ratio
   within the existing window bounds. Narrow previews put ratings below the
   title/navigation row; extreme portrait media retains enough width for usable
-  controls. Video dimensions update when the decoder reports its display size;
-  text, audio-only and unavailable previews retain the general-purpose frame.
+  controls. Video opening waits for a prepared stream with valid display
+  dimensions before drawing or animating the card. A frameless spinner covers
+  slow initialization; no generic wide card or backdrop flash is shown first.
+  File switching, cancellation and reduced motion follow the same rule. Text,
+  audio-only and unavailable previews retain the general-purpose frame.
 - Image previews support pointer-anchored scroll zoom from fit to 8×, bounded
   drag panning and double-click to fit. Each new image starts fitted. Drawing
   is clipped inside a zero-request widget; the decoded texture remains bounded
@@ -299,6 +302,7 @@ PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_preview_aspect.py
+INITIAL_PREVIEW_SCREENSHOTS=/tmp/preview-initial PYTHONPATH=. python tests/ui_preview_initial_size.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
@@ -502,6 +506,14 @@ gdbus introspect --session \
   checks passed. The installed module matches source; an actual portrait clip
   was verified in the installed player with correctly fitted bounds and an
   unmuted, nonzero system audio stream.
+- Initial-size QA observes every painted opening frame, not only final geometry.
+  It delays file reads and valid decoder dimensions, then checks stable target
+  bounds for portrait/landscape/square videos, file switching, cancelled/stale
+  results, reduced motion, audio-only containers and decode errors. A rotated
+  fixture must match the decoder's displayed geometry; the installed GTK backend
+  ignores that fixture's rotation tag, so metadata-only autorotation remains a
+  separate decoder limitation. Keep native autoplay behavior: sizing gates paint
+  and animation, without introducing a separate media playback state machine.
 - Playback QA compares media timestamps with monotonic elapsed time and sets a
   distinct GLib application name before creating a player. PipeWire/PulseAudio
   remembers stream mute and volume by application name outside the isolated home;
@@ -560,6 +572,13 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Initial video sizing verification (2026-09-07): 154 unit tests and native
+  opening-frame, aspect, geometry, image zoom, Help and Quick Look checks passed.
+  H264, HEVC, ProRes, VP9 and AV1 playback passed play/pause/seek/resume/stop
+  checks. Loading and portrait snapshots were visually inspected. The installed
+  package matches source and passes the opening-frame regression, including
+  delayed dimensions, cancellation, file switching and reduced motion.
 
 - Action-sound verification (2026-09-07): 154 unit tests passed, including real
   silent subprocess timing, cleanup, mute and asset checks. Native action QA
