@@ -33,8 +33,9 @@ as the desktop's XDG FileChooser portal backend.
   the selected item count and a folder/file breakdown, rather than previewing
   only the first item. Shared rating controls still apply to the whole selection.
   Counts refer to selected entries, not recursively scanned folder contents.
-- Multi-file summaries show combined logical file size, including zero-byte
-  totals. Mixed selections explicitly exclude folder contents; unavailable
+- Multi-file summaries show the combined logical file size value without a
+  "Combined size" heading, including zero-byte totals. Mixed selections exclude
+  folder contents (clarified in the byte-value tooltip); unavailable
   entries mark the total as partial/unavailable instead of silently undercounting.
 - Video grid/metadata thumbnails support silent hover-scrubbing with delayed
   entry, a thin position indicator, background decoding and poster restoration.

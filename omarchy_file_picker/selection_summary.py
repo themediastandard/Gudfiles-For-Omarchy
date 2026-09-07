@@ -133,9 +133,6 @@ def show_selection_summary(owner, paths):
     owner.metadata.append(primary)
     if files:
         facts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
-        caption = Gtk.Label(label='Combined size (files only)' if folders else 'Combined size', xalign=0)
-        caption.add_css_class('muted')
-        facts.append(caption)
         size_text = format_size(total)
         if unavailable:
             size_text = 'Unavailable' if unavailable == files else f'{size_text} known'

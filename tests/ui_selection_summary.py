@@ -1,5 +1,7 @@
 """Collective selection previews in all views, without growing the window."""
 import os
+import json
+import subprocess
 from pathlib import Path
 import tempfile
 from unittest.mock import patch
@@ -48,6 +50,14 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
     window.present()
     settle()
     try:
+        # Concurrent native QA can retile windows. Float only this test's exact
+        # surface so desktop layout changes do not look like preview resizing.
+        clients = json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
+        client = next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker')
+        selector = json.dumps('address:' + client['address'])
+        if not client['floating']:
+            subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True)
+            settle()
         for mode in ('grid', 'list', 'columns'):
             window._set_view(mode)
             settle()
@@ -67,10 +77,8 @@ with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
                 assert isinstance(icon, SelectionStack) and icon.kind == kind
                 assert title in texts(window.metadata) and detail in texts(window.metadata)
                 if kind in ('files', 'mixed'):
-                    assert ('Combined size (files only)' if kind == 'mixed' else 'Combined size') in texts(window.metadata)
                     assert '14 B' in texts(window.metadata)
-                else:
-                    assert not any(text.startswith('Combined size') for text in texts(window.metadata))
+                assert not any(text.startswith('Combined size') for text in texts(window.metadata))
                 assert (window.get_width(), window.get_height()) == size
                 assert window.metadata_viewport.get_height() == strip_height
                 assert window.browser_stack.get_height() == browser_height
