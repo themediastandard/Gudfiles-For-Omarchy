@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Omarchy File Picker
-Comment=Choose files with an Omarchy-native visual browser
+Name=Gudfiles
+Comment=Browse, organize and preview files
 Exec=omarchy-file-picker --demo --multiple
 Icon=folder-pictures-symbolic
 Terminal=false

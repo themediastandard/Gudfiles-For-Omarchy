@@ -1,11 +1,15 @@
-# Omarchy File Picker
+# Gudfiles
 
 ## Purpose
 
-Provide a fast, visual, theme-aware Open/Save dialog for Omarchy and expose it
-as the desktop's XDG FileChooser portal backend.
+Provide Gudfiles, a fast, visual, theme-aware file manager for Omarchy, with
+Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
+
+- Product name is Gudfiles in the launcher, standalone window, Help, transfer
+  messages, notifications and installation output. The existing commands,
+  application/portal IDs and storage paths remain stable for compatibility.
 
 - List Up/Down moves the native row cursor immediately after switching views,
   keeps the entire row visible and stops at the list edges. Shift extends ranges;
@@ -29,7 +33,7 @@ as the desktop's XDG FileChooser portal backend.
 - Header Help / F1 opens a compact, searchable feature guide with seven categories,
   shortcut badges, empty-search recovery and active Omarchy colors. Ctrl+F focuses
   help search; Escape closes only help. Each browser owns one reusable guide,
-  cleaned up when its Files/picker window ends. Quick Look, selection and file
+  cleaned up when its Gudfiles/picker window ends. Quick Look, selection and file
   operations remain independent of the guide.
 - Shared native dialog design for Rename, Properties, New Folder, Batch Rename,
   NAS, errors, Trash/Delete and Save replacement: draggable in-window headings,
@@ -44,7 +48,7 @@ as the desktop's XDG FileChooser portal backend.
   ready form actions and Escape/titlebar close share the cancellation path.
 - Native GTK 4 picker with grid, list and Finder-style column layouts, selected
   through a compact three-button toolbar group or the View context submenu.
-  The last chosen view is saved immediately and restored in new Files windows
+  The last chosen view is saved immediately and restored in new Gudfiles windows
   and Open/Save pickers. Missing/invalid values default to grid; startup does
   not rewrite the preference. Settings writes merge the latest on-disk values
   so an older window's sidebar resize cannot replace a newer view choice.
@@ -77,7 +81,7 @@ as the desktop's XDG FileChooser portal backend.
 - Drag sources preserve GTK click/range/double-click behavior until the drag
   threshold. FlowBox's duplicate native rubber-band controller is disabled;
   the existing background selection overlay owns blank drags. Native FileList /
-  URI payloads support other windows/apps; Alt advertises COPY only. Files uses
+  URI payloads support other windows/apps; Alt advertises COPY only. Gudfiles uses
   a marker to negotiate MOVE internally, acknowledges outside sources as COPY
   so they cannot delete before queued work, and never deletes URI sources based
   solely on GDK's delete-data flag. Hover checks are bounded/latest-only;
@@ -128,7 +132,7 @@ as the desktop's XDG FileChooser portal backend.
   Queue mode holds scheduling on pause/failure. In All mode, a row Pause/failure
   leaves independent transfers running; Pause all holds scheduling and pauses
   every active worker. Completed items remain at their destinations.
-  The separate window scrolls its rows without resizing the Files browser.
+  The separate window scrolls its rows without resizing the Gudfiles browser.
 - Automatically opened transfer panels hide when quick work finishes; copies
   already complete before opening do not flash a window. Five minutes of actual
   running time (accumulated across attempts) keeps the panel open afterward.
@@ -142,8 +146,8 @@ as the desktop's XDG FileChooser portal backend.
   resume and require an explicit restart of unfinished items. Same-volume moves
   use atomic no-overwrite renames; cross-volume moves stop without copying or
   deleting their sources, explaining how to use Copy instead.
-- Queues belong to the open Files session. Closing the transfer panel hides it;
-  closing Files/finishing a picker pauses scheduling and asks whether to keep the
+- Queues belong to the open Gudfiles session. Closing the transfer panel hides it;
+  closing Gudfiles/finishing a picker pauses scheduling and asks whether to keep the
   session or cancel unfinished work. It waits for active I/O/cleanup to stop.
   Failed cleanup offers an explicit leave-partials exit. No automatic reconnect,
   credentials, persisted queue, background service or restart recovery is added.
@@ -153,7 +157,7 @@ as the desktop's XDG FileChooser portal backend.
 - User-local portal installation with GTK retained as the fallback backend.
 - Sidebar uses the same application background, not a contrasting white panel.
 - Sidebar items have native pointer/keyboard context menus for Open, a separate
-  Files window, enclosing-folder reveal, Copy Location and Properties. Right-click
+  Gudfiles window, enclosing-folder reveal, Copy Location and Properties. Right-click
   preserves the current directory, browser selection, column trail and geometry.
   Remove from Sidebar hides default locations in display preferences or removes
   only the shared GTK bookmark. Restore Default Locations is available from the
@@ -228,7 +232,7 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/transfers.py` — bounded Queue/All scheduling, resumable
   copies, checked staging ownership, atomic publication and cancellation cleanup.
 - `omarchy_file_picker/transfer_ui.py` — native transfer window, progress/actions,
-  ordered move receipts, clipboard ownership and Files/picker close guard.
+  ordered move receipts, clipboard ownership and Gudfiles/picker close guard.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
 - `omarchy_file_picker/dialogs.py` — shared dialog shell, fields, file summaries,
   detail cards, bounded lists and explicit confirmation actions.
@@ -386,7 +390,7 @@ gdbus introspect --session \
   jobs run out of visible order. Confirmed partial moves migrate ratings and
   remove only those sources from an owned cut clipboard; full completion changes
   that clipboard to destination copies. Newer clipboard contents are preserved.
-  Closing Files drains final receipts before returning a picker result/quitting.
+  Closing Gudfiles drains final receipts before returning a picker result/quitting.
   Failed/paused transfers with no completed outputs do not trigger automatic
   directory reloads, avoiding an unnecessary read of an unavailable destination.
 - Transfer QA uses disposable generated data and injected short writes, full-disk
@@ -432,7 +436,7 @@ gdbus introspect --session \
   avoid queued Wayland input-method events reaching destroyed widgets.
 - Sidebar/menu QA uses isolated preferences and native Paned positions, verifies
   restored width, and checks pointer/keyboard anchors against real GTK bounds.
-  It restores all three views in Files/Open/Save windows and verifies that an
+  It restores all three views in Gudfiles/Open/Save windows and verifies that an
   older window's unrelated save preserves the latest explicit view choice.
   Present test windows before destroying them; an unshown second window triggered
   a GTK destruction crash on this desktop. No desktop rules are changed by QA.
@@ -447,7 +451,7 @@ gdbus introspect --session \
   despite desktop focus changes; normal menus dismiss on outside clicks.
 - Device removal uses Gio asynchronous operations with no force flag or force
   prompt. File operations, media conversions and unfinished transfers in that
-  Files session block removal. Busy-device errors are shown without forcing it;
+  Gudfiles session block removal. Busy-device errors are shown without forcing it;
   success returns an affected browser to Home. Pending operations cancel on
   window destruction. Open in New Window starts an independent explorer process
   so closing it cannot finish/cancel an originating portal request.
@@ -475,7 +479,7 @@ gdbus introspect --session \
 - Playback QA compares media timestamps with monotonic elapsed time and sets a
   distinct GLib application name before creating a player. PipeWire/PulseAudio
   remembers stream mute and volume by application name outside the isolated home;
-  muting QA under the generic `python` identity can silence subsequent Files
+  muting QA under the generic `python` identity can silence subsequent Gudfiles
   previews even when GtkMediaStream reports unmuted at full volume. Inspect the
   actual sink input matched by process ID when diagnosing missing sound.
 - Image zoom QA emits real GTK controller signals (not physical mouse events)
@@ -530,6 +534,13 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Gudfiles rename verification (2026-09-07): 147 unit tests, native Help in
+  light/active themes, explorer/Open/Save and transfer suites passed. Help
+  snapshots were inspected. Installed modules and the desktop entry match
+  source; the installed app reports Gudfiles and Gudfiles Help with the existing
+  application ID. The FileChooser portal remains active and exposes OpenFile,
+  SaveFile and SaveFiles.
 
 - Tabs/drag verification (2026-09-07): 142 unit tests passed. Native drag-copy,
   tab/state, background selection, keyboard selection, columns, explorer/picker,

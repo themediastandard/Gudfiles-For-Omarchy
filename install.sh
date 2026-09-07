@@ -39,5 +39,5 @@ systemctl --user daemon-reload
 systemctl --user restart omarchy-file-picker-portal.service
 systemctl --user restart xdg-desktop-portal.service
 
-printf 'Installed Omarchy File Picker.\n'
+printf 'Installed Gudfiles.\n'
 printf 'Portal config backup directory: %s\n' "$BACKUP_DIR"

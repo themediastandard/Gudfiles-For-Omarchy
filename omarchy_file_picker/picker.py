@@ -1431,7 +1431,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         if notifier:
             try:
                 Gio.Subprocess.new(
-                    [notifier, "--app-name", "Omarchy File Picker", headline, detail],
+                    [notifier, "--app-name", "Gudfiles", headline, detail],
                     Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
                 )
             except GLib.Error:
@@ -1819,7 +1819,7 @@ class PickerApplication(Gtk.Application):
 
 
 def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
-    parser = argparse.ArgumentParser(description="Omarchy visual file picker")
+    parser = argparse.ArgumentParser(description="Gudfiles — visual file manager and file picker")
     parser.add_argument("--request", type=Path, help="JSON portal request")
     parser.add_argument("--result", type=Path, help="JSON result destination")
     parser.add_argument("--demo", nargs="?", const=str(Path.home() / "Pictures"), help="Open standalone demo")
@@ -1839,7 +1839,7 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
         request = PickerRequest(
             mode=args.mode,
             explorer=explorer,
-            title="Files" if explorer else ("Save File" if args.mode == "save" else "Open File"),
+            title="Gudfiles" if explorer else ("Save File" if args.mode == "save" else "Open File"),
             accept_label="Save" if args.mode == "save" else ("Select Folder" if args.directory else "Open"),
             current_folder=folder if folder.is_dir() else folder.parent,
             current_name="untitled.txt" if args.mode == "save" else "",
@@ -1851,6 +1851,7 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
 
 def main(argv: list[str] | None = None) -> int:
     request, result_path = parse_args(argv if argv is not None else sys.argv[1:])
+    GLib.set_application_name("Gudfiles")
     return PickerApplication(request, result_path).run([])
 
 

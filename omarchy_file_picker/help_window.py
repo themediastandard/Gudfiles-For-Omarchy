@@ -16,7 +16,7 @@ def text(value, css, *, wrap=False):
 
 class HelpWindow(Gtk.Window):
     def __init__(self, owner):
-        super().__init__(title='Files Help', transient_for=owner,
+        super().__init__(title='Gudfiles Help', transient_for=owner,
                          application=owner.get_application(), destroy_with_parent=True)
         self.set_default_size(800, 680)
         self.set_size_request(660, 480)
@@ -32,7 +32,7 @@ class HelpWindow(Gtk.Window):
         icon.add_css_class('help-emblem')
         heading.append(icon)
         titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
-        titles.append(text('A little help with Files', 'help-title'))
+        titles.append(text('A little help with Gudfiles', 'help-title'))
         titles.append(text('Find a feature. Learn a shortcut. Make yourself at home.', 'help-description'))
         heading.append(titles)
         self.close_button = Gtk.Button.new_from_icon_name('window-close-symbolic')
@@ -135,7 +135,7 @@ class HelpWindow(Gtk.Window):
         query = self.search.get_text().strip()
         self.visible_features = matching_features(query, self.category)
         groups = [group for group in CATEGORIES if self.category in (None, group.key)]
-        title = 'Search results' if query else groups[0].title if self.category else 'Get to know Files'
+        title = 'Search results' if query else groups[0].title if self.category else 'Get to know Gudfiles'
         description = ('Matching features from across the app.' if query else
                        groups[0].description if self.category else
                        'Everyday essentials and a few things worth discovering.')

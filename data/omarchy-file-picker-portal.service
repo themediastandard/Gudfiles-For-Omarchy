@@ -1,5 +1,5 @@
 [Unit]
-Description=Omarchy File Picker portal backend
+Description=Gudfiles file chooser portal backend
 PartOf=graphical-session.target
 After=graphical-session.target
 

@@ -27,5 +27,5 @@ fi
 
 systemctl --user daemon-reload
 systemctl --user restart xdg-desktop-portal.service
-printf 'Removed Omarchy File Picker and restored portal routing.\n'
+printf 'Removed Gudfiles and restored portal routing.\n'
 

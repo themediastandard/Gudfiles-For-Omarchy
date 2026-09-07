@@ -1,7 +1,7 @@
-# Omarchy File Picker
+# Gudfiles
 
-A visual, keyboard-friendly file picker that follows the active Omarchy theme
-and serves as an XDG desktop portal backend.
+A visual, keyboard-friendly file manager and file picker that follows the active
+Omarchy theme and serves as an XDG desktop portal backend.
 
 Launching it directly opens explorer mode: no bottom filter/action bar, files
 open with their default applications, and the explorer stays open. App-requested
@@ -84,7 +84,7 @@ superseded, and keeps output in temporary storage. It never edits the original
 or creates sidecar files. The helper and its decoder packages are optional
 system dependencies and are not installed by `install.sh`; without the helper,
 Quick Look reports that RAW preview support is missing. Exact camera and
-compression support depends on the installed reader. Reopen Files after updating.
+compression support depends on the installed reader. Reopen Gudfiles after updating.
 Text is read-only and
 limited to 128 KB, and PDFs show their first page with the total page count.
 The selection preview strip and Space-bar preview stay within the existing
@@ -126,7 +126,7 @@ active transfers finish before starting more. Use `Ctrl+Shift+V` to stage a
 clipboard batch without starting it, then **Start queue** or **Start all** when
 ready. A mode change does not start staged batches or resume paused transfers.
 Each transfer has its own pause/resume/cancel controls, and All includes
-**Pause all**. Queues last for the current Files session; closing Files asks
+**Pause all**. Queues last for the current Gudfiles session; closing Gudfiles asks
 before cancelling unfinished work. Moves are limited to the same filesystem;
 verified copies can cross volumes when the destination supports safe publication.
 Automatically opened transfer panels close when quick transfers finish. Once a
@@ -137,7 +137,7 @@ their history remains available from **Transfers**.
 Display preferences persist in `~/.config/omarchy-file-picker/preferences.json`;
 bookmarks use the shared GTK `~/.config/gtk-3.0/bookmarks` file.
 Your last chosen grid, list, or column view is saved as soon as you select it
-and restored when you open Files or an Open/Save dialog again.
+and restored when you open Gudfiles or an Open/Save dialog again.
 
 Right-click a sidebar location for **Open**, **Open in New Window**, **Copy
 Location**, and **Properties**. Local folders also offer **Show in Enclosing
@@ -244,3 +244,10 @@ Revert with:
 ```bash
 ./uninstall.sh
 ```
+
+## Naming and compatibility
+
+The application is named **Gudfiles**. The existing `omarchy-file-picker` command,
+`org.omarchy.FilePicker` desktop/application ID, portal service IDs and storage
+paths remain stable, preserving existing shortcuts, portal routing, preferences
+and ratings across the rename.

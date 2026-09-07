@@ -364,7 +364,7 @@ class QuickLook(Gtk.Widget):
             error = media.get_error().message
             self._clear_content()
             if 'plug-in' in error.lower() or 'plugin' in error.lower():
-                self._message('Playback needs additional media codecs.\nInstall gst-plugins-good, gst-plugins-bad,\ngst-plugins-ugly and gst-libav, then reopen Files.')
+                self._message('Playback needs additional media codecs.\nInstall gst-plugins-good, gst-plugins-bad,\ngst-plugins-ugly and gst-libav, then reopen Gudfiles.')
             else:
                 self._message('Media preview unavailable.\n' + error.splitlines()[0][:200])
             self.kind = 'info'

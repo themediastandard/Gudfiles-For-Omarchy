@@ -253,7 +253,7 @@ class TransferUI:
             self.transfer_close_label = Gtk.Label(xalign=0, wrap=True)
             self.transfer_close_box.append(self.transfer_close_label)
             close_controls = Gtk.Box(spacing=8, halign=Gtk.Align.END)
-            self.transfer_keep = button('Keep Files open', self._keep_transfers)
+            self.transfer_keep = button('Keep Gudfiles open', self._keep_transfers)
             close_controls.append(self.transfer_keep)
             self.transfer_close_confirm = button('Cancel unfinished & close', self._cancel_transfers_and_close, 'transfer-action')
             close_controls.append(self.transfer_close_confirm)
@@ -264,7 +264,7 @@ class TransferUI:
             root.append(self.transfer_close_box)
             footer = Gtk.Box(spacing=12)
             footer.add_css_class('transfer-footer')
-            note = text_label('Queue stays in this Files session. Closing this panel keeps transfers running.', 'transfer-subtitle')
+            note = text_label('Queue stays in this Gudfiles session. Closing this panel keeps transfers running.', 'transfer-subtitle')
             note.set_wrap(True)
             note.set_ellipsize(Pango.EllipsizeMode.NONE)
             note.set_lines(2)
@@ -299,7 +299,7 @@ class TransferUI:
         self.transfer_note.set_text(
             'Closes when quick transfers finish. Transfers lasting 5 minutes stay open.'
             if self.transfer_auto_close else
-            'Queue stays in this Files session. Closing this panel keeps transfers running.')
+            'Queue stays in this Gudfiles session. Closing this panel keeps transfers running.')
         if self._can_auto_hide_transfers():
             self.transfer_window.set_visible(False)
 
@@ -406,9 +406,9 @@ class TransferUI:
             self.transfer_close_label.set_text(
                 'Stopping transfers before closing. Waiting for the current filesystem operation and cleanup…'
                 if self.transfer_cancel_close else
-                'Cleanup could not finish. Keep Files open to retry, or leave the hidden partial folders and close this session. Sources and completed items stay.'
+                'Cleanup could not finish. Keep Gudfiles open to retry, or leave the hidden partial folders and close this session. Sources and completed items stay.'
                 if self.transfer_cleanup_blocked else
-                'Files has unfinished transfers. Keep this session open to preserve the queue and saved bytes, or cancel unfinished work to close. Completed items stay.')
+                'Gudfiles has unfinished transfers. Keep this session open to preserve the queue and saved bytes, or cancel unfinished work to close. Completed items stay.')
             self.transfer_close_confirm.set_sensitive(not self.transfer_cancel_close)
             self.transfer_keep.set_sensitive(not self.transfer_cancel_close)
             self.transfer_leave.set_visible(self.transfer_cleanup_blocked)

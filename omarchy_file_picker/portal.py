@@ -231,7 +231,7 @@ class PortalService:
         except Exception as error:
             invocation.return_dbus_error(
                 "org.freedesktop.impl.portal.Error.Failed",
-                f"Unable to launch Omarchy File Picker: {error}",
+                f"Unable to launch Gudfiles: {error}",
             )
 
     def run(self) -> int:
