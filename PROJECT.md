@@ -109,6 +109,7 @@ PYTHONPATH=. python tests/ui_image_zoom.py
 PYTHONPATH=. python tests/ui_hover_scrub.py
 PYTHONPATH=. python tests/ui_media_details.py
 PYTHONPATH=. python tests/ui_creative.py
+PYTHONPATH=. python tests/ui_label_colors.py
 PYTHONPATH=. python tests/ui_batch_rename.py
 PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
@@ -184,6 +185,10 @@ gdbus introspect --session \
   editable-shortcut safety, preserved selection/geometry, and real batch rename
   with collision/race/partial-failure protection. Native screenshots are inspected
   for controls, filter card and rename dialog; no physical pointer injection.
+  Swatch QA asserts actual GTK label foregrounds for all five colors in metadata,
+  Quick Look and filter palettes under light and the active desktop theme.
+  Palette CSS must outrank generic rating-control button colors because these
+  popovers remain descendants of the controls, including under dark themes.
   `CREATIVE_QA_SCREENSHOTS=1` enables optional creative UI captures. GTK can
   return no paintable node when a widget is not drawable; keep its native
   surface visible for capture. Screenshots are separate from behavior QA.

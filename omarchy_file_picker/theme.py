@@ -283,11 +283,13 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     .file-list .rating-badge {{ background: transparent; margin: 0; padding: 0 4px; }}
     .rating-badge.rejected {{ color: {colors['red']}; }}
-    .label-red, .label-red > button, .rating-controls .label-red > button {{ color: #d96868; }}
-    .label-orange, .label-orange > button, .rating-controls .label-orange > button {{ color: #c68b37; }}
-    .label-green, .label-green > button, .rating-controls .label-green > button {{ color: #579a70; }}
-    .label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: #598dc8; }}
-    .label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: #a47ac4; }}
+    /* Popovers remain descendants of rating-controls: swatches must outrank
+       its generic button foreground, not merely inherit a label color. */
+    .label-red, .color-swatch.label-red, .label-red > button, .rating-controls .label-red > button {{ color: #d96868; }}
+    .label-orange, .color-swatch.label-orange, .label-orange > button, .rating-controls .label-orange > button {{ color: #c68b37; }}
+    .label-green, .color-swatch.label-green, .label-green > button, .rating-controls .label-green > button {{ color: #579a70; }}
+    .label-blue, .color-swatch.label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: #598dc8; }}
+    .label-purple, .color-swatch.label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: #a47ac4; }}
     popover.creative-popover > contents, popover.media-details-popover > contents {{
       background: {colors['background']}; color: {colors['foreground']};
       border: 1px solid {colors['darker_background']}; border-radius: 10px;
