@@ -45,6 +45,7 @@ from .hover_scrub import HoverScrub
 from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
+from .selection_summary import show_selection_summary
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -856,6 +857,10 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
         self.media_details.cancel()
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
+        paths = self._selected_paths() or [path]
+        if len(paths) > 1:
+            show_selection_summary(self, paths)
+            return
         poster = picture_for(path, 132, 76, crop=True)
         self.metadata.append(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
@@ -871,7 +876,6 @@ class PickerWindow(CreativeTools, FileManagement, Gtk.ApplicationWindow):
             detail_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             detail_label.set_max_width_chars(36)
             primary.append(detail_label)
-        paths = self._selected_paths() or [path]
         primary.append(self._rating_controls(paths))
         self.metadata.append(primary)
         try:

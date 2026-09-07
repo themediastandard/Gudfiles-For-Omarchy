@@ -29,6 +29,10 @@ as the desktop's XDG FileChooser portal backend.
   restoration. File-origin click gestures remain native GTK.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
+- Multi-selection metadata shows a theme-colored stack of folders/documents,
+  the selected item count and a folder/file breakdown, rather than previewing
+  only the first item. Shared rating controls still apply to the whole selection.
+  Counts refer to selected entries, not recursively scanned folder contents.
 - Video grid/metadata thumbnails support silent hover-scrubbing with delayed
   entry, a thin position indicator, background decoding and poster restoration.
 - Selection details asynchronously show available media resolution, FPS, codec,
@@ -111,6 +115,7 @@ as the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/batch_rename.py` — preview planning, no-overwrite apply and dialog.
 - `omarchy_file_picker/breadcrumbs.py` — chevron drawing/allocation and wheel handling.
 - `omarchy_file_picker/columns.py` — adjacent directory columns and active selection/focus.
+- `omarchy_file_picker/selection_summary.py` — collective selection icon/count strip.
 - `omarchy_file_picker/drag_selection.py` — background selection and edge scrolling.
 - `omarchy_file_picker/network.py` / `network_ui.py` — bounded service discovery
   and explicit server/share browsing in the NAS dialog.
@@ -137,6 +142,7 @@ PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
+PYTHONPATH=. python tests/ui_selection_summary.py
 PYTHONPATH=. python tests/ui_sidebar_menu.py
 PYTHONPATH=. python tests/ui_explorer.py
 PYTHONPATH=. python tests/ui_drag_selection.py
@@ -221,6 +227,10 @@ gdbus introspect --session \
   file actions run only against a disposable fixture with isolated preferences.
 - Selection smoke tests exercise GTK's native range/toggle action signals in
   all three views, not injected mouse events; reuse native FlowBox pointer handling.
+- Selection-summary QA checks folder/file/mixed stacks and counts, group labels,
+  single/empty reset, no single-file media probe, and stable strip/browser/window
+  geometry in all three views. `SELECTION_SUMMARY_QA_SCREENSHOT=/tmp/selection.png`
+  optionally captures the native strip from disposable fixtures.
 - Column QA verifies hierarchy expansion, overflow, native selection, preview
   focus, hidden-file refresh, background-context creation destinations, empty
   folders, history, view switching, single/folder-only constraints and stable
