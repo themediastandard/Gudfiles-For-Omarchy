@@ -15,6 +15,8 @@ as the desktop's XDG FileChooser portal backend.
   multi-select, folder selection, Open, Save, and SaveFiles modes.
 - Compact context actions create folders and text files; cascading media menus
   expose resize presets and format conversions without replacing originals.
+- New Text File creates and selects an empty `untitled.txt` immediately, with
+  numbered collision-safe names and no naming dialog. Rename remains available.
 - Context-menu surfaces use scoped GTK CSS, compact flat rows, and inward
   submenu placement near the chooser's right edge.
 - File and background menus include rename, clipboard file operations,

@@ -60,7 +60,13 @@ def start():
     w._on_context_pressed(Gesture(),1,w.browser_stack.get_width()-30,w.browser_stack.get_height()-30)
     texts=labels(w.context_popover)
     assert 'New Folder…' in texts and 'Rename…' not in texts and 'Connect to NAS…' not in texts, texts
+    assert 'New Text File' in texts and 'New Text File…' not in texts
     w._close_context_menu()
+    for name in ('untitled.txt', 'untitled (1).txt'):
+        w._show_create_dialog('text')
+        assert (source/name).read_bytes() == b''
+        assert w._selected_paths() == [source/name]
+        assert not any(x.get_visible() and x is not w for x in Gtk.Window.get_toplevels())
     w._show_create_dialog('folder')
     d=dialog('New Folder'); entry_in(d).set_text('created'); d.response(Gtk.ResponseType.ACCEPT)
     assert (source/'created').is_dir()

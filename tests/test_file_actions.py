@@ -4,7 +4,7 @@ from pathlib import Path
 
 from gi.repository import GLib
 from omarchy_file_picker.file_actions import (
-    parse_file_clipboard, remove_items, rename_item, sort_entries, transfer_items,
+    create_untitled_text, parse_file_clipboard, remove_items, rename_item, sort_entries, transfer_items,
 )
 
 
@@ -13,6 +13,26 @@ class FileActionsTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_untitled_text_creation_and_numbering(self):
+        first = create_untitled_text(self.root)
+        self.assertEqual(first.name, 'untitled.txt')
+        self.assertEqual(first.read_bytes(), b'')
+        first.write_text('keep this')
+        second = create_untitled_text(self.root)
+        self.assertEqual(second.name, 'untitled (1).txt')
+        self.assertEqual(second.read_bytes(), b'')
+        self.assertEqual(first.read_text(), 'keep this')
+
+    def test_untitled_skips_directories_and_dangling_symlinks(self):
+        (self.root / 'untitled.txt').mkdir()
+        link = self.root / 'untitled (1).txt'
+        link.symlink_to('missing.txt')
+        self.assertEqual(create_untitled_text(self.root).name, 'untitled (2).txt')
+        self.assertTrue(link.is_symlink())
+        self.assertFalse((self.root / 'missing.txt').exists())
+        with self.assertRaises(FileNotFoundError):
+            create_untitled_text(self.root / 'missing-directory')
 
     def test_rename_and_collision_preserve_existing_content(self):
         a, b = self.root / 'a.txt', self.root / 'b.txt'

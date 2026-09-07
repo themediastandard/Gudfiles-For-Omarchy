@@ -10,6 +10,8 @@ and serves as an XDG desktop portal backend.
 - Pinned folders, recent files, and mounted volumes
 - Compact, icon-led right-click menu with grouped media submenus
 - Right-click creation of folders and text files
+- New Text File immediately creates `untitled.txt`, then `untitled (1).txt`, etc.,
+  without a naming prompt; use Rename or F2 whenever you want to name it
 - Background right-click works in blank areas and empty folders
 - Rename, Cut/Copy/Paste, Copy Location, Properties, and confirmed Trash/Delete
 - GTK-shared bookmarks, hidden files, configurable list details, and sorting

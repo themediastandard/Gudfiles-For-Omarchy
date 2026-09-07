@@ -30,7 +30,7 @@ from .actions import (
 from .model import PickerRequest, file_type, format_size, list_directory, recent_files, safe_uri
 from .theme import build_css, load_colors
 from .file_management import FileManagement
-from .file_actions import sort_entries
+from .file_actions import create_untitled_text, sort_entries
 from .quicklook import QuickLook
 from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri
@@ -963,7 +963,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             icon_name="folder-new-symbolic",
         )
         new_text = self._menu_button(
-            "New Text File…",
+            "New Text File",
             lambda: self._show_create_dialog("text"),
             icon_name="document-new-symbolic",
         )
@@ -1057,8 +1057,18 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _show_create_dialog(self, kind: str) -> None:
-        noun = "Folder" if kind == "folder" else "Text File"
-        dialog = Gtk.Dialog(title=f"New {noun}", transient_for=self, modal=True)
+        if kind == "text":
+            try:
+                destination = create_untitled_text(self.current_dir)
+            except OSError as error:
+                self._show_error("Could not create text file", str(error))
+                return
+            self._refresh_files([destination])
+            child = self.children_by_path.get(destination)
+            if child:
+                child.grab_focus()
+            return
+        dialog = Gtk.Dialog(title="New Folder", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("Create", Gtk.ResponseType.ACCEPT)
         dialog.set_default_response(Gtk.ResponseType.ACCEPT)
@@ -1069,7 +1079,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         content.set_margin_start(18)
         content.set_margin_end(18)
         content.append(label(f"Create in {self.current_dir}", "muted"))
-        entry = Gtk.Entry(placeholder_text="Folder name" if kind == "folder" else "File name")
+        entry = Gtk.Entry(placeholder_text="Folder name")
         entry.set_activates_default(True)
         content.append(entry)
 
@@ -1081,14 +1091,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             if not name or name in {".", ".."} or Path(name).name != name:
                 entry.add_css_class("error")
                 return
-            if kind == "text" and not Path(name).suffix:
-                name += ".txt"
             destination = self.current_dir / name
             try:
-                if kind == "folder":
-                    destination.mkdir()
-                else:
-                    destination.touch(exist_ok=False)
+                destination.mkdir()
             except OSError as error:
                 entry.add_css_class("error")
                 entry.set_tooltip_text(str(error))

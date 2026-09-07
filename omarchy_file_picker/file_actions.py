@@ -7,6 +7,20 @@ from urllib.parse import unquote, urlparse
 from gi.repository import Gio
 
 
+def create_untitled_text(directory: Path) -> Path:
+    """Atomically create an empty file without replacing any existing entry."""
+    number = 0
+    while True:
+        name = 'untitled.txt' if number == 0 else f'untitled ({number}).txt'
+        target = directory / name
+        try:
+            with target.open('x'):
+                pass
+            return target
+        except FileExistsError:
+            number += 1
+
+
 def validate_name(name: str) -> str:
     name = name.strip()
     if not name or name in {'.', '..'} or '/' in name or '\0' in name:
