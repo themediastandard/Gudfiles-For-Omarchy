@@ -1375,6 +1375,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
                     self.flow.select_child(child)
                     child.grab_focus()
                 self._show_conversion_notice(output)
+                self._play_sound('complete')
             else:
                 detail = (stderr or "The converter exited without creating a file.").strip()[-800:]
                 self._show_error("Conversion failed", detail)
@@ -1633,6 +1634,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         if self.sidebar_save_timer:
             self._save_sidebar_width()
         self.media_details.close()
+        self.action_sounds.close()
         if self.request.explorer:
             self.get_application().quit()
             return

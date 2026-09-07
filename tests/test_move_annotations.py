@@ -3,7 +3,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import gi
 gi.require_version('Gtk', '4.0')
@@ -29,6 +29,7 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.store = RatingStore(self.root / 'ratings.sqlite3')
         self.store.set_many(self.paths, stars=4, color='blue')
         self.owner = FileManagement()
+        self.owner.action_sounds = Mock()
         self.calls = []
         def migrate(mapping):
             self.calls.append((mapping.copy(), threading.get_ident()))

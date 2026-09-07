@@ -13,6 +13,7 @@ from .dialogs import PickerDialog, confirmation, detail_card, entry_field, file_
 
 from .file_actions import parse_file_clipboard, remove_items, rename_item, transfer_items
 from .transfer_ui import TransferUI
+from .sound_effects import ActionSounds
 
 SIDEBAR_MIN_WIDTH = 280
 SIDEBAR_DEFAULT_WIDTH = 300
@@ -37,7 +38,7 @@ class FileManagement(TransferUI):
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
                         show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH,
-                        transfer_mode='queue', hidden_locations=[], view_mode='grid')
+                        transfer_mode='queue', hidden_locations=[], view_mode='grid', sound_effects=True)
         try:
             saved = json.loads(self.preferences_path.read_text())
             if not isinstance(saved, dict):
@@ -56,6 +57,17 @@ class FileManagement(TransferUI):
         defaults['hidden_locations'] = [key for key in defaults['hidden_locations'] if isinstance(key, str)]
         defaults['sidebar_width'] = max(SIDEBAR_MIN_WIDTH, defaults['sidebar_width'])
         self.file_preferences = defaults
+        self.action_sounds = ActionSounds(self.preferences_path)
+        self.connect('unrealize', self.action_sounds.close)
+
+    def _play_sound(self, cue):
+        self.action_sounds.play(cue)
+
+    def _toggle_sound_effects(self):
+        enabled = not self.action_sounds.enabled
+        self._set_file_preference('sound_effects', enabled, reload=False)
+        if not enabled:
+            self.action_sounds.stop()
 
     def _set_file_preference(self, key, value, *, reload=True):
         self.file_preferences[key] = value
@@ -214,7 +226,8 @@ class FileManagement(TransferUI):
         action = 'Delete permanently' if permanent else 'Move to Trash'
         detail = ('This cannot be undone.' if permanent else 'You can restore these items from Trash.')
         return confirmation(self, f'{action}?', detail, action, paths,
-                            lambda: self._run_file_job(action, lambda: remove_items(paths, permanent)),
+                            lambda: self._run_file_job(action, lambda: remove_items(paths, permanent),
+                                lambda: self._play_sound('delete' if permanent else 'trash')),
                             destructive=permanent)
 
     def _copy_location(self, paths):
@@ -426,6 +439,10 @@ class FileManagement(TransferUI):
         for key, title in [('show_size', 'Size Column'), ('show_type', 'Type Column'), ('show_time', 'Time')]:
             options.append((('Hide ' if prefs[key] else 'Show ') + title, '', 'view-list-symbolic',
                             lambda k=key: self._set_file_preference(k, not prefs[k])))
+        enabled = self.action_sounds.enabled
+        options.append(('Sound Effects', 'On' if enabled else 'Off',
+                        'audio-volume-low-symbolic' if enabled else 'audio-volume-muted-symbolic',
+                        self._toggle_sound_effects))
         submenu('View', 'view-grid-symbolic', options)
         sorts = [(title, 'Selected' if prefs['sort_key'] == key else '', 'view-sort-ascending-symbolic',
                   lambda k=key: self._set_file_preference('sort_key', k))

@@ -351,6 +351,8 @@ class DragCopy:
                     jobs = [queue.add(group, directory, cut=cut, duplicate=not cut, start=True)
                             for group, cut in batches]
                 for job in jobs:
+                    owner.transfer_sounds[job.id] = 'drop'
+                for job in jobs:
                     owner._show_transfers(automatic_job=job)
             except ValueError as exc:
                 owner._show_error('Could not transfer files', str(exc))

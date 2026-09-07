@@ -72,6 +72,9 @@ FEATURES = (
             'Right-click and use Sort By for name, modified date, size or type, either direction, and folders first. The View menu toggles list detail columns.'),
     Feature('browse', 'Refresh the folder',
             'Reload the current folder to see changes made elsewhere.', 'F5'),
+    Feature('browse', 'Action sounds',
+            'Quiet sounds confirm completed drops, copies, Trash, permanent deletion and media conversions. Right-click → View → Sound Effects turns them on or off. The choice is remembered across windows. Cancelled or failed actions stay silent.',
+            keywords='audio mute volume feedback'),
     Feature('browse', 'An app that follows your theme',
             'Gudfiles reads your active Omarchy colors at launch, including its previews, menus and dialogs.'),
 

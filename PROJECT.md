@@ -7,6 +7,14 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Four short original action sounds confirm successful drop/copy batches, Trash,
+  permanent deletion and conversions. Right-click → View → Sound Effects saves
+  a shared mute preference, read back by existing windows without changing their
+  views or selection. Cancelled, failed, partial-failure, staged and no-op actions
+  produce no success cue; completion polling does not repeat sounds. Playback
+  is optional, asynchronous, limited to one sound at a time with a 300 ms gap,
+  and killed after 2.5 seconds or when muted/its window closes.
+
 - Product name is Gudfiles in the launcher, standalone window, Help, transfer
   messages, notifications and installation output. The existing commands,
   application/portal IDs and storage paths remain stable for compatibility.
@@ -215,6 +223,12 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/sound_effects.py` / `sounds/` — optional `paplay` action
+  audio, shared mute readback and original 170–320 ms PCM cues. Effects use the
+  separate Gudfiles Sound Effects audio identity with half stream volume.
+- `scripts/generate_sounds.py` — deterministic standard-library synthesis for
+  the bundled sound assets; no external recordings or sound libraries.
+
 - `omarchy_file_picker/list_navigation.py` — list arrow routing through GTK's
   native cursor/selection engine, with view-button focus handoff and row reveal.
 - `omarchy_file_picker/help_catalog.py` — feature descriptions, category metadata
@@ -262,6 +276,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ```bash
 python -m unittest discover -v
+SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action_sounds.py
 HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
@@ -308,6 +323,17 @@ gdbus introspect --session \
 ```
 
 ## Decisions and constraints
+
+- Sound cues report successful batches, not individual files or action requests.
+  Drag batches use the drop cue; other transfers/conversions use completion.
+  Assets install with the Python package. Missing `paplay`, files or audio output
+  fail silently without changing file-operation results. The saved `sound_effects`
+  boolean defaults to true; unknown/malformed preference values use that default.
+- Sound QA uses a disposable silent player for process/timeout checks and spies
+  for native action routing. Actual Trash fixtures must live on the home
+  filesystem, with isolated `XDG_DATA_HOME`; GIO refuses Trash on `/tmp`'s system
+  mount. Use a separate client identity for any live audio checks. Never mute
+  Gudfiles previews or the global output to silence tests.
 
 - When restoring list keyboard navigation after rebuilding FlowBox children, use
   the FlowBox's `child_focus()` to initialize its native cursor. Direct child
@@ -534,6 +560,16 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Action-sound verification (2026-09-07): 154 unit tests passed, including real
+  silent subprocess timing, cleanup, mute and asset checks. Native action QA
+  exercised actual fixture Trash/delete/drop/copy operations, partial failure,
+  cancellation, repeated polling and the View-menu toggle. Drag, transfer,
+  Queue/All, panel visibility, conversion, Help, sidebar and explorer regressions
+  passed with audio playback mocked. All four cues played successfully through
+  a separate, unmuted QA stream at half volume without mixer changes. The native
+  sound menu was visually inspected. Installed action/transfer checks passed;
+  all 38 installed package files, including the WAVs, match source.
 
 - Gudfiles rename verification (2026-09-07): 147 unit tests, native Help in
   light/active themes, explorer/Open/Save and transfer suites passed. Help

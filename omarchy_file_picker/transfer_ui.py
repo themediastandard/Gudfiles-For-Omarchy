@@ -150,6 +150,7 @@ class TransferUI:
         self.transfer_rows = {}
         self.transfer_callbacks = {}
         self.transfer_seen_states = {}
+        self.transfer_sounds = {}
         self.transfer_changed_dirs = {}
         self.transfer_closing = None
         self.transfer_cancel_close = False
@@ -328,6 +329,7 @@ class TransferUI:
             states = {job.id: ('running' if job in active_at_snapshot and job.state not in BUSY else job.state)
                       for job in jobs}
             completed_events = queue.completed_events()
+        self.transfer_sounds = {key: cue for key, cue in self.transfer_sounds.items() if key in states}
         # Preserve actual commit order even when individual Start controls run
         # jobs in a different order from the visible list. No GTK on workers.
         for job, events in groupby(completed_events, key=lambda event: event[0]):
@@ -343,6 +345,7 @@ class TransferUI:
                 clipboard = self.transfer_callbacks.get(job.id)
                 if clipboard:
                     clipboard(dict(job.completed))
+        completed_sound = None
         for job in jobs:
             previous = self.transfer_seen_states.get(job.id)
             state = states[job.id]
@@ -357,7 +360,12 @@ class TransferUI:
                     self._refresh_files()
                 if state in TERMINAL:
                     self.transfer_callbacks.pop(job.id, None)
+                    cue = self.transfer_sounds.pop(job.id, 'complete')
+                    if state == 'completed' and job.completed:
+                        completed_sound = cue
             self.transfer_seen_states[job.id] = state
+        if completed_sound:
+            self._play_sound(completed_sound)
         count = sum(job.state not in TERMINAL for job in jobs)
         if hasattr(self, 'transfer_count'):
             self.transfer_count.set_text(str(count) if count < 100 else '99+')

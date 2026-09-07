@@ -10,6 +10,11 @@ CLI `--result`, `--directory` and Save requests also retain picker controls.
 
 ## Features
 
+- Quiet action sounds for completed file drops, copies, Trash, permanent deletion
+  and media conversions. **Right-click → View → Sound Effects** toggles them;
+  the choice is remembered across windows. Cancelled, failed and no-op actions
+  stay silent, and rapid completions do not build an audio backlog.
+
 - Folder tabs with separate history, view, filters, selection and scroll position
 - Drag files to folders, sidebar locations or tabs: move on the same disk, copy
   between disks; hold Alt / Option to copy anywhere
@@ -244,6 +249,14 @@ Revert with:
 ```bash
 ./uninstall.sh
 ```
+
+## Action sounds
+
+Action sounds use the optional `paplay` command already available on this desktop.
+If it or audio output is unavailable, file operations continue silently. The four
+short original WAVs ship inside the package; `python scripts/generate_sounds.py`
+regenerates them. Effects have their own **Gudfiles Sound Effects** mixer identity
+and half stream volume, separate from media previews and system volume.
 
 ## Naming and compatibility
 
