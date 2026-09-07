@@ -38,6 +38,7 @@ class FileFilter:
 @dataclass
 class PickerRequest:
     mode: str = "open"
+    explorer: bool = False
     title: str = "Open File"
     accept_label: str = "Open"
     current_folder: Path = field(default_factory=Path.home)

@@ -8,6 +8,10 @@ as the desktop's XDG FileChooser portal backend.
 ## Current state
 
 - Native GTK 4 picker with grid and list layouts.
+- Standalone browsing runs in explorer mode: footer hidden, normal default-app
+  file opening without quitting, and Escape clears selection. The preview strip
+  remains. Portal requests, CLI `--result`, folder picking and Save modes retain
+  picker footer controls and result semantics.
 - List view uses compact 32-pixel rows with no inter-row gap; grid spacing is
   unchanged. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
@@ -34,6 +38,10 @@ as the desktop's XDG FileChooser portal backend.
 - Reads the active Omarchy `colors.toml` on every launch.
 - User-local portal installation with GTK retained as the fallback backend.
 - Sidebar uses the same application background, not a contrasting white panel.
+- Native draggable sidebar divider with a 160-pixel minimum, scrollable places,
+  and debounced width persistence without reloading files or clearing selection.
+- Mouse context menus preserve browser-relative pointer coordinates. Only
+  keyboard-opened menus use the selected row/tile's center as their anchor.
 - Breadcrumbs scroll within a bounded toolbar viewport; long metadata, type,
   sidebar and selection labels ellipsize instead of growing the window.
 - In-window Quick Look expands from the selected tile on Space and contracts
@@ -77,6 +85,8 @@ PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
 PYTHONPATH=. python tests/ui_selection.py
+PYTHONPATH=. python tests/ui_sidebar_menu.py
+PYTHONPATH=. python tests/ui_explorer.py
 PYTHONPATH=. python tests/ui_drag_selection.py
 PYTHONPATH=. python tests/ui_conversion_notice.py
 PYTHONPATH=. python tests/ui_mounts.py
@@ -107,6 +117,10 @@ gdbus introspect --session \
 - Context popovers are parented to the stable browser stack, not replaceable
   file tiles. Entry dialogs release focus/hide before deferred destruction to
   avoid queued Wayland input-method events reaching destroyed widgets.
+- Sidebar/menu QA uses isolated preferences and native Paned positions, verifies
+  restored width, and checks pointer/keyboard anchors against real GTK bounds.
+  Present test windows before destroying them; an unshown second window triggered
+  a GTK destruction crash on this desktop. No desktop rules are changed by QA.
 - Content must not increase the top-level minimum size during navigation.
   Keep path ancestors in a horizontal scroller (current folder auto-revealed),
   preserve the full typed path, and use tooltips for truncated labels. The layout

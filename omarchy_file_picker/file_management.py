@@ -28,7 +28,7 @@ class FileManagement:
         self.preferences_path = Path.home() / '.config/omarchy-file-picker/preferences.json'
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
-                        show_size=True, show_type=True, show_time=True)
+                        show_size=True, show_type=True, show_time=True, sidebar_width=240)
         try:
             saved = json.loads(self.preferences_path.read_text())
             if not isinstance(saved, dict):
@@ -40,9 +40,10 @@ class FileManagement:
             pass
         if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'}:
             defaults['sort_key'] = 'name'
+        defaults['sidebar_width'] = max(160, defaults['sidebar_width'])
         self.file_preferences = defaults
 
-    def _set_file_preference(self, key, value):
+    def _set_file_preference(self, key, value, *, reload=True):
         self.file_preferences[key] = value
         try:
             self.preferences_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,7 +53,8 @@ class FileManagement:
             )
         except (OSError, GLib.Error) as error:
             self._show_error('Could not save display preferences', str(error))
-        self._load()
+        if reload:
+            self._load()
 
     def _bookmarks(self):
         result = []

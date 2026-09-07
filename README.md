@@ -3,17 +3,24 @@
 A visual, keyboard-friendly file picker that follows the active Omarchy theme
 and serves as an XDG desktop portal backend.
 
+Launching it directly opens explorer mode: no bottom filter/action bar, files
+open with their default applications, and the explorer stays open. App-requested
+Open/Save dialogs retain their filter, Cancel and Open/Save controls. Explicit
+CLI `--result`, `--directory` and Save requests also retain picker controls.
+
 ## Features
 
 - Thumbnail-first grid and compact list views
 - Dense list rows with no gaps between files
 - Image previews and freedesktop video thumbnail cache support
 - Pinned folders, recent files, and mounted volumes
+- Drag the divider beside the sidebar to resize it; its width is remembered
 - Compact, icon-led right-click menu with grouped media submenus
 - Right-click creation of folders and text files
 - New Text File immediately creates `untitled.txt`, then `untitled (1).txt`, etc.,
   without a naming prompt; use Rename or F2 whenever you want to name it
 - Background right-click works in blank areas and empty folders
+- Mouse context menus anchor at the click; keyboard menus anchor at the selected file
 - Rename, Cut/Copy/Paste, Copy Location, Properties, and confirmed Trash/Delete
 - GTK-shared bookmarks, hidden files, configurable list details, and sorting
 - Non-destructive image resizing: Small (1080 px), Medium (2160 px), Large (3160 px)

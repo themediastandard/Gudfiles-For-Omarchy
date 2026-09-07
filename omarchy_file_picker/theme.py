@@ -65,6 +65,12 @@ def build_css(colors: dict[str, str]) -> str:
       border-right: 1px solid {colors['darker_background']};
       padding: 12px 8px;
     }}
+    .sidebar-split > separator {{
+      min-width: 5px;
+      background: {colors['background']};
+      border: 0;
+    }}
+    .sidebar-split > separator:hover {{ background: alpha({colors['accent']}, 0.35); }}
     .sidebar-heading {{
       color: {colors['dark_foreground']};
       font-size: 12px;

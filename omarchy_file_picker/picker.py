@@ -191,6 +191,8 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         subtitle_text = "Choose a folder" if self.request.directory else (
             "Choose where to save" if self.request.mode.startswith("save") else "Choose files to open"
         )
+        if self.request.explorer:
+            subtitle_text = "Browse files and folders"
         subtitle = label(subtitle_text, "muted", xalign=0.5)
         title_box.append(title_label)
         title_box.append(subtitle)
@@ -203,20 +205,34 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.preview_overlay.set_child(root)
         self.set_child(self.preview_overlay)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        body = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        body.add_css_class('sidebar-split')
+        body.set_wide_handle(True)
+        body.set_resize_start_child(False)
+        body.set_resize_end_child(True)
+        body.set_shrink_start_child(False)
+        body.set_shrink_end_child(False)
+        self.sidebar_split = body
+        self.sidebar_save_timer = 0
         body.set_vexpand(True)
         root.append(body)
 
         self.sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.sidebar.add_css_class("sidebar")
-        self.sidebar.set_size_request(205, -1)
-        body.append(self.sidebar)
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sidebar_scroll.set_min_content_width(160)
+        sidebar_scroll.set_size_request(160, -1)
+        sidebar_scroll.set_child(self.sidebar)
+        body.set_start_child(sidebar_scroll)
         self._build_sidebar()
 
         browser = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         browser.set_hexpand(True)
         browser.set_vexpand(True)
-        body.append(browser)
+        body.set_end_child(browser)
+        body.set_position(self.file_preferences['sidebar_width'])
+        body.connect('notify::position', self._sidebar_resized)
 
         self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.toolbar.add_css_class("toolbar")
@@ -284,6 +300,23 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.footer.add_css_class("footer")
         root.append(self.footer)
         self._build_footer()
+        self.footer.set_visible(not self.request.explorer)
+
+    def _sidebar_resized(self, split, _property) -> None:
+        if not self.get_mapped():
+            return
+        if self.sidebar_save_timer:
+            GLib.source_remove(self.sidebar_save_timer)
+        self.sidebar_save_timer = GLib.timeout_add(400, self._save_sidebar_width)
+
+    def _save_sidebar_width(self) -> bool:
+        if self.sidebar_save_timer:
+            GLib.source_remove(self.sidebar_save_timer)
+            self.sidebar_save_timer = 0
+        width = max(160, self.sidebar_split.get_position())
+        if width != self.file_preferences['sidebar_width']:
+            self._set_file_preference('sidebar_width', width, reload=False)
+        return False
 
     def _sidebar_button(self, text: str, icon_name: str, callback) -> Gtk.Button:
         button = Gtk.Button()
@@ -565,13 +598,15 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                 self._show_properties(selected or [self.current_dir])
                 return Gdk.EVENT_STOP
             if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
-                self._show_context_menu(24, 24, selected[0] if selected else None)
+                self._show_context_menu(24, 24, selected[0] if selected else None, keyboard=True)
                 return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_Escape:
             if self.path_stack.get_visible_child_name() == "entry":
                 self.path_stack.set_visible_child_name("crumbs")
             elif self.search.get_text():
                 self.search.set_text("")
+            elif self.request.explorer:
+                self.flow.unselect_all()
             else:
                 self._finish(cancelled=True)
             return Gdk.EVENT_STOP
@@ -952,7 +987,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             self.qa_submenu_button = menu_button
         return menu_button
 
-    def _show_context_menu(self, x: float, y: float, path: Path | None = None) -> None:
+    def _show_context_menu(self, x: float, y: float, path: Path | None = None, *, keyboard=False) -> None:
         self._close_context_menu()
         automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
         keep_open_for_qa = automation in {"context-menu", "context-submenu", "context-background"}
@@ -962,7 +997,7 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         # stable browser surface, never on a tile that can be destroyed.
         anchor = self.browser_stack
         tile = self.children_by_path.get(path) if path else None
-        if tile:
+        if keyboard and tile:
             valid_tile_bounds, tile_bounds = tile.compute_bounds(anchor)
             if valid_tile_bounds:
                 x = tile_bounds.get_x() + tile_bounds.get_width() / 2
@@ -1412,6 +1447,17 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
 
     def _accept(self) -> None:
         selected = self._selected_paths()
+        if self.request.explorer:
+            if len(selected) == 1 and selected[0].is_dir():
+                self.navigate(selected[0])
+                return
+            for path in selected:
+                if path.is_file():
+                    try:
+                        Gio.AppInfo.launch_default_for_uri(safe_uri(path), None)
+                    except GLib.Error as error:
+                        self._show_error(f'Could not open {path.name}', error.message)
+            return
         if self.request.mode == "save":
             name = self.filename_entry.get_text().strip()
             if not name or "/" in name or name in (".", ".."):
@@ -1455,6 +1501,11 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
     def _finish(self, *, cancelled: bool = False, paths: list[Path] | None = None) -> None:
         if self.file_job_active:
             self._show_error('File operation in progress', 'Wait for the operation to finish before closing the picker.')
+            return
+        if self.sidebar_save_timer:
+            self._save_sidebar_width()
+        if self.request.explorer:
+            self.get_application().quit()
             return
         paths = paths or []
         active_filter = self._active_filter()
@@ -1633,9 +1684,11 @@ def parse_args(argv: list[str]) -> tuple[PickerRequest, Path | None]:
         request = PickerRequest.from_dict(json.loads(args.request.read_text(encoding="utf-8")))
     else:
         folder = Path(args.demo or Path.cwd()).expanduser()
+        explorer = args.mode == 'open' and not args.directory and args.result is None
         request = PickerRequest(
             mode=args.mode,
-            title="Save File" if args.mode == "save" else "Open File",
+            explorer=explorer,
+            title="Files" if explorer else ("Save File" if args.mode == "save" else "Open File"),
             accept_label="Save" if args.mode == "save" else ("Select Folder" if args.directory else "Open"),
             current_folder=folder if folder.is_dir() else folder.parent,
             current_name="untitled.txt" if args.mode == "save" else "",
