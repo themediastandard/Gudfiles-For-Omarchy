@@ -1,5 +1,17 @@
 # Design QA
 
+## Current — stable window geometry while navigating
+
+- Reproduced growth from 1200 × 800 to 4254 × 800 over seven nested folders.
+  Each unbounded breadcrumb increased the toolbar's minimum width; metadata
+  paths and other unbounded data labels could impose similar width requests.
+- Ancestor buttons now live inside a horizontally scrollable viewport with
+  automatic current-folder reveal. Long labels ellipsize with full tooltips;
+  Ctrl+L still exposes the complete editable path.
+- `tests/ui_layout.py` checks actual GTK window dimensions after navigation,
+  selection, backtracking, grid/list changes and resizing to 1040 × 680.
+  The chooser retains its starting or user-selected size throughout.
+
 ## Current — cohesive palette, Quick Look and NAS discovery
 
 - Sidebar now uses the same theme background/foreground as the browser. The

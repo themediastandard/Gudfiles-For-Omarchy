@@ -22,6 +22,8 @@ as the desktop's XDG FileChooser portal backend.
 - Reads the active Omarchy `colors.toml` on every launch.
 - User-local portal installation with GTK retained as the fallback backend.
 - Sidebar uses the same application background, not a contrasting white panel.
+- Breadcrumbs scroll within a bounded toolbar viewport; long metadata, type,
+  sidebar and selection labels ellipsize instead of growing the window.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
@@ -53,6 +55,7 @@ python -m unittest discover -v
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
 PYTHONPATH=. python tests/ui_nas.py
+PYTHONPATH=. python tests/ui_layout.py
 ./bin/omarchy-file-picker --demo ~/Pictures
 ./install.sh
 ```
@@ -80,6 +83,10 @@ gdbus introspect --session \
 - Context popovers are parented to the stable browser stack, not replaceable
   file tiles. Entry dialogs release focus/hide before deferred destruction to
   avoid queued Wayland input-method events reaching destroyed widgets.
+- Content must not increase the top-level minimum size during navigation.
+  Keep path ancestors in a horizontal scroller (current folder auto-revealed),
+  preserve the full typed path, and use tooltips for truncated labels. The layout
+  regression exercises deep paths, long names/types and user-selected sizes.
 - UI smoke tests require a desktop session and temporarily use the clipboard;
   file actions run only against a disposable fixture with isolated preferences.
 - For unobstructed NAS visual QA, set `NAS_QA_SCREENSHOT=/tmp/nas-qa.png` when

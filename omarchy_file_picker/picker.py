@@ -274,6 +274,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         row.append(icon)
         item_label = label(text)
         item_label.set_hexpand(True)
+        item_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        item_label.set_max_width_chars(20)
+        button.set_tooltip_text(text)
         row.append(item_label)
         button.set_child(row)
         button.connect("clicked", callback)
@@ -358,7 +361,15 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.path_stack.set_hexpand(True)
         self.path_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=1)
         self.path_box.set_hexpand(True)
-        self.path_stack.add_named(self.path_box, "crumbs")
+        # Keep all ancestors reachable without growing the window's minimum
+        # width every time the user enters another folder.
+        self.path_scroll = Gtk.ScrolledWindow()
+        self.path_scroll.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        self.path_scroll.set_min_content_width(80)
+        self.path_scroll.set_propagate_natural_width(False)
+        self.path_scroll.set_child(self.path_box)
+        self.path_scroll.get_hadjustment().connect('changed', self._scroll_path_to_current)
+        self.path_stack.add_named(self.path_scroll, "crumbs")
         self.path_entry = Gtk.Entry()
         self.path_entry.connect("activate", self._on_path_activate)
         self.path_stack.add_named(self.path_entry, "entry")
@@ -430,6 +441,8 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         else:
             self.selection_label = label("No file selected", "muted")
             self.selection_label.set_hexpand(True)
+            self.selection_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            self.selection_label.set_max_width_chars(36)
             row.append(self.selection_label)
 
         hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -632,7 +645,11 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
                 detail = format_size(path.stat().st_size)
         except OSError:
             detail = file_type(path)
-        item.append(label(detail, "muted", xalign=0.5))
+        detail_label = label(detail, "muted", xalign=0.5)
+        detail_label.set_ellipsize(Pango.EllipsizeMode.END)
+        detail_label.set_max_width_chars(18)
+        detail_label.set_tooltip_text(detail)
+        item.append(detail_label)
         return item
 
     def _list_item(self, path: Path) -> Gtk.Widget:
@@ -647,6 +664,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         row.append(name)
         kind = label(file_type(path), "muted")
         kind.set_size_request(150, -1)
+        kind.set_ellipsize(Pango.EllipsizeMode.END)
+        kind.set_max_width_chars(20)
+        kind.set_tooltip_text(file_type(path))
         if self.file_preferences['show_type']: row.append(kind)
         try:
             size_text = "—" if path.is_dir() else format_size(path.stat().st_size)
@@ -661,6 +681,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         modified.set_size_request(125, -1)
         row.append(modified)
         return row
+
+    def _scroll_path_to_current(self, adjustment) -> None:
+        adjustment.set_value(max(adjustment.get_lower(), adjustment.get_upper() - adjustment.get_page_size()))
 
     def _rebuild_pathbar(self) -> None:
         while child := self.path_box.get_first_child():
@@ -690,6 +713,9 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
             current = current / part
             button = Gtk.Button(label=part)
             button.add_css_class("path-segment")
+            button.get_child().set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            button.get_child().set_max_width_chars(24)
+            button.set_tooltip_text(str(current))
             button.connect("clicked", lambda _b, p=current: self.navigate(p))
             self.path_box.append(button)
         self.path_entry.set_text(str(path))
@@ -711,11 +737,16 @@ class PickerWindow(FileManagement, Gtk.ApplicationWindow):
         self.metadata.append(picture_for(path, 132, 76, crop=True))
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         primary.set_size_request(240, -1)
+        primary.set_hexpand(True)
         title = label(path.name, "metadata-title")
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         primary.append(title)
-        primary.append(label(file_type(path), "muted"))
-        primary.append(label(str(path.parent), "muted"))
+        for detail in (file_type(path), str(path.parent)):
+            detail_label = label(detail, "muted")
+            detail_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            detail_label.set_max_width_chars(36)
+            detail_label.set_tooltip_text(detail)
+            primary.append(detail_label)
         self.metadata.append(primary)
         try:
             stat = path.stat()
