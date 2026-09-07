@@ -13,6 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# GTK's Vulkan renderer can crash on video textures on this desktop. Keep the
+# fallback app-local, before GTK initialization, and respect explicit overrides.
+os.environ.setdefault("GSK_RENDERER", "gl")
+
 import gi
 
 gi.require_version("Gtk", "4.0")

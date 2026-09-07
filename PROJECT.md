@@ -47,6 +47,10 @@ as the desktop's XDG FileChooser portal backend.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
+- Installed GStreamer good/bad/ugly/libav codecs; generated H.264/AAC, HEVC/AAC,
+  ProRes/PCM, VP9/Opus and AV1/AAC clips verify decoding, play, pause, seek,
+  resume and stop on preview close. Actual user media and audible output remain
+  separate manual checks.
 - Selection previews occupy a reserved 113-pixel strip. Neither the strip's
   content nor the Quick Look overlay participates in window size requests;
   long titles and metadata ellipsize with full values available in tooltips.
@@ -81,6 +85,7 @@ as the desktop's XDG FileChooser portal backend.
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_file_management.py
 PYTHONPATH=. python tests/ui_quicklook.py
+PYTHONPATH=. python tests/ui_video_playback.py
 PYTHONPATH=. python tests/ui_preview_geometry.py
 PYTHONPATH=. python tests/ui_nas.py
 PYTHONPATH=. python tests/ui_layout.py
@@ -110,6 +115,11 @@ gdbus introspect --session \
 - PDF preview uses optional Poppler GI/Cairo. Media playback needs GStreamer
   codecs; missing dependencies produce an inline explanation. Discovery uses
   the existing Avahi tools/GVfs and never brute-force scans a network.
+- The picker defaults to app-local `GSK_RENDERER=gl` before GTK initialization,
+  respecting explicit overrides. Vulkan video QA produced an allocation warning
+  and GTK rendering crash; all five codec fixtures pass with OpenGL. No global
+  graphics configuration is changed. Codec packages require separate privileged
+  installation and are not installed by `install.sh`.
 - Media actions use the ImageMagick and FFmpeg packages already shipped in the
   current Omarchy environment; NAS access uses GVfs SMB/NFS support.
 - Portal routing changes are user-local and backed up before replacement.
@@ -155,7 +165,5 @@ gdbus introspect --session \
   live passive discovery is verified, while authenticated share browsing and
   mounting require a user-selected server/login and remain unverified here.
   Browsing an existing authenticated mount and entering a subfolder are verified.
-- This machine lacks `gst-plugins-good` and `gst-libav`; playback currently
-  shows a codec explanation. Installing them requires administrator approval.
 - Sandboxed-app and native-app Open/Save flows must both be smoke-tested after
   each portal protocol change.

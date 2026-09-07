@@ -50,9 +50,20 @@ limited to 128 KB, and PDFs show their first page with the total page count.
 The selection preview strip and Space-bar preview stay within the existing
 window layout; switching files or opening/closing previews does not resize it.
 Video/audio playback uses GTK/GStreamer and needs the appropriate codecs
-(`gst-plugins-good` and `gst-libav` on Arch). Missing codecs show an explanation
-instead of opening another app. These optional system packages are not installed
-by `install.sh`.
+on Arch. Install the playback stack with:
+
+```bash
+omarchy pkg add gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+```
+
+Missing codecs show an explanation instead of opening another app. These system
+packages are not installed by `install.sh`. Restart the picker after installing
+them. `PYTHONPATH=. python tests/ui_video_playback.py` verifies H.264/AAC MP4,
+HEVC MP4, ProRes MOV, VP9/Opus WebM and AV1 MP4 playback, pause, seeking and
+cleanup using generated test clips; it requires the codec stack to be installed.
+The picker defaults to GTK's OpenGL renderer to avoid a Vulkan video-texture
+crash observed on this desktop. An explicit `GSK_RENDERER` override is respected;
+no desktop-wide renderer setting is changed.
 
 Network search starts every time Connect to NAS opens; Refresh scans again.
 Discovery uses Avahi DNS-SD and GVfs, plus mounted shares and GTK-saved network
