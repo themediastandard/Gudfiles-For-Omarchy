@@ -77,7 +77,7 @@ class QuickLook(Gtk.Widget):
         self.tick_id = 0
         self.generation = 0
         self.media = None
-        self.waiting_for_video = False
+        self.waiting_for_preview = False
         self.aspect_ratio = 0.0
         self.compact_header = False
         self.origin = (0, 0, 100, 100)
@@ -193,17 +193,18 @@ class QuickLook(Gtk.Widget):
         ratio = media.get_intrinsic_aspect_ratio()
         if math.isfinite(ratio) and ratio > 0:
             self._set_aspect_ratio(ratio)
-            self._reveal_video()
+            self._reveal_preview()
         elif not media.has_video():
             # Audio-only files can also use a video container extension.
-            self._reveal_video()
+            self._set_aspect_ratio(0.0)
+            self._reveal_preview()
 
     def _media_prepared(self, media, _property, generation):
         self._media_size_changed(media, generation)
 
-    def _reveal_video(self):
-        if self.waiting_for_video:
-            self.waiting_for_video = False
+    def _reveal_preview(self):
+        if self.waiting_for_preview:
+            self.waiting_for_preview = False
             self.loading_spinner.stop()
             self.loading_spinner.set_visible(False)
             self.card.set_can_target(True)
@@ -211,9 +212,9 @@ class QuickLook(Gtk.Widget):
             self._animate(1.0)
 
     def do_snapshot(self, snapshot):
-        if self.waiting_for_video:
-            # Keep the media widget mapped for decoder preparation, but never
-            # paint its generic landscape-sized card before dimensions arrive.
+        if self.waiting_for_preview:
+            # Keep content mapped for decoder preparation, but don't paint a
+            # guessed card before the first preview's dimensions arrive.
             self.snapshot_child(self.loading_spinner, snapshot)
             return
         if self.progress <= 0:
@@ -242,11 +243,11 @@ class QuickLook(Gtk.Widget):
             self.remove_tick_callback(self.tick_id)
             self.tick_id = 0
         self.target = target
-        if target == 1 and self.waiting_for_video:
+        if target == 1 and self.waiting_for_preview:
             self.queue_draw()
             return
         settings = self.get_settings()
-        if settings and not settings.get_property('gtk-enable-animations'):
+        if self.progress == target or (settings and not settings.get_property('gtk-enable-animations')):
             self.progress = target
             self._animation_done()
             return
@@ -273,6 +274,7 @@ class QuickLook(Gtk.Widget):
             flow = self.owner.flow
             self.set_visible(False)
             self._clear_content()
+            self._set_aspect_ratio(0.0)
             self.owner.preview_overlay.get_child().set_sensitive(True)
             if child:
                 focus_file(self.owner, child)
@@ -301,8 +303,8 @@ class QuickLook(Gtk.Widget):
         if self.media:
             self.media.pause()
         self.origin = self._source_rect(self.path)
-        if self.waiting_for_video:
-            self.waiting_for_video = False
+        if self.waiting_for_preview:
+            self.waiting_for_preview = False
             self.loading_spinner.stop()
             self.loading_spinner.set_visible(False)
             self.card.set_can_target(True)
@@ -312,12 +314,13 @@ class QuickLook(Gtk.Widget):
         self._animate(0.0)
 
     def _clear_content(self):
+        # Replacing asynchronous content must not reset a visible card's shape.
+        # The next decoded result (or closing) supplies the new geometry.
         if self.media:
             self.media.pause()
             self.media = None
         while child := self.content.get_first_child():
             self.content.remove(child)
-        self._set_aspect_ratio(0.0)
 
     def _message(self, text, loading=False):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, valign=Gtk.Align.CENTER, vexpand=True)
@@ -335,12 +338,14 @@ class QuickLook(Gtk.Widget):
         self.generation += 1
         generation = self.generation
         self._clear_content()
-        self.waiting_for_video = (mimetypes.guess_type(path.name)[0] or '').startswith('video/')
-        self.loading_spinner.set_spinning(self.waiting_for_video)
-        self.loading_spinner.set_visible(self.waiting_for_video)
-        self.card.set_can_target(not self.waiting_for_video)
-        if self.waiting_for_video:
-            self.progress = 0.0
+        self.waiting_for_preview = self.progress == 0
+        self.loading_spinner.set_spinning(self.waiting_for_preview)
+        self.loading_spinner.set_visible(self.waiting_for_preview)
+        self.card.set_can_target(not self.waiting_for_preview)
+        if not self.waiting_for_preview:
+            # Arrow navigation replaces the contents of an already open card;
+            # retain its geometry while loading and don't replay the entry zoom.
+            self.progress = 1.0
         self.title.set_text(path.name)
         self.refresh_ratings()
         try:
@@ -386,6 +391,7 @@ class QuickLook(Gtk.Widget):
             if kind == 'pdf':
                 self.caption.set_text(f'{self.details}  ·  Page 1 of {data[1]}  ·  Space to close')
         elif kind == 'text':
+            self._set_aspect_ratio(0.0)
             view = Gtk.TextView(editable=False, monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
             view.get_buffer().set_text(data)
             for side in ('top', 'bottom', 'left', 'right'):
@@ -405,21 +411,23 @@ class QuickLook(Gtk.Widget):
             self._media_size_changed(self.media, generation)
             self._media_error(self.media, None, generation)
         else:
+            self._set_aspect_ratio(0.0)
             self._message(data)
         if kind != 'media':
-            self._reveal_video()
+            self._reveal_preview()
         return False
 
     def _media_error(self, media, _property, generation):
         if media is not None and media is self.media and generation == self.generation and media.get_error():
             error = media.get_error().message
             self._clear_content()
+            self._set_aspect_ratio(0.0)
             if 'plug-in' in error.lower() or 'plugin' in error.lower():
                 self._message('Playback needs additional media codecs.\nInstall gst-plugins-good, gst-plugins-bad,\ngst-plugins-ugly and gst-libav, then reopen Gudfiles.')
             else:
                 self._message('Media preview unavailable.\n' + error.splitlines()[0][:200])
             self.kind = 'info'
-            self._reveal_video()
+            self._reveal_preview()
 
     def step(self, direction):
         files = [p for p in self.owner.entries if p.is_file()]
@@ -434,7 +442,7 @@ class QuickLook(Gtk.Widget):
 
     def _backdrop_click(self, gesture, _count, x, y):
         rx, ry, width, height = self.rect
-        if self.waiting_for_video or not (rx <= x <= rx + width and ry <= y <= ry + height):
+        if self.waiting_for_preview or not (rx <= x <= rx + width and ry <= y <= ry + height):
             gesture.set_state(Gtk.EventSequenceState.CLAIMED)
             self.close()
 

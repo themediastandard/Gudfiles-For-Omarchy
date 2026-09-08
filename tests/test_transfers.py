@@ -63,6 +63,51 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(job.written_bytes, len(self.data) - 65536)
         self.assertEqual(job.verified_bytes, 65536)
 
+    def test_unsupported_metadata_still_publishes_verified_folder(self):
+        folder = self.source / 'folder'
+        folder.mkdir()
+        (folder / 'clip.mov').write_bytes(self.data)
+        (folder / 'empty').mkdir()
+        for operation in ('fchmod', 'utime'):
+            with self.subTest(operation=operation):
+                job = TransferJob([folder], self.dest, duplicate=True)
+                with patch.object(transfers.os, operation,
+                                  side_effect=OSError(errno.EOPNOTSUPP, 'unsupported')):
+                    self.engine.run(job)
+                target = job.completed[folder]
+                self.assertEqual((target / 'clip.mov').read_bytes(), self.data)
+                self.assertTrue((target / 'empty').is_dir())
+                self.assertFalse(job.stage_name)
+        self.assertEqual((folder / 'clip.mov').read_bytes(), self.data)
+
+    def test_real_metadata_errors_retain_verified_partial_for_resume(self):
+        for operation in ('fchmod', 'utime'):
+            for code in (errno.EACCES, errno.EPERM, errno.EIO, errno.ENOSPC):
+                with self.subTest(operation=operation, code=code):
+                    job = self.job()
+                    with patch.object(transfers.os, operation,
+                                      side_effect=OSError(code, 'fixture failure')):
+                        with self.assertRaises(OSError) as raised:
+                            self.engine.run(job)
+                    self.assertEqual(raised.exception.errno, code)
+                    self.assertFalse(job.completed)
+                    self.assertFalse((self.dest / self.file.name).exists())
+                    self.assertEqual(self.file.read_bytes(), self.data)
+                    self.engine.run(job)
+                    self.assertEqual(job.written_bytes, 0)
+                    self.assertEqual((self.dest / self.file.name).read_bytes(), self.data)
+                    (self.dest / self.file.name).unlink()
+
+    def test_unsupported_flush_is_not_treated_as_optional_metadata(self):
+        job = self.job()
+        with patch.object(transfers.os, 'fsync',
+                          side_effect=OSError(errno.EOPNOTSUPP, 'unsupported')):
+            with self.assertRaises(OSError):
+                self.engine.run(job)
+        self.assertFalse(job.completed)
+        self.assertFalse((self.dest / self.file.name).exists())
+        self.assertEqual(self.file.read_bytes(), self.data)
+
     def test_corrupt_partial_refuses_resume_then_explicit_restart_works(self):
         job = self.job()
         stage = self.partial(job)

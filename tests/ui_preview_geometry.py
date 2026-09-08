@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from unittest.mock import patch
 
 import cairo
 import gi
@@ -21,10 +22,12 @@ def settle(milliseconds=120):
 
 def native_window():
     clients = json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
-    return next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker')
+    return next(c for c in clients if c['pid'] == os.getpid()
+                and c['class'].startswith('org.omarchy.FilePicker'))
 
 
-with tempfile.TemporaryDirectory(prefix='picker-preview-size-') as temp:
+with tempfile.TemporaryDirectory(prefix='picker-preview-size-') as temp, \
+        patch.object(Path, 'home', return_value=Path(temp)):
     root = Path(temp)
     for name, width, height in [('portrait', 100, 1600), ('landscape', 1600, 100), ('square', 500, 500)]:
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
@@ -48,11 +51,11 @@ with tempfile.TemporaryDirectory(prefix='picker-preview-size-') as temp:
                             'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True)
             settle(350)
         subprocess.run(['hyprctl', 'dispatch',
-                        'hl.dsp.window.resize({x=1040,y=680,relative=false,window=' + selector + '})'], check=True)
+                        'hl.dsp.window.resize({x=1200,y=820,relative=false,window=' + selector + '})'], check=True)
         settle(350)
         baseline = native_window()
         geometry = (baseline['at'], baseline['size'])
-        assert baseline['size'] == [1040, 680], baseline['size']
+        assert baseline['size'] == [1200, 820], baseline['size']
         measure = lambda: (window.measure(Gtk.Orientation.HORIZONTAL, -1)[:2],
                            window.measure(Gtk.Orientation.VERTICAL, window.get_width())[:2])
         initial_measure = measure()

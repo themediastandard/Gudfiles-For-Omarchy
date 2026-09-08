@@ -20,17 +20,46 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         self.set_propagate_natural_width(False)
         self.box = Gtk.Box()
         self.set_child(self.box)
-        self.reveal_pending = False
-        self.get_hadjustment().connect('changed', self._reveal)
+        # The viewport otherwise follows the focused ancestor and undoes our
+        # horizontal reveal as soon as the child column is allocated.
+        self.get_child().set_scroll_to_focus(False)
+        self.reveal_tick = 0
         click = Gtk.GestureClick(button=0)
         click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        click.connect('pressed', lambda _g, _n, x, y: self.activate_at(self, x, y))
+        click.connect('pressed', lambda g, _n, x, y: self.activate_at(
+            self, x, y, reveal=g.get_current_button() == Gdk.BUTTON_PRIMARY))
         self.add_controller(click)
 
-    def _reveal(self, adjustment):
-        if self.reveal_pending:
-            adjustment.set_value(max(0, adjustment.get_upper() - adjustment.get_page_size()))
-            self.reveal_pending = False
+    def reveal_column(self, column):
+        self.cancel_reveal()
+        attempts, stable, previous = 0, 0, None
+
+        def reveal(_widget, _clock):
+            nonlocal attempts, stable, previous
+            attempts += 1
+            if column not in self.columns or attempts >= 60:
+                self.reveal_tick = 0
+                return False
+            adjustment = self.get_hadjustment()
+            valid, bounds = column.panel.compute_bounds(self.box)
+            layout = (bounds.get_x(), bounds.get_width(), adjustment.get_upper(),
+                      adjustment.get_page_size()) if valid else None
+            stable = stable + 1 if layout == previous else 0
+            previous = layout
+            # Run after allocation and GTK's focus scrolling. Replacing a column
+            # of the same width (including an empty folder) emits no size change.
+            if not valid or bounds.get_width() <= 0 or adjustment.get_page_size() <= 0 or stable < 2:
+                return True
+            adjustment.clamp_page(bounds.get_x(), bounds.get_x() + bounds.get_width())
+            self.reveal_tick = 0
+            return False
+
+        self.reveal_tick = self.add_tick_callback(reveal)
+
+    def cancel_reveal(self):
+        if self.reveal_tick:
+            self.remove_tick_callback(self.reveal_tick)
+            self.reveal_tick = 0
 
     def cancel_pending(self):
         if self.pending:
@@ -39,6 +68,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
 
     def reset(self):
         self.cancel_pending()
+        self.cancel_reveal()
         self.focus_restore = None
         self.busy = True
         for column in self.columns:
@@ -86,7 +116,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             self.focus_column(column)
         self.busy = False
 
-    def focus_column(self, column):
+    def focus_column(self, column, path=None):
         # Newly constructed flows are not mapped yet. GTK otherwise restores
         # focus into the first ancestor and emits a spurious selection there.
         self.focus_restore = column
@@ -94,8 +124,9 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             if self.focus_restore is column and column in self.columns:
                 self.activate(column, record=False)
                 selected = column.flow.get_selected_children()
-                if selected:
-                    focus_file(self.owner, selected[0])
+                child = column.children.get(path) or (selected[0] if selected else None)
+                if child:
+                    focus_file(self.owner, child)
                 else:
                     self.owner.set_focus(column.flow)
                 valid, bounds = column.panel.compute_bounds(self.box)
@@ -158,7 +189,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         flow.add_controller(keys)
         self.columns.append(column)
         self.box.append(panel)
-        self.reveal_pending = True
+        self.reveal_column(column)
         return column
 
     def _populate(self, column):
@@ -211,7 +242,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
                     if path in column.children:
                         column.flow.select_child(column.children[path])
                 if focused_path:
-                    owner.set_focus(column.children.get(focused_path, column.flow))
+                    self.focus_column(column, focused_path)
             if self.active:
                 self.activate(self.active, record=False)
                 owner._on_selection_changed(self.active.flow)
@@ -246,13 +277,24 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             owner._update_nav_state()
             owner._update_active_location()
 
-    def activate_at(self, widget, x, y):
+    def activate_at(self, widget, x, y, *, reveal=False):
         picked = widget.pick(x, y, Gtk.PickFlags.DEFAULT)
+        row = None
         while picked and not isinstance(picked, Gtk.Popover):
+            if isinstance(picked, Gtk.FlowBoxChild):
+                row = picked
             column = next((c for c in self.columns if c.panel is picked), None)
             if column:
                 self.activate(column)
-                self.owner.set_focus(column.flow)
+                # Leave file-row focus to GTK's native click handling. Focusing
+                # the whole flow during capture can scroll to its old cursor
+                # before the row receives the click.
+                if row is None:
+                    self.owner.set_focus(column.flow)
+                elif reveal and row.is_selected() and len(column.flow.get_selected_children()) == 1:
+                    index = self.columns.index(column) + 1
+                    if index < len(self.columns) and self.columns[index].path == row._picker_path:
+                        self.reveal_column(self.columns[index])
                 self.owner._on_selection_changed(column.flow)
                 return
             picked = picked.get_parent()
@@ -280,6 +322,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         target = selected[0] if len(selected) == 1 and selected[0].is_dir() else None
         index = self.columns.index(self.active) + 1
         if index < len(self.columns) and self.columns[index].path == target:
+            self.reveal_column(self.columns[index])
             return False
         self.busy = True
         try:
@@ -294,22 +337,34 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             self.append(target)
         return False
 
+    def enter_folder(self, column, path=None):
+        """Enter the adjacent column without rebuilding scrolled ancestors."""
+        self.activate(column)
+        if path is not None:
+            column.flow.handler_block(column.handler)
+            try:
+                column.flow.unselect_all()
+                column.flow.select_child(column.children[path])
+            finally:
+                column.flow.handler_unblock(column.handler)
+        self.cancel_pending()
+        self._open_selection()
+        index = self.columns.index(column) + 1
+        if index < len(self.columns):
+            destination = self.columns[index]
+            self.activate(destination)
+            self.focus_column(destination)
+            if destination.children and not destination.flow.get_selected_children():
+                destination.flow.select_child(next(iter(destination.children.values())))
+            else:
+                self.owner._on_selection_changed(destination.flow)
+
     def _key(self, _controller, keyval, _code, state, column):
         if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SHIFT_MASK):
             return False
         self.activate(column)
         if keyval == Gdk.KEY_Right:
-            self.cancel_pending()
-            self._open_selection()
-            index = self.columns.index(column) + 1
-            if index < len(self.columns):
-                destination = self.columns[index]
-                self.activate(destination)
-                self.focus_column(destination)
-                if destination.children and not destination.flow.get_selected_children():
-                    destination.flow.select_child(next(iter(destination.children.values())))
-                else:
-                    self.owner._on_selection_changed(destination.flow)
+            self.enter_folder(column)
             return True
         if keyval == Gdk.KEY_Left:
             index = self.columns.index(column)

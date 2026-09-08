@@ -170,7 +170,7 @@ class BrowserTabs(Gtk.Box):
                         owner.flow.select_child(child)
                 owner.flow.handler_unblock(owner.selection_changed_handler)
                 if owner.view_mode == 'columns':
-                    owner.columns.reveal_pending = False
+                    owner.columns.cancel_reveal()
                     owner.columns.get_hadjustment().set_value(state.get('horizontal', 0))
                     positions = {p: y for p, _selected, y in state.get('columns', [])}
                     for column in owner.columns.columns:

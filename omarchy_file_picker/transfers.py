@@ -417,8 +417,18 @@ class TransferEngine:
                     # Keep owner read/write/traverse on folders for recovery if
                     # publication fails. This is a data copy, not an ACL archive.
                     mode = stat.S_IMODE(entry.stamp[2]) & 0o777
-                    os.fchmod(fd, mode | (0o700 if stat.S_ISDIR(entry.stamp[2]) else 0o600))
-                    os.utime(fd, ns=(entry.stamp[4], entry.stamp[4]))
+                    # SMB/GVfs can copy and verify bytes but cannot represent
+                    # POSIX modes (or timestamps). Unsupported metadata is
+                    # optional; permission, connection and I/O failures are not.
+                    for apply_metadata in (
+                        lambda: os.fchmod(fd, mode | (0o700 if stat.S_ISDIR(entry.stamp[2]) else 0o600)),
+                        lambda: os.utime(fd, ns=(entry.stamp[4], entry.stamp[4])),
+                    ):
+                        try:
+                            apply_metadata()
+                        except OSError as error:
+                            if error.errno not in {errno.ENOTSUP, errno.EOPNOTSUPP}:
+                                raise
                 finally:
                     os.close(fd)
         job.checkpoint()

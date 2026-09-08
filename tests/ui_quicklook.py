@@ -12,6 +12,8 @@ from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
 from omarchy_file_picker.quicklook import read_preview
 
+GLib.set_application_name('Gudfiles Quick Look QA')
+
 
 def wait_for(predicate, timeout=5):
     loop = GLib.MainLoop()
@@ -122,6 +124,8 @@ with tempfile.TemporaryDirectory(prefix='quicklook-qa-') as directory:
         animations = settings.get_property('gtk-enable-animations')
         settings.set_property('gtk-enable-animations', False)
         preview.show_file(picture)
+        # Reduced motion still waits for decoded geometry, then reveals directly.
+        wait_for(lambda: preview.kind == 'image')
         assert preview.progress == 1
         preview.close()
         assert not preview.get_visible()

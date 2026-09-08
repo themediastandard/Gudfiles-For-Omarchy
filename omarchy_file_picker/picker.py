@@ -1000,7 +1000,13 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _on_child_activated(self, _flow: Gtk.FlowBox, child: Gtk.FlowBoxChild) -> None:
         path = child._picker_path  # type: ignore[attr-defined]
         if path.is_dir():
-            self.navigate(path)
+            if self.view_mode == 'columns':
+                column = next(c for c in self.columns.columns if c.flow is _flow)
+                self.columns.enter_folder(column, path)
+            else:
+                self.navigate(path)
+        elif self.request.explorer and path.suffix.casefold() == '.zip':
+            self._extract_zip(path)
         else:
             self._accept()
 
@@ -1388,7 +1394,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
 
         process.communicate_utf8_async(None, None, on_finished)
 
-    def _show_conversion_notice(self, output: Path) -> None:
+    def _show_conversion_notice(self, output: Path, *, headline='Conversion complete', working=False) -> None:
         if not hasattr(self, 'conversion_notice'):
             notice = Gtk.Revealer(halign=Gtk.Align.END, valign=Gtk.Align.END)
             notice.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
@@ -1399,9 +1405,14 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             row.add_css_class('conversion-notice')
             icon = Gtk.Image.new_from_icon_name('emblem-ok-symbolic')
             icon.add_css_class('conversion-success')
-            row.append(icon)
+            self.conversion_notice_status = Gtk.Stack()
+            self.conversion_notice_status.add_named(icon, 'complete')
+            self.conversion_notice_spinner = Gtk.Spinner()
+            self.conversion_notice_status.add_named(self.conversion_notice_spinner, 'working')
+            row.append(self.conversion_notice_status)
             copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-            copy.append(label('Conversion complete', 'metadata-title'))
+            self.conversion_notice_headline = label('', 'metadata-title')
+            copy.append(self.conversion_notice_headline)
             self.conversion_notice_filename = label('', 'muted')
             self.conversion_notice_filename.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             self.conversion_notice_filename.set_max_width_chars(36)
@@ -1418,6 +1429,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self.conversion_notice = notice
             self.conversion_notice_timer = 0
         self._dismiss_conversion_notice()
+        self.conversion_notice_status.set_visible_child_name('working' if working else 'complete')
+        self.conversion_notice_spinner.set_spinning(working)
+        self.conversion_notice_headline.set_text(headline)
         self.conversion_notice_filename.set_text(output.name)
         self.conversion_notice_filename.set_tooltip_text(str(output))
         self.conversion_notice.set_reveal_child(True)
@@ -1425,9 +1439,11 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self.conversion_notice_timer = 0
             self.conversion_notice.set_reveal_child(False)
             return False
-        self.conversion_notice_timer = GLib.timeout_add_seconds(8, expire)
+        if not working:
+            self.conversion_notice_timer = GLib.timeout_add_seconds(8, expire)
 
     def _dismiss_conversion_notice(self) -> None:
+        self.conversion_notice_spinner.stop()
         if self.conversion_notice_timer:
             GLib.source_remove(self.conversion_notice_timer)
             self.conversion_notice_timer = 0

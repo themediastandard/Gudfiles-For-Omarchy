@@ -7,6 +7,31 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Locations without Trash support, including the verified SMB NAS shares, show
+  an explicit permanent-delete confirmation after GIO reports `NOT_SUPPORTED`.
+  Cancel keeps the unsupported items intact; successful Trash items are excluded
+  from that confirmation. Source identities/metadata are rechecked before the
+  confirmed deletion. Permission/I/O/read-only failures do not offer this
+  fallback, and partial failures report completed/not-completed counts. Removal
+  refreshes preserve visible column trails and avoid redirecting another tab.
+- Column row clicks preserve vertical position and native selection. New child
+  columns are revealed after layout, including empty folders, equal-width sibling
+  replacements and re-clicking an already selected folder. The horizontal
+  viewport no longer overrides reveal to follow focus in the parent column.
+  Folder double-click/Enter enters the adjacent column without rebuilding and
+  resetting the scrolled ancestors.
+- Double-clicking a ZIP in explorer mode extracts it into a new sibling folder
+  named after the archive, using ` (1)`, ` (2)`, etc. for collisions. The archive
+  and existing entries remain intact. A background worker shows an Extracting
+  notice, then completion or an error; duplicate work and normal close are guarded.
+  Visible destination columns refresh without discarding the trail or switching
+  tabs. Open/Save dialogs keep ordinary ZIP selection behavior.
+  Extraction validates relative paths, rejects encrypted entries, links and
+  special files, checks ZIP CRCs through streamed reads and publishes the complete
+  staged tree using atomic no-overwrite rename. Failure removes unpublished
+  staging; forced process termination can leave a hidden staging directory.
+  The limit is 100,000 archive entries; extraction has no pause/resume or password
+  prompt and is separate from the transfer queue.
 - External file-manager requests use `org.omarchy.FilePicker.External`.
   `ShowItems` groups requested items by parent folder and selects them after
   layout, including folder entries, hidden files, symlinks and escaped names.
@@ -273,10 +298,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Image, PDF and video preview cards fit the displayed media's aspect ratio
   within the existing window bounds. Narrow previews put ratings below the
   title/navigation row; extreme portrait media retains enough width for usable
-  controls. Video opening waits for a prepared stream with valid display
-  dimensions before drawing or animating the card. A frameless spinner covers
-  slow initialization; no generic wide card or backdrop flash is shown first.
-  File switching, cancellation and reduced motion follow the same rule. Text,
+  controls. First opening waits for decoded content (and prepared video display
+  dimensions) before drawing or animating the card. A frameless spinner covers
+  slow initialization. Arrow navigation keeps an already open card at its last
+  aspect while the next file loads, then fits the decoded result without replaying
+  the opening zoom. Cancellation and reduced motion preserve these rules. Text,
   audio-only and unavailable previews retain the general-purpose frame.
 - Image previews support pointer-anchored scroll zoom from fit to 8×, bounded
   drag panning and double-click to fit. Each new image starts fitted. Drawing
@@ -300,6 +326,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/archives.py` — streamed ZIP validation/extraction, private
+  staging, collision naming and atomic publication; `FileManagement._extract_zip`
+  owns background work and the shared operation notice.
 - `omarchy_file_picker/sound_effects.py` / `sounds/` — optional `paplay` action
   audio, shared mute readback and original 170–320 ms PCM cues. Effects use the
   separate Gudfiles Sound Effects audio identity with half stream volume.
@@ -458,6 +487,18 @@ gdbus introspect --session \
   scrolling, sorted preview navigation/close and nested column transitions.
   Pointer fixtures scroll target rows into view and wait for GTK's scroll
   animation before clicking; stale coordinates can click a different row.
+- `tests/ui_column_clicks.py` uses isolated Xvfb/xdotool to check first clicks in
+  deeply scrolled columns (including transient adjustment changes), ancestor
+  context clicks and visible populated/empty/reselected children. Set
+  `COLUMN_CLICKS_QA_SCREENSHOT` for an optional native snapshot.
+  `tests/ui_archives.py` uses the same `POINTER_QA_ISOLATED=1` / `XDOTOOL` setup
+  for real ZIP double clicks in all views, output bytes, collision naming,
+  running/success/error notices, duplicate and close guards, tab changes, post-
+  refresh arrow navigation and Open/Save selection. `ARCHIVES_QA_SCREENSHOT`
+  captures the completion notice. Unit checks: `python -m unittest tests.test_archives -v`.
+  Refreshed column rows must initialize GTK's native cursor through `focus_file`
+  after allocation. Directly setting root focus reproduced a SIGSEGV on the next
+  Up key after ZIP extraction; the regression now exercises that actual key.
 - `tests/ui_sorting.py` uses disposable timestamps and preferences to verify all
   eight sort choices in all views, native row order, selection, folder grouping,
   search/tabs and saved explorer/Open/Save choices. `SORT_QA_SCREENSHOTS=/tmp/sort`
@@ -642,6 +683,13 @@ gdbus introspect --session \
   ignores that fixture's rotation tag, so metadata-only autorotation remains a
   separate decoder limitation. Keep native autoplay behavior: sizing gates paint
   and animation, without introducing a separate media playback state machine.
+- `tests/ui_preview_navigation_size.py` sends actual Up/Down keys with an already
+  open portrait preview on the isolated Xvfb/xdotool display. Every painted frame
+  must retain the card's bounds and full visibility through image/image,
+  image/video and video/video switches, including delayed reads/dimensions,
+  rapid arrows and stale callbacks. It also checks initial image sizing, reduced
+  motion and transitions to landscape/text/error/audio previews. Optional
+  `NAVIGATION_PREVIEW_SCREENSHOTS` captures loading and decoded native snapshots.
 - Playback QA compares media timestamps with monotonic elapsed time and sets a
   distinct GLib application name before creating a player. PipeWire/PulseAudio
   remembers stream mute and volume by application name outside the isolated home;
@@ -701,6 +749,65 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Portrait navigation verification (2026-09-08): actual isolated Up/Down input
+  reproduced the open image card reverting to a 940-pixel-wide loading frame.
+  The fix retains decoded aspect through replacement and avoids restarting the
+  video entry animation. Every painted navigation frame now keeps the same
+  portrait bounds through image/image, image/video and video/video switches.
+  Delayed reads/dimensions, rapid arrows, stale results, close during loading,
+  reduced motion and landscape/text/error/audio fallbacks passed. Loading and
+  decoded snapshots were reviewed. All 206 unit tests, five-codec playback,
+  image zoom, Quick Look, real all-view arrows, and Wayland aspect/window-geometry
+  checks passed. All 46 installed runtime files match source; navigation,
+  initial-frame and Quick Look checks also passed against the installed package.
+  The portal remains active and existing NAS-transfer changes remain intact.
+
+- NAS Trash verification (2026-09-08): both mounted SMB shares returned GIO
+  `NOT_SUPPORTED` for disposable files through both their local GVfs path and
+  native SMB URI; originals were preserved. Native GTK fixture checks on both
+  actual shares verified the unavailable-Trash dialog, Cancel preservation and
+  explicitly confirmed permanent deletion. Only fixture-owned paths were changed.
+  No server recycle-bin configuration or recoverable NAS Trash was added.
+  206 unit tests passed, including mixed-location selection, partial failures,
+  permission/I/O errors, changed/replaced targets and symlink target preservation.
+  Native all-view removal, action-sound, file-management and ZIP regressions
+  passed; the NAS confirmation snapshot was reviewed. `tests/ui_trash.py` accepts
+  newline-separated `TRASH_QA_MOUNT_PATHS` for unique fixtures on live shares and
+  optional `TRASH_QA_SCREENSHOT`; use the established isolated Xvfb workflow.
+  Installed/source parity passed for all 46 runtime files, and the native live
+  NAS Cancel/delete checks passed again against the installed package.
+
+- Column/ZIP verification (2026-09-08): 197 unit tests passed. Isolated native
+  Xvfb/xdotool checks cover single and double folder clicks after deep scrolling,
+  ancestor context clicks, populated/empty/reselected-child reveal, ZIP double
+  clicks in all views, original/output bytes, collision naming, visible working/
+  completion/error states, duplicate/close guards, tab changes and post-extraction
+  arrow navigation. Folder double-click previously rebuilt the parents at scroll
+  zero; horizontal reveal was also undone by viewport focus following. Both are
+  covered by physical-input regressions. Column, arrow, tab/drag, transfer,
+  conversion-notice and explorer/Open/Save suites passed; the original column
+  suite also passed natively on Wayland. Empty-column and extraction screenshots
+  were reviewed. All 46 installed runtime files match source; the column-click
+  and ZIP suites also passed against the final installed package. ZIPs with links,
+  special files or encryption are explicitly unsupported; real user archives
+  and physical Wayland pointer input remain separate from these fixture checks.
+  Existing NAS-transfer changes were preserved.
+
+- NAS metadata fix (2026-09-07): a real SMB/GVfs copy reproduced `EOPNOTSUPP`
+  from `fchmod` after successful byte verification. Copies now tolerate only
+  unsupported mode/timestamp metadata; permission, I/O and flush failures still
+  stop the transfer. All 185 unit tests pass. Disposable fixtures on both mounted
+  NAS shares passed file/folder/empty-folder copies, duplicate naming, byte
+  comparisons and injected interruption/resume, with originals preserved and
+  staging cleaned. Tab drop policy selects copy for the actual NAS mount.
+  Installed with `./install.sh` after the existing failed job was cancelled via
+  Transfers → Cancel unfinished & close. The idle FileManager1 service was
+  stopped for installation; it reactivates on demand. Installed/source transfer
+  modules match, and fresh installed-engine copies passed on both NAS shares.
+  Downloads was reopened with the original file selected. Failed jobs count as
+  unfinished, so ordinary window close opens Transfers; use its explicit cancel
+  and close control rather than repeatedly closing the panel.
 
 - External reveal verification (2026-09-07): 182 unit tests passed. Native
   reveal QA verifies grid/list/columns, offscreen items, hidden files, multiple
@@ -809,8 +916,9 @@ gdbus introspect --session \
   transfer-mode/transfer/file-management,
   columns, selection, drag selection, layout, preview geometry, Quick Look,
   sidebar/menu, active filters, breadcrumbs, explorer and selection-summary
-  suites passed. Live NAS transfer failure/recovery and real user media remain
-  unverified. Resume after reconnect requires stable identities; it deliberately
+  suites passed. Live NAS copies and injected interruption/resume are now verified
+  as described above; physical reconnect and real user media remain unverified.
+  Resume after reconnect requires stable identities; it deliberately
   refuses to trust an unrelated replacement mount/source/partial file.
   A real disposable cross-filesystem copy and move refusal were also verified
   between the local fixture filesystem and `/dev/shm`.

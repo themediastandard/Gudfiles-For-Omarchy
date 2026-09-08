@@ -4,7 +4,35 @@ import os
 import shutil
 from urllib.parse import unquote, urlparse
 
-from gi.repository import Gio
+from gi.repository import Gio, GLib
+
+
+class RemovalError(Exception):
+    def __init__(self, message, *, completed, remaining):
+        super().__init__(message)
+        self.completed = tuple(completed)
+        self.remaining = tuple(remaining)
+
+
+class TrashUnavailable(RemovalError):
+    def __init__(self, paths, completed, signatures):
+        super().__init__('Trash is not available in this location.',
+                         completed=completed, remaining=paths)
+        self.signatures = signatures
+
+
+def _removal_signature(path):
+    info = path.lstat()
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+            info.st_mtime_ns, info.st_ctime_ns)
+
+
+def delete_after_trash_failure(failure):
+    """Revalidate the exact unsupported items after explicit delete confirmation."""
+    for path in failure.remaining:
+        if _removal_signature(path) != failure.signatures[path]:
+            raise ValueError(f'“{path.name}” changed while the dialog was open. Select it again to delete it.')
+    return remove_items(list(failure.remaining), permanent=True)
 
 
 def create_untitled_text(directory: Path) -> Path:
@@ -74,12 +102,30 @@ def remove_items(paths: list[Path], permanent: bool = False) -> list[Path]:
     for path in paths:
         if not path.name or path == Path.home():
             raise ValueError('This location cannot be removed from the picker.')
-        if not permanent:
-            Gio.File.new_for_path(str(path)).trash(None)
-        elif path.is_dir() and not path.is_symlink():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
+    completed, unavailable, signatures = [], [], {}
+    for index, path in enumerate(paths):
+        try:
+            if not permanent:
+                signature = _removal_signature(path)
+                try:
+                    if not Gio.File.new_for_path(str(path)).trash(None):
+                        raise OSError('The file could not be moved to Trash.')
+                except GLib.Error as error:
+                    if not error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_SUPPORTED):
+                        raise
+                    unavailable.append(path)
+                    signatures[path] = signature
+                    continue
+            elif path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            completed.append(path)
+        except (OSError, GLib.Error) as error:
+            raise RemovalError(str(error), completed=completed,
+                               remaining=[*unavailable, *paths[index:]]) from error
+    if unavailable:
+        raise TrashUnavailable(unavailable, completed, signatures)
     return []
 
 

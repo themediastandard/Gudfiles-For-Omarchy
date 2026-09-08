@@ -11,7 +11,8 @@ from gi.repository import Gdk, Gio, GLib, Gtk
 
 from .dialogs import PickerDialog, confirmation, detail_card, entry_field, file_summary, path_list, section
 
-from .file_actions import parse_file_clipboard, remove_items, rename_item, transfer_items
+from .file_actions import (RemovalError, TrashUnavailable, delete_after_trash_failure,
+                          parse_file_clipboard, remove_items, rename_item, transfer_items)
 from .transfer_ui import TransferUI
 from .sound_effects import ActionSounds
 
@@ -205,7 +206,7 @@ class FileManagement(TransferUI):
         except (OSError, UnicodeError, GLib.Error) as error:
             self._show_error('Could not update bookmarks', str(error))
 
-    def _run_file_job(self, title, work, finished=None):
+    def _run_file_job(self, title, work, finished=None, *, refresh=None, failed=None):
         if self.file_job_active:
             self._show_error('File operation in progress', 'Wait for it to finish before starting another.')
             return
@@ -215,18 +216,51 @@ class FileManagement(TransferUI):
             try:
                 paths, error = work(), None
             except Exception as exc:
-                paths, error = [], str(exc)
+                paths, error = [], exc
             GLib.idle_add(complete, paths, error)
         def complete(paths, error):
             self.file_job_active = False
             self.set_title(self.request.title)
-            self._refresh_files(paths or [])
+            if refresh:
+                refresh(paths or [])
+            else:
+                self._refresh_files(paths or [])
             if error:
-                self._show_error(title + ' failed', error + '\nAny completed items remain in their new location.')
+                if not failed or not failed(error):
+                    self._show_error(title + ' failed', str(error) + '\nAny completed items remain in their new location.')
             elif finished:
                 finished()
             return False
         threading.Thread(target=worker, daemon=True).start()
+
+    def _extract_zip(self, path):
+        from .archives import extract_zip
+        if self.file_job_active:
+            self._show_error('File operation in progress', 'Wait for it to finish before starting another.')
+            return
+        outputs = []
+
+        def work():
+            outputs.append(extract_zip(path))
+            return outputs
+
+        def refresh(paths):
+            self._dismiss_conversion_notice()
+            if not paths:
+                return
+            # Browsing remains available while extracting. Refresh only visible
+            # destinations, without taking the user back from another folder/tab.
+            if self.view_mode == 'columns':
+                self.columns.refresh_paths({path.parent})
+            elif self.current_dir == path.parent or self.special_mode == 'recent':
+                self._refresh_files()
+
+        def finished():
+            self._show_conversion_notice(outputs[0], headline='Extraction complete')
+            self._play_sound('complete')
+
+        self._show_conversion_notice(path, headline='Extracting ZIP…', working=True)
+        self._run_file_job('ZIP extraction', work, finished, refresh=refresh)
 
     def _refresh_files(self, selected=None):
         if getattr(self, "_restoring_tab", False):
@@ -292,11 +326,42 @@ class FileManagement(TransferUI):
     def _confirm_remove(self, paths, permanent=False):
         if not paths: return
         action = 'Delete permanently' if permanent else 'Move to Trash'
-        detail = ('This cannot be undone.' if permanent else 'You can restore these items from Trash.')
+        detail = ('This cannot be undone.' if permanent else
+                  'Items moved to Trash can be restored. If a location does not support Trash, Gudfiles will ask before deleting permanently.')
         return confirmation(self, f'{action}?', detail, action, paths,
                             lambda: self._run_file_job(action, lambda: remove_items(paths, permanent),
-                                lambda: self._play_sound('delete' if permanent else 'trash')),
+                                lambda: self._play_sound('delete' if permanent else 'trash'),
+                                refresh=lambda _: self._refresh_removed(paths),
+                                failed=lambda error: self._remove_failed(error, permanent)),
                             destructive=permanent)
+
+    def _refresh_removed(self, paths):
+        if self.view_mode == 'columns':
+            self.columns.refresh_paths({path.parent for path in paths})
+        elif self.current_dir in {path.parent for path in paths} or self.special_mode == 'recent':
+            self._refresh_files()
+
+    def _remove_failed(self, error, permanent=False):
+        if isinstance(error, TrashUnavailable) and not permanent:
+            detail = ('This location does not support Trash. You can delete the listed items permanently instead. '
+                      'This cannot be undone. Cancel keeps them in place.')
+            if error.completed:
+                count = len(error.completed)
+                detail += f' {count} other item{"s were" if count != 1 else " was"} already moved to Trash.'
+            confirmation(self, 'Trash is not available', detail, 'Delete permanently',
+                         list(error.remaining),
+                         lambda: self._run_file_job('Delete permanently',
+                             lambda: delete_after_trash_failure(error), lambda: self._play_sound('delete'),
+                             refresh=lambda _: self._refresh_removed(error.remaining),
+                             failed=lambda failure: self._remove_failed(failure, True)),
+                         destructive=True)
+            return True
+        if isinstance(error, RemovalError):
+            action = 'Permanently deleted' if permanent else 'Moved to Trash'
+            detail = f'{error}\n\n{action}: {len(error.completed)}. Not completed: {len(error.remaining)}.'
+            self._show_error('Delete failed' if permanent else 'Move to Trash failed', detail)
+            return True
+        return False
 
     def _copy_location(self, paths):
         self.get_clipboard().set('\n'.join(str(p.absolute()) for p in paths))
