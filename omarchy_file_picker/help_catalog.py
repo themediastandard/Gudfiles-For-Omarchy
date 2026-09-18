@@ -137,6 +137,9 @@ FEATURES = (
     Feature('transfers', 'Copy, cut & paste',
             'Copy with Ctrl + C or cut with Ctrl + X, visit the destination, then paste with Ctrl + V. Transfers shows progress. Filename collisions are not overwritten.',
             'Ctrl + C / X / V', 'clipboard move'),
+    Feature('transfers', 'Copy to or Move to a folder',
+            'Select one or more files or folders, right-click and choose Copy to… or Move to…. Browse to a destination in Gudfiles, then choose Copy here or Move here. Cancel leaves everything in place. Progress appears in Transfers and your clipboard stays unchanged. Copies use an available name; moves stop on name collisions and currently work only within the same filesystem.',
+            keywords='destination choose folder multiple selection copy move'),
     Feature('transfers', 'Drag files between folders',
             'Drag files or a selection onto a folder, sidebar location or tab. Files move on the same disk and copy to a different disk. Hover over a tab to switch to it while dragging. A drop in the original folder does nothing.',
             keywords='drag drop move disk volume'),
@@ -176,7 +179,7 @@ FEATURES = (
             keywords='movie format export'),
 
     Feature('locations', 'Favorites & recent files',
-            'Use the sidebar for common folders, Recent and mounted devices. Right-click a folder and choose More → Add to Bookmarks to pin it. Bookmarks are shared with GTK apps.'),
+            'Use the sidebar for common folders, Recent and mounted devices. Open a folder, right-click empty space and choose Folder → Add to Bookmarks to pin it. Bookmarks are shared with GTK apps.'),
     Feature('locations', 'Make the sidebar yours',
             'Drag its divider to resize; the width is remembered. Right-click a location to Remove from Sidebar without deleting it. Restore Default Locations brings hidden defaults back.'),
     Feature('locations', 'Open another Gudfiles window',

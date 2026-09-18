@@ -121,6 +121,11 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-context-hover-') as temp:
                         move(second)
                         assert second.get_popover().get_mapped()
                         assert not first.get_popover().get_mapped()
+                        for target in (first, second, first, second):
+                            move(target, delay=200)
+                            assert target.get_popover().get_mapped(), 'Repeated sibling hover stopped responding'
+                            other = second if target is first else first
+                            assert not other.get_popover().get_mapped()
                         # A plain action closes the old submenu, keeping the root.
                         plain = next(row for row in rows if isinstance(row, Gtk.Button))
                         move(plain, delay=450)

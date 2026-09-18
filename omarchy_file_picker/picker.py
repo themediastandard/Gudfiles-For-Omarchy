@@ -131,10 +131,13 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
 
 
 class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationWindow):
-    def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None):
+    def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None,
+                 *, on_result=None):
         super().__init__(application=app, title=request.title)
         self.request = request
         self.result_path = result_path
+        self.on_result = on_result
+        self.finished = False
         self.current_dir = request.current_folder
         self.special_mode: str | None = None
         self.history = [self.current_dir]
@@ -166,8 +169,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.preview_overlay.add_overlay(self.quicklook)
         self.preview_overlay.set_measure_overlay(self.quicklook, False)
         self.preview_overlay.set_clip_overlay(self.quicklook, True)
-        self.volume_monitor.connect("mount-added", lambda *_args: self._refresh_sidebar())
-        self.volume_monitor.connect("mount-removed", lambda *_args: self._refresh_sidebar())
+        mount_handlers = [self.volume_monitor.connect(signal, lambda *_args: self._refresh_sidebar())
+                          for signal in ('mount-added', 'mount-removed')]
+        self.connect('unrealize', lambda *_: [self.volume_monitor.disconnect(handler)
+                                            for handler in mount_handlers])
         self._install_shortcuts()
         self.connect('close-request', self._on_close_requested)
         if self.file_preferences['view_mode'] == self.view_mode:
@@ -1761,16 +1766,24 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         return results
 
     def _finish(self, *, cancelled: bool = False, paths: list[Path] | None = None) -> None:
+        if self.finished:
+            return
         if self._guard_transfer_close(lambda: self._finish(cancelled=cancelled, paths=paths)):
             return
         if self.file_job_active:
             self._show_error('File operation in progress', 'Wait for the operation to finish before closing the picker.')
             return
+        self.finished = True
         if self.sidebar_save_timer:
             self._save_sidebar_width()
         self.media_details.close()
         self.action_sounds.close()
         self._close_search()
+        if self.on_result is not None:
+            callback, self.on_result = self.on_result, None
+            self.destroy()
+            callback(None if cancelled else list(paths or []))
+            return
         if self.request.explorer:
             self.get_application().quit()
             return

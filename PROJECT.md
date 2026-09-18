@@ -7,6 +7,20 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Switching right-click submenus closes the previous popup before mapping its
+  sibling. The shared MenuButton pre-popup callback covers hover, click and
+  keyboard activation and respects Wayland's popup-grab ordering.
+- Right-clicking a file or selection offers **Copy to…** and **Move to…**.
+  A modal Gudfiles folder picker chooses the destination with Copy here/Move
+  here; it captures the source selection and leaves the clipboard unchanged.
+  Cancel/close schedules nothing. The parent owns progress, queue controls,
+  refreshes, move annotation receipts and close guards. Copies choose available
+  names; moves retain the existing no-overwrite and same-filesystem constraints.
+  The folder prompt closes with its owner and never quits the parent app or
+  writes an Open/Save result. Existing paused/failed queues remain held until
+  resumed in Transfers.
+  Copy/Move use supported neutral symbolic icons; the file-selection menu has
+  no More submenu. Bookmarking remains under the background Folder menu.
 - Search offers **This folder** and **Whole computer** in the magnifying-glass
   popover. This folder retains the immediate-folder name filter. Whole computer
   recursively searches accessible files and already-mounted drives, starting
@@ -457,6 +471,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 python -m unittest discover -v
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
+GDK_BACKEND=wayland G_DEBUG=fatal-warnings PYTHONPATH=. python tests/ui_context_switching.py
 TAB_MOTION_SCREENSHOTS=/tmp/gudfiles-tab-motion PYTHONPATH=. python tests/ui_tab_motion.py
 SEARCH_QA_SCREENSHOTS=/tmp/gudfiles-search PYTHONPATH=. python tests/ui_search_scope.py
 TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar PYTHONPATH=. python tests/ui_toolbar.py
@@ -466,6 +481,7 @@ SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action
 HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
+PYTHONPATH=. python tests/ui_transfer_destination.py
 PYTHONPATH=. python tests/ui_transfer_modes.py
 PYTHONPATH=. python tests/ui_transfer_visibility.py
 PYTHONPATH=. python tests/ui_drag_copy.py
@@ -809,6 +825,45 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Submenu-switching fix (2026-09-18): reproduced on native Wayland as
+  `Tried to map a grabbing popup with a non-top most parent`; the first menu
+  stayed open and siblings never mapped. The prior X11-only check missed the
+  protocol restriction. MenuButton's pre-popup callback now unmaps the old
+  sibling before GTK maps the new one, preserving hover/keyboard state.
+  `tests/ui_context_switching.py` checks real native surface ordering through
+  popup and action activation, repeated forward/backward switches, dismissals
+  and subsequent actions for background/file/image menus in active/light
+  palettes. It passes on Wayland with warnings fatal, including against the
+  installed package. Extended physical-pointer tests pass on isolated X11 at
+  820/1200 pixels in both themes; all 216 unit tests pass. Installed with the
+  guarded installer and a backup; all 51 installed runtime files match source.
+
+- Destination-transfer verification (2026-09-18): all 216 unit tests pass.
+  `tests/ui_transfer_destination.py` checks native context hit testing, single/
+  multiple selection, both destination-selection methods, real recursive copy
+  and move bytes, same-folder duplication, collision preservation, cross-volume
+  move refusal, held-queue recovery, queue errors, unchanged clipboard, repeated
+  completion, cancellation and owner cleanup in grid/list/columns and active/
+  light themes. Dialog, file-management and explorer/Open/Save regressions pass,
+  as do real-pointer context-menu checks at 820/1200 pixels in both themes.
+  Native prompt snapshots were reviewed. These checks use an isolated Xvfb
+  display and disposable data, not live-user transfers. Installed with the
+  guarded `./install.sh` and an automatic backup; all 51 runtime files match
+  source. The complete destination suite also passes against the installed
+  package, as does a native Wayland launch/window-close/process-exit check.
+  The later menu cleanup replaces unavailable folder-copy/folder-move icon
+  names with existing neutral symbolic icons and removes More. Active/light
+  native menu snapshots, icon availability, file-management regression and
+  all 216 unit tests pass; the updated runtime is installed and matches source.
+
+- Six older standalone browser processes were found without compositor windows
+  or active transfer workers on September 18. After explicit user approval,
+  those exact processes exited on SIGTERM before installation. Their stdout
+  and stderr were `/dev/null`, with no matching journal diagnostics, so the
+  original cause is unconfirmed. Fresh installed launches and normal closes
+  pass. If this recurs, capture startup/close errors before assuming that no
+  visible window means no retained queue; paused state may still exist.
 
 - Context-hover verification (2026-09-17): real pointer/keyboard input on an
   isolated Xvfb display passes in active/light themes at 820/1200 pixels, with

@@ -18,6 +18,7 @@ class HoverSubmenus:
         while row:
             if isinstance(row, Gtk.MenuButton):
                 submenu = row.get_popover()
+                row.set_create_popup_func(self._prepare_popup)
                 self._keys(submenu)
                 enter = lambda *_, b=row: self._enter_row(b)
                 self._motion(row, enter, self._leave)
@@ -96,6 +97,19 @@ class HoverSubmenus:
         if self.active:
             self.active.popdown()
         return GLib.SOURCE_REMOVE
+
+    def _prepare_popup(self, button, *_):
+        # MenuButton calls this before mapping, for hover, click and keyboard
+        # activation alike. Wayland requires the old grabbing popup to close
+        # before a sibling can use their shared parent. Waiting for `map` is
+        # too late: GDK refuses the new popup, so _opened never runs.
+        self._cancel()
+        previous = self.active
+        if previous and previous is not button.get_popover():
+            # This is a handoff, not dismissal. Its unmap must not suspend
+            # hovering or cancel the incoming popup's native activation.
+            self.active = None
+            previous.popdown()
 
     def _opened(self, submenu):
         self._cancel()

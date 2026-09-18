@@ -385,6 +385,53 @@ class FileManagement(TransferUI):
         return not self._computer_search_active() and self.special_mode is None and os.access(self.current_dir, os.W_OK) and any(
             formats.contain_mime_type(m) for m in ('x-special/gnome-copied-files', 'text/uri-list'))
 
+    def _choose_transfer_destination(self, paths, *, cut=False):
+        """Keep the source selection fixed while a Gudfiles folder picker is open."""
+        from .model import PickerRequest
+        from .picker import PickerWindow
+
+        sources = tuple(paths)
+        if not sources or self.file_job_active:
+            return None
+        existing = getattr(self, 'destination_picker', None)
+        if existing is not None:
+            existing.present()
+            return existing
+        verb = 'Move' if cut else 'Copy'
+        start = sources[0].parent if self.special_mode or self._computer_search_active() else self.current_dir
+
+        def chosen(destinations):
+            if not destinations or not self.get_visible():
+                return
+            try:
+                job = self.transfer_queue.add(sources, destinations[0], cut,
+                                              start=True, duplicate=not cut)
+                self._show_transfers(automatic_job=job)
+            except ValueError as error:
+                self._show_error(f'Could not {verb.lower()}', str(error))
+
+        request = PickerRequest(current_folder=start, directory=True,
+                                title=f'{verb} {len(sources)} item{"s" if len(sources) != 1 else ""} to…',
+                                accept_label=f'{verb} here')
+        chooser = PickerWindow(self.get_application(), request, None, on_result=chosen)
+        self.destination_picker = chooser
+        chooser.set_transient_for(self)
+        chooser.set_modal(True)
+        chooser.set_destroy_with_parent(True)
+        # Gtk.Window.destroy() can unrealize an owner before its destroy signal
+        # is emitted when Python still holds it. Close the prompt at that point.
+        owner_closed = self.connect('unrealize', lambda *_: chooser.destroy())
+
+        def released(*_):
+            self.destination_picker = None
+            self.disconnect(owner_closed)
+            chooser.on_result = None
+            chooser.finished = True
+
+        chooser.connect('unrealize', released)
+        chooser.present()
+        return chooser
+
     def _paste_files(self, *, queued=False):
         if not self._can_paste(): return
         destination = self.current_dir
@@ -534,21 +581,13 @@ class FileManagement(TransferUI):
             separator()
             action('Cut', lambda: self._copy_files(paths, True), 'edit-cut-symbolic', detail='Ctrl+X')
             action('Copy', lambda: self._copy_files(paths), 'edit-copy-symbolic', detail='Ctrl+C')
+            action('Copy to…', lambda: self._choose_transfer_destination(paths), 'edit-copy-symbolic')
+            action('Move to…', lambda: self._choose_transfer_destination(paths, cut=True), 'go-jump-symbolic')
         action('Paste', self._paste_files, 'edit-paste-symbolic', self._can_paste(), 'Ctrl+V')
         action('Add to Transfer Queue', lambda: self._paste_files(queued=True),
                'folder-download-symbolic', self._can_paste(), 'Ctrl+Shift+V')
         if not background:
             action('Copy Location', lambda: self._copy_location(paths), 'edit-copy-symbolic')
-            folder = paths[0] if len(paths) == 1 and paths[0].is_dir() else paths[0].parent
-            entries = [
-                ('Open With File Manager', '', 'folder-open-symbolic', lambda: self._open_file_manager(folder)),
-                ('Delete Permanently…', 'Shift+Del', 'edit-delete-symbolic', lambda: self._confirm_remove(paths, True)),
-            ]
-            if len(paths) == 1 and paths[0].is_dir():
-                bookmarked = paths[0] in [p for p, _ in self._bookmarks()]
-                entries.insert(0, ('Remove Bookmark' if bookmarked else 'Add to Bookmarks', '',
-                    'bookmark-new-symbolic', lambda: self._toggle_bookmark(paths[0])))
-            submenu('More', 'view-more-symbolic', entries)
             action('Properties', lambda: self._show_properties(paths), 'dialog-information-symbolic')
             separator()
             action('Move to Trash…', lambda: self._confirm_remove(paths), 'user-trash-symbolic', detail='Del')
