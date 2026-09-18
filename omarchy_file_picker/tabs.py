@@ -90,6 +90,7 @@ class BrowserTabs(Gtk.Box):
         self.current.state = dict(
             special_mode=owner.special_mode, history=list(owner.history), history_index=owner.history_index,
             query=owner.search.get_text(), view=owner.view_mode, hidden=owner.show_hidden,
+            search_scope=owner.search_scope,
             creative=owner.creative_filter, filter=owner.filter_combo.get_active(),
             selected=owner._selected_paths(), scroll=owner.file_scroller.get_vadjustment().get_value(),
             columns=[(c.path, [r._picker_path for r in c.flow.get_selected_children()],
@@ -124,6 +125,7 @@ class BrowserTabs(Gtk.Box):
             return
         owner = self.owner
         self.capture()
+        owner._cancel_computer_search()
         owner.drag_selection.cancel()
         owner.columns.cancel_pending()
         owner.quicklook.close()
@@ -141,6 +143,7 @@ class BrowserTabs(Gtk.Box):
             owner.history_index = state.get('history_index', len(owner.history) - 1)
             owner.show_hidden = state.get('hidden', False)
             owner.creative_filter = state.get('creative', ('all', 0, ''))
+            owner._set_search_scope(state.get('search_scope', 'folder'))
             owner.search.set_text(state.get('query', ''))
             owner._last_search = owner.search.get_text()
             owner.filter_combo.set_active(state.get('filter', 0))
@@ -151,6 +154,7 @@ class BrowserTabs(Gtk.Box):
         finally:
             owner._restoring_tab = False
         owner._load()
+        owner._search_restore_selection = state.get('selected', [])
         generation = self.generation
         frames = 0
         def restore(_widget, _clock):

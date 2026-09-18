@@ -160,12 +160,12 @@ class FileManagement(TransferUI):
         # Save criterion and direction together so another window cannot restore
         # half of the previous choice. Refresh once and keep the selected files.
         self._set_file_preferences({'sort_key': key, 'descending': descending}, reload=False)
-        self._refresh_files()
+        self._refresh_files(rescan=False)
 
     def _toggle_folders_first(self):
         self.sort_popover.popdown()
         self._set_file_preference('folders_first', not self.file_preferences['folders_first'], reload=False)
-        self._refresh_files()
+        self._refresh_files(rescan=False)
 
     def _bookmarks(self):
         result = []
@@ -252,7 +252,7 @@ class FileManagement(TransferUI):
             # destinations, without taking the user back from another folder/tab.
             if self.view_mode == 'columns':
                 self.columns.refresh_paths({path.parent})
-            elif self.current_dir == path.parent or self.special_mode == 'recent':
+            elif self._computer_search_active() or self.current_dir == path.parent or self.special_mode == 'recent':
                 self._refresh_files()
 
         def finished():
@@ -262,10 +262,13 @@ class FileManagement(TransferUI):
         self._show_conversion_notice(path, headline='Extracting ZIP…', working=True)
         self._run_file_job('ZIP extraction', work, finished, refresh=refresh)
 
-    def _refresh_files(self, selected=None):
+    def _refresh_files(self, selected=None, *, rescan=True):
         if getattr(self, "_restoring_tab", False):
             return
         selected = self._selected_paths() if selected is None else selected
+        if rescan and self._computer_search_active():
+            self._cancel_computer_search()
+        self._search_restore_selection = list(selected)
         self._close_context_menu()
         self._load()
         for path in selected:
@@ -338,7 +341,7 @@ class FileManagement(TransferUI):
     def _refresh_removed(self, paths):
         if self.view_mode == 'columns':
             self.columns.refresh_paths({path.parent for path in paths})
-        elif self.current_dir in {path.parent for path in paths} or self.special_mode == 'recent':
+        elif self._computer_search_active() or self.current_dir in {path.parent for path in paths} or self.special_mode == 'recent':
             self._refresh_files()
 
     def _remove_failed(self, error, permanent=False):
@@ -379,7 +382,7 @@ class FileManagement(TransferUI):
 
     def _can_paste(self):
         formats = self.get_clipboard().get_formats()
-        return self.special_mode is None and os.access(self.current_dir, os.W_OK) and any(
+        return not self._computer_search_active() and self.special_mode is None and os.access(self.current_dir, os.W_OK) and any(
             formats.contain_mime_type(m) for m in ('x-special/gnome-copied-files', 'text/uri-list'))
 
     def _paste_files(self, *, queued=False):
@@ -523,7 +526,7 @@ class FileManagement(TransferUI):
             action('Open Folder' if len(paths) == 1 and paths[0].is_dir() else self.request.accept_label,
                    lambda: self.navigate(paths[0]) if len(paths) == 1 and paths[0].is_dir() else self._accept(),
                    'document-open-symbolic')
-            if self.special_mode == 'recent' and len(paths) == 1:
+            if (self.special_mode == 'recent' or self._computer_search_active()) and len(paths) == 1:
                 action('Visit File', lambda: self._visit_file(paths[0]), 'go-jump-symbolic')
             action('Batch Rename…' if len(paths) > 1 else 'Rename…',
                    lambda: self._show_batch_rename_dialog(paths) if len(paths) > 1 else self._show_rename_dialog(paths[0]),

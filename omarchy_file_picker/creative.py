@@ -20,7 +20,7 @@ class CreativeTools:
             self.ratings.cache = {}
         if self.creative_filter == ('all', 0, ''):
             return entries
-        return [p for p in entries if p.is_dir() or matches(self.ratings.get(p), *self.creative_filter)]
+        return [p for p in entries if self._entry_is_dir(p) or matches(self.ratings.get(p), *self.creative_filter)]
 
     def _rating_badge(self, path):
         badge = Gtk.Label()
@@ -247,9 +247,10 @@ class CreativeTools:
         query = self.search.get_text()
         search_toggle = self.search_button.get_first_child()
         (search_toggle.add_css_class if query else search_toggle.remove_css_class)('active')
-        self.search_button.set_tooltip_text('Search active · Edit search (Ctrl+F)' if query else 'Search this folder (Ctrl+F)')
+        self.search_button.set_tooltip_text('Search active · Edit search (Ctrl+F)' if query else 'Search (Ctrl+F)')
         if query:
-            items.append(('search', 'Search: ' + query))
+            scope = 'Whole computer' if self.search_scope == 'computer' else 'This folder'
+            items.append(('search', scope + ': ' + query))
         file_filter = self._active_filter() if hasattr(self, 'filter_combo') else None
         if file_filter:
             items.append(('type', 'Type: ' + file_filter.name))

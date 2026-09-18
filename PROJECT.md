@@ -7,6 +7,19 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Search offers **This folder** and **Whole computer** in the magnifying-glass
+  popover. This folder retains the immediate-folder name filter. Whole computer
+  recursively searches accessible files and already-mounted drives, starting
+  with Home, without following directory symlinks or scanning virtual system
+  roots. Hidden/type/folder-only constraints apply; each tab keeps its own scope.
+  Results include parent locations in all three views and Visit File in their
+  context menu. Background paste/create/drop requires an actual folder; drops
+  onto a found folder remain supported. Save searches open the selected result's
+  folder before saving; folder pickers require a selection in computer results.
+  A cancellable subprocess scans for at most 15 seconds or 500 matches. A status
+  row distinguishes searching, complete, partial, unreadable and failed results.
+  Clear/query/scope/tab/window changes invalidate late replies; F5 rescans.
+  View/sort changes reuse the result metadata collected off the GTK thread.
 - The toolbar has an Up one folder button beside Back/Forward, sharing Alt+Up
   behavior and disabled at `/` and in Recent. Search is a magnifying-glass
   button with a focused popover and Ctrl+F support. Enter applies the query and
@@ -348,6 +361,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/search.py` / `search_ui.py` — bounded filename scanner,
+  process cancellation, one active/latest pending request, native scope controls
+  and generation-checked result rendering with parent locations.
 - `omarchy_file_picker/toolbar.py` — native height-for-width layout that keeps
   navigation together and wraps the action group according to available space.
 - `omarchy_file_picker/archives.py` — streamed ZIP validation/extraction, private
@@ -424,6 +440,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+SEARCH_QA_SCREENSHOTS=/tmp/gudfiles-search PYTHONPATH=. python tests/ui_search_scope.py
 TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar PYTHONPATH=. python tests/ui_toolbar.py
 PYTHONPATH=. python tests/ui_sorting.py
 LIGHT_THEME_QA_SCREENSHOTS=/tmp/gudfiles-light PYTHONPATH=. python tests/ui_light_theme.py
@@ -774,6 +791,24 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Search scope verification (2026-09-17): 216 unit tests pass, including real
+  subprocess recursion, hidden/type/directory constraints, duplicate basenames,
+  symlink loops, overlap, permission failures, limits, timeout partial results,
+  cancellation and latest-only scheduling. Native active/light 820-pixel checks
+  cover all views, locations, external-result opening, tab scope/selection,
+  query/scope/tab invalidation, clear, sorting, refresh, partial/error states and
+  Open/Save/folder semantics. Native callbacks are checked for swallowed errors;
+  result rendering/sorting uses worker metadata, with live probing reserved for
+  selected-item previews/actions. Toolbar, sorting, columns, tabs/drag and transfer
+  regressions pass. A real Home/system/mounted-root scan found a disposable Home
+  fixture in 6.91 seconds, with 57 unreadable locations reported and no limit.
+  Search is a bounded live scan, not an index; refine the query if incomplete.
+  Active/light scope and result screenshots were visually reviewed.
+  All 49 installed runtime files match source; the complete native scope suite
+  also passes against the installed package. Eleven updated/new modules were
+  installed with backups while existing user windows stayed open. Reopen those
+  windows to load the feature. No desktop configuration or user data changed.
 
 - Breadcrumb verification (2026-09-17): single-click column navigation now
   includes the opened child folder while preserving the parent's selected row

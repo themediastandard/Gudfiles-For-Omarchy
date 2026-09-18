@@ -53,6 +53,7 @@ from .help_window import show_help
 from .list_navigation import navigate_files
 from .tabs import BrowserTabs
 from .toolbar import AdaptiveToolbar
+from .search_ui import SearchTools
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -128,7 +129,7 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
     return widget
 
 
-class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationWindow):
+class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None):
         super().__init__(application=app, title=request.title)
         self.request = request
@@ -152,6 +153,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.context_submenus: list[Gtk.Popover] = []
         self.qa_submenu_button: Gtk.MenuButton | None = None
         self.volume_monitor = Gio.VolumeMonitor.get()
+        self._init_search()
 
         self.set_default_size(1200, 800)
         self.set_size_request(820, 560)
@@ -279,6 +281,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         browser.append(self.toolbar)
         self._build_toolbar()
         browser.append(self._build_active_filters())
+        browser.append(self._build_search_status())
 
         self.browser_stack = Gtk.Stack()
         self.browser_stack.set_hhomogeneous(False)
@@ -328,8 +331,11 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         empty.set_halign(Gtk.Align.CENTER)
         empty.set_valign(Gtk.Align.CENTER)
         empty.append(Gtk.Image.new_from_icon_name("folder-open-symbolic"))
-        empty.append(label("Nothing here", "empty-title", xalign=0.5))
+        self.empty_title = label("Nothing here", "empty-title", xalign=0.5)
+        empty.append(self.empty_title)
         self.empty_detail = label("Try another folder or search.", "muted", xalign=0.5)
+        self.empty_detail.set_wrap(True)
+        self.empty_detail.set_max_width_chars(48)
         empty.append(self.empty_detail)
         self.browser_stack.add_named(empty, "empty")
 
@@ -503,19 +509,11 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.toolbar.navigation.append(location_button)
 
         self.search_button = Gtk.MenuButton(icon_name='system-search-symbolic')
-        self.search_button.set_tooltip_text('Search this folder (Ctrl+F)')
-        self.search_button.update_property([Gtk.AccessibleProperty.LABEL], ['Search this folder'])
+        self.search_button.set_tooltip_text('Search (Ctrl+F)')
+        self.search_button.update_property([Gtk.AccessibleProperty.LABEL], ['Search'])
         self.search_popover = Gtk.Popover()
         self.search_button.set_popover(self.search_popover)
-        self.search = Gtk.SearchEntry(placeholder_text="Search this folder")
-        self.search.set_size_request(280, -1)
-        for side in ('top', 'bottom', 'start', 'end'):
-            getattr(self.search, 'set_margin_' + side)(10)
-        self._last_search = ""
-        self.search.connect("search-changed", self._search_changed)
-        self.search.connect('stop-search', lambda *_: self.search_button.popdown())
-        self.search.connect('activate', self._search_activated)
-        self.search_popover.set_child(self.search)
+        self._build_search_controls()
         self.search_popover.connect('map', lambda *_: self.search.grab_focus())
         self.toolbar.actions.append(self.search_button)
         self.toolbar.actions.append(self._creative_filter_button())
@@ -787,6 +785,10 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self._last_search = self.search.get_text()
         self._update_active_filters()
         query = self.search.get_text() if hasattr(self, "search") else ""
+        if self._computer_search_active():
+            self._load_computer_search()
+            return
+        self._cancel_computer_search()
         if self.special_mode == "recent":
             entries = recent_files()
             if query:
@@ -816,6 +818,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _rebuild_files(self) -> None:
         self.drag_selection.cancel()
         self._close_context_menu()
+        self.empty_title.set_text('Nothing here')
         if self.view_mode == 'columns':
             self.columns.rebuild()
             self.browser_stack.set_visible_child_name('columns')
@@ -829,8 +832,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         for path in self.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = path  # type: ignore[attr-defined]
-            child._picker_is_dir = path.is_dir()
+            child._picker_is_dir = self._entry_is_dir(path)
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
+            child.set_tooltip_text(str(path))
             self.flow.append(child)
             self.children_by_path[path] = child
         self.browser_stack.set_visible_child_name("files" if self.entries else "empty")
@@ -849,8 +853,15 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         frame.set_halign(Gtk.Align.CENTER)
         frame.set_valign(Gtk.Align.CENTER)
         thumbnail = Gtk.Overlay()
-        poster = picture_for(path, 156, 98)
-        thumbnail.set_child(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
+        # Whole-computer results must not launch hundreds of thumbnail decoders.
+        if self._computer_search_active():
+            poster = Gtk.Image.new_from_gicon(self._search_result_icon(path))
+            poster.set_pixel_size(48)
+            poster.set_size_request(156, 98)
+            thumbnail.set_child(poster)
+        else:
+            poster = picture_for(path, 156, 98)
+            thumbnail.set_child(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
         badge = self._rating_badge(path)
         badge.set_halign(Gtk.Align.END)
         badge.set_valign(Gtk.Align.START)
@@ -863,6 +874,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         name.set_width_chars(18)
         name.set_max_width_chars(18)
         item.append(name)
+        if self._computer_search_active():
+            item.append(self._search_location_label(path))
+            return item
         detail = ""
         try:
             if path.is_dir():
@@ -884,14 +898,26 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _list_item(self, path: Path) -> Gtk.Widget:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         row.set_size_request(-1, 28)
-        image = Gtk.Image.new_from_gicon(icon_for(path))
+        image = Gtk.Image.new_from_gicon(self._search_result_icon(path) if self._computer_search_active() else icon_for(path))
         image.set_pixel_size(18)
         row.append(image)
         name = label(path.name, "filename")
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         name.set_hexpand(True)
-        row.append(name)
+        if self._computer_search_active():
+            title = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+            title.append(name)
+            title.append(self._search_location_label(path))
+            row.append(title)
+        else:
+            row.append(name)
         row.append(self._rating_badge(path))
+        if self._computer_search_active():
+            info = self.search_result.metadata.get(path, {}) if self.search_result else {}
+            size_text = format_size(info['size']) if 'size' in info and not info.get('directory') else '—'
+            if self.file_preferences['show_size']:
+                row.append(label(size_text, 'muted'))
+            return row
         kind = label(file_type(path), "muted")
         kind.set_size_request(150, -1)
         kind.set_ellipsize(Pango.EllipsizeMode.END)
@@ -942,7 +968,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _breadcrumb_directory(self):
         # Column selection stays in its parent for drag/file operations, while
         # the path includes the folder whose contents were opened beside it.
-        if self.view_mode == 'columns' and self.special_mode is None:
+        if self.view_mode == 'columns' and self.special_mode is None and not self._computer_search_active():
             active = self.columns.active
             if active in self.columns.columns:
                 index = self.columns.columns.index(active) + 1
@@ -1071,7 +1097,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _on_child_activated(self, _flow: Gtk.FlowBox, child: Gtk.FlowBoxChild) -> None:
         path = child._picker_path  # type: ignore[attr-defined]
         if path.is_dir():
-            if self.view_mode == 'columns':
+            if self.view_mode == 'columns' and not self._computer_search_active():
                 column = next(c for c in self.columns.columns if c.flow is _flow)
                 self.columns.enter_folder(column, path)
             else:
@@ -1248,7 +1274,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             lambda: self._show_create_dialog("text"),
             icon_name="document-new-symbolic",
         )
-        can_create = not self.file_job_active and self.special_mode is None and os.access(self.current_dir, os.W_OK)
+        can_create = not self.file_job_active and not self._computer_search_active() and self.special_mode is None and os.access(self.current_dir, os.W_OK)
         new_folder.set_sensitive(can_create)
         new_text.set_sensitive(can_create)
         if path is None:
@@ -1350,6 +1376,8 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         return GLib.SOURCE_REMOVE
 
     def _show_create_dialog(self, kind: str) -> None:
+        if self._computer_search_active():
+            return
         if kind == "text":
             try:
                 destination = create_untitled_text(self.current_dir)
@@ -1666,10 +1694,15 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _update_accept_state(self) -> None:
         if not hasattr(self, "accept_button"):
             return
+        if self.request.mode == 'save' and self._computer_search_active():
+            self.accept_button.set_label('Open folder')
+            self.accept_button.set_sensitive(len(self._selected_paths()) == 1)
+            return
+        self.accept_button.set_label(self.request.accept_label)
         if self.request.mode == "save":
             enabled = bool(self.filename_entry.get_text().strip())
         elif self.request.directory:
-            enabled = True
+            enabled = not self._computer_search_active() or bool(self._selected_paths())
         else:
             enabled = any(path.is_file() for path in self._selected_paths())
         self.accept_button.set_sensitive(enabled)
@@ -1688,6 +1721,11 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
                         self._show_error(f'Could not open {path.name}', error.message)
             return
         if self.request.mode == "save":
+            if self._computer_search_active():
+                if len(selected) == 1:
+                    target = selected[0]
+                    self.navigate(target if target.is_dir() else target.parent)
+                return
             name = self.filename_entry.get_text().strip()
             if not name or "/" in name or name in (".", ".."):
                 self.filename_entry.add_css_class("error")
@@ -1702,6 +1740,8 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             return
         if self.request.directory:
             dirs = [path for path in selected if path.is_dir()]
+            if self._computer_search_active() and not dirs:
+                return
             self._finish(paths=dirs or [self.current_dir])
             return
         paths = [path for path in selected if path.is_file()]
@@ -1728,6 +1768,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self._save_sidebar_width()
         self.media_details.close()
         self.action_sounds.close()
+        self._close_search()
         if self.request.explorer:
             self.get_application().quit()
             return
@@ -1830,7 +1871,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             # Hidden standard rows must not retain stale selections or badges.
             self.flow.remove_all()
             self.children_by_path = {}
-            self._refresh_files(selected)
+            self._refresh_files(selected, rescan=False)
             return
         self.flow.remove_all()
         self.children_by_path = {}
@@ -1842,7 +1883,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self.flow.add_css_class('file-list')
         else:
             self.flow.remove_css_class('file-list')
-        self._refresh_files(selected)
+        self._refresh_files(selected, rescan=False)
 
     def _select_first_file(self) -> bool:
         for path in self.entries:

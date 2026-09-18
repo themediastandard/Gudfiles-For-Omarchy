@@ -356,7 +356,7 @@ class TransferUI:
                 if (getattr(self, 'view_mode', None) == 'columns' and
                         any(column.path in changed for column in self.columns.columns)):
                     self.columns.refresh_paths(changed)
-                elif self.current_dir in changed:
+                elif self.current_dir in changed or (changed and getattr(self, '_computer_search_active', lambda: False)()):
                     self._refresh_files()
                 if state in TERMINAL:
                     self.transfer_callbacks.pop(job.id, None)

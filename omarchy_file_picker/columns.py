@@ -87,7 +87,10 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         restore = getattr(self, 'restore_state', None)
         self.restore_state = None
         paths = [c.path for c in self.columns]
-        if restore:
+        if owner._computer_search_active():
+            paths = [owner.current_dir]
+            restore = None
+        elif restore:
             paths = [path for path, _selected, _y in restore]
         elif owner.special_mode is None and owner.current_dir in paths:
             paths = paths[:paths.index(owner.current_dir) + 1]
@@ -150,7 +153,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         panel.add_css_class('browser-column')
         panel.set_size_request(260, -1)
-        title = Gtk.Label(label='Recent' if owner.special_mode == 'recent' else path.name or '/', xalign=0)
+        title = Gtk.Label(label='Whole computer' if owner._computer_search_active() else
+                          'Recent' if owner.special_mode == 'recent' else path.name or '/', xalign=0)
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         title.set_max_width_chars(26)
         title.add_css_class('column-heading')
@@ -173,6 +177,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         empty = Gtk.Label(label='No matching files' if owner.search.get_text() or owner.creative_filter != ('all', 0, '')
                           else 'Empty folder', valign=Gtk.Align.START, can_target=False)
         empty.add_css_class('column-empty')
+        empty.set_wrap(True)
+        empty.set_max_width_chars(30)
         column.empty = empty
         panel.remove(scroller)
         overlay = Gtk.Overlay()
@@ -197,17 +203,24 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         for item in column.entries:
             child = Gtk.FlowBoxChild()
             child._picker_path = item
-            child._picker_is_dir = item.is_dir()
+            child._picker_is_dir = owner._entry_is_dir(item)
+            child.set_tooltip_text(str(item))
             row = Gtk.Box(spacing=8, height_request=28)
-            row.append(Gtk.Image.new_from_gicon(Gio.content_type_get_icon('inode/directory') if item.is_dir()
+            row.append(Gtk.Image.new_from_gicon(Gio.content_type_get_icon('inode/directory') if child._picker_is_dir
                        else Gio.content_type_get_icon(Gio.content_type_guess(str(item), None)[0])))
             name = Gtk.Label(label=item.name, xalign=0, hexpand=True)
             name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             name.set_width_chars(8)
             name.set_max_width_chars(22)
-            row.append(name)
+            if owner._computer_search_active():
+                title = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+                title.append(name)
+                title.append(owner._search_location_label(item))
+                row.append(title)
+            else:
+                row.append(name)
             row.append(owner._rating_badge(item))
-            if item.is_dir():
+            if child._picker_is_dir:
                 arrow = Gtk.Image.new_from_icon_name('go-next-symbolic')
                 arrow.add_css_class('muted')
                 arrow.set_pixel_size(12)
@@ -220,6 +233,9 @@ class ColumnBrowser(Gtk.ScrolledWindow):
     def refresh_paths(self, paths):
         """Refresh completed transfers in any visible column, preserving its trail."""
         owner = self.owner
+        if owner._computer_search_active():
+            owner._refresh_files()
+            return
         self.cancel_pending()
         self.busy = True
         try:
@@ -315,7 +331,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
     def _open_selection(self):
         self.pending = 0
         owner = self.owner
-        if (owner.view_mode != 'columns' or not self.active or owner.drag_selection.active or
+        if (owner._computer_search_active() or owner.view_mode != 'columns' or not self.active or owner.drag_selection.active or
                 owner.drag_copy.active or owner.context_popover):
             return False
         selected = owner._selected_paths()
@@ -343,6 +359,12 @@ class ColumnBrowser(Gtk.ScrolledWindow):
 
     def enter_folder(self, column, path=None):
         """Enter the adjacent column without rebuilding scrolled ancestors."""
+        if self.owner._computer_search_active():
+            selected = self.owner._selected_paths()
+            target = path or (selected[0] if len(selected) == 1 else None)
+            if target and target.is_dir():
+                self.owner.navigate(target)
+            return
         self.activate(column)
         if path is not None:
             column.flow.handler_block(column.handler)

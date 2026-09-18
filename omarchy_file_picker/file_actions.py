@@ -142,8 +142,11 @@ def parse_file_clipboard(text: str, mime: str) -> tuple[list[Path], bool]:
     return paths, cut
 
 
-def sort_entries(entries: list[Path], key: str, descending: bool, folders_first: bool) -> list[Path]:
+def sort_entries(entries: list[Path], key: str, descending: bool, folders_first: bool,
+                 *, metadata=None) -> list[Path]:
     def value(path):
+        if metadata is not None and key in ('modified', 'size'):
+            return metadata.get(path, {}).get(key, 0)
         try:
             if key == 'modified': return path.stat().st_mtime
             if key == 'size': return path.stat().st_size
@@ -154,5 +157,6 @@ def sort_entries(entries: list[Path], key: str, descending: bool, folders_first:
     ordered = sorted(entries, key=lambda p: p.name.casefold())
     ordered.sort(key=value, reverse=descending)
     if folders_first:
-        ordered.sort(key=lambda p: not p.is_dir())
+        ordered.sort(key=lambda p: not (metadata.get(p, {}).get('directory', False)
+                                       if metadata is not None else p.is_dir()))
     return ordered

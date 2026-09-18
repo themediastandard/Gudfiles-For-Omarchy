@@ -158,7 +158,7 @@ class DragCopy:
             if self.owner.get_visible():
                 if self.owner.view_mode == 'columns':
                     self.owner.columns.refresh_paths(changed)
-                elif self.owner.current_dir in changed:
+                elif self.owner._computer_search_active() or self.owner.current_dir in changed:
                     self.owner._refresh_files()
             return False
         GLib.idle_add(refresh)
@@ -202,7 +202,7 @@ class DragCopy:
             if not child._picker_is_dir:
                 return None, None, scroller
             directory, surface = child._picker_path, child
-        elif self.owner.special_mode is not None:
+        elif self.owner.special_mode is not None or self.owner._computer_search_active():
             return None, None, scroller
         # Filesystem/alias checks happen again on the worker. Hover uses only
         # cached row kinds and path comparisons, never a potentially blocked NAS.
