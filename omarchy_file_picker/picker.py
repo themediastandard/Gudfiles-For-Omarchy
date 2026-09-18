@@ -1413,7 +1413,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 menu.append(self._menu_button('New Tab', lambda: self.tabs.new(), icon_name='tab-new-symbolic'))
         paths = self._selected_paths() if path else []
         if path and path not in paths: paths = [path]
-        self._append_common_context(menu, paths, background=path is None, qa=keep_open_for_qa)
+        screenshot_destination = self.current_dir if path is None else path if path.is_dir() else None
+        self._append_common_context(menu, paths, background=path is None, qa=keep_open_for_qa,
+                                    screenshot_destination=screenshot_destination)
 
         if path and len(paths) == 1 and path.is_file() and path.suffix.casefold() in IMAGE_TYPES:
             menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))

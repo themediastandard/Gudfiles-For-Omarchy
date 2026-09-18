@@ -58,6 +58,8 @@ search results and feature counts are generated from that catalog.
   a 280-pixel minimum and a 300-pixel default
 - Compact, icon-led right-click menu with grouped media submenus
 - Right-click creation of folders and text files
+- Paste PNG clipboard images into the current folder with `Ctrl+V`, or choose
+  **Put Screenshot Here** on blank space/a folder; clipboard contents stay intact
 - New Text File immediately creates `untitled.txt`, then `untitled (1).txt`, etc.,
   without a naming prompt; use Rename or F2 whenever you want to name it
 - Background right-click works in blank areas and empty folders
@@ -143,9 +145,12 @@ Mounted shares need GVfs's local filesystem bridge. The picker checks it when
 opening a mounted device and starts the installed bridge if missing, without
 reconnecting or changing NAS credentials. Unavailable folders show an error.
 
-Rename and paste refuse filename collisions instead of overwriting existing
-files. Trash and permanent deletion both require confirmation. Clipboard file
-operations support local file URIs, including mounted shares exposed as paths.
+Rename and file paste refuse filename collisions instead of overwriting existing
+files. PNG clipboard images use Omarchy-style timestamped screenshot names and
+Gudfiles-style numbered collision suffixes, with no overwrite. Screenshot paste
+is available only in writable normal folders and preserves the clipboard. Trash
+and permanent deletion both require confirmation. Clipboard file operations
+support local file URIs, including mounted shares exposed as paths.
 
 Open **Transfers** from the header to choose **Queue** (one transfer at a time)
 or **All** (up to three independent transfer batches together). The choice is

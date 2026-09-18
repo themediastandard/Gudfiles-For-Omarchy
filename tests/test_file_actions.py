@@ -1,11 +1,17 @@
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from gi.repository import GLib
 from omarchy_file_picker.file_actions import (
-    create_untitled_text, parse_file_clipboard, remove_items, rename_item, sort_entries, transfer_items,
+    create_untitled_text, parse_file_clipboard, remove_items, rename_item,
+    save_screenshot_png, sort_entries, transfer_items,
 )
+
+
+PNG = b'\x89PNG\r\n\x1a\nexact clipboard bytes'
 
 
 class FileActionsTests(unittest.TestCase):
@@ -33,6 +39,41 @@ class FileActionsTests(unittest.TestCase):
         self.assertFalse((self.root / 'missing.txt').exists())
         with self.assertRaises(FileNotFoundError):
             create_untitled_text(self.root / 'missing-directory')
+
+    def test_screenshot_uses_omarchy_name_and_preserves_exact_bytes(self):
+        output = save_screenshot_png(self.root, PNG, when=datetime(2026, 9, 18, 1, 2, 3))
+        self.assertEqual(output.name, 'screenshot-2026-09-18_01-02-03.png')
+        self.assertEqual(output.read_bytes(), PNG)
+
+    def test_screenshot_collisions_never_overwrite_any_entry(self):
+        when = datetime(2026, 9, 18, 1, 2, 3)
+        original = self.root / 'screenshot-2026-09-18_01-02-03.png'
+        original.write_bytes(b'keep')
+        (self.root / 'screenshot-2026-09-18_01-02-03 (1).png').mkdir()
+        output = save_screenshot_png(self.root, PNG, when=when)
+        self.assertEqual(output.name, 'screenshot-2026-09-18_01-02-03 (2).png')
+        self.assertEqual(original.read_bytes(), b'keep')
+        self.assertEqual(output.read_bytes(), PNG)
+
+    def test_screenshot_failure_publishes_nothing_and_removes_stage(self):
+        with patch('omarchy_file_picker.file_actions.rename_noreplace',
+                   side_effect=OSError('publication failed')):
+            with self.assertRaisesRegex(OSError, 'publication failed'):
+                save_screenshot_png(self.root, PNG, when=datetime(2026, 9, 18, 1, 2, 3))
+        self.assertEqual(list(self.root.iterdir()), [])
+        with patch('omarchy_file_picker.file_actions.os.write',
+                   side_effect=OSError('write failed')):
+            with self.assertRaisesRegex(OSError, 'write failed'):
+                save_screenshot_png(self.root, PNG, when=datetime(2026, 9, 18, 1, 2, 3))
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_screenshot_rejects_non_png_and_oversized_data(self):
+        with self.assertRaisesRegex(ValueError, 'PNG signature'):
+            save_screenshot_png(self.root, b'not a png')
+        with patch('omarchy_file_picker.file_actions.MAX_SCREENSHOT_BYTES', len(PNG) - 1):
+            with self.assertRaisesRegex(ValueError, 'larger than'):
+                save_screenshot_png(self.root, PNG)
+        self.assertEqual(list(self.root.iterdir()), [])
 
     def test_rename_and_collision_preserve_existing_content(self):
         a, b = self.root / 'a.txt', self.root / 'b.txt'

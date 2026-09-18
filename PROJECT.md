@@ -7,6 +7,15 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Branch consolidation (September 21): `main` now includes the recursive folder
+  sizes and folder-like Trash work, launch update discovery and the refreshed
+  Help guide, plus PNG clipboard screenshot paste recovered from its detached
+  worktree. All 314 unit tests pass. Native Wayland suites pass for screenshot
+  paste, update notices, Help, folder sizes and the live disposable Trash browser.
+  The isolated Xvfb/xdotool Trash pointer suite was not rerun because those tools
+  are unavailable. The older transfer-mode branch was not replayed because its
+  final integrated implementation is already in `main`.
+
 - Folder sizes load in the background in grid, list and column rows and in the
   compact selection total, including nested and hidden regular files. Sizes are
   logical bytes; symbolic links inside folders are excluded and hard links count
@@ -36,7 +45,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   tabs and list-layout descriptions are split into focused topics. Folder-size,
   Empty Trash and launch-notice entries are shown only when their corresponding
   runtime capabilities exist; this keeps mixed development installations honest.
-  The catalog contains 72 entries, with counts derived from the available subset.
+  The catalog contains 73 entries, with counts derived from the available subset.
 - Help uses a single slim title/search row, neutral topic navigation, flat content
   rows, small shortcut badges and lighter About/License sections. Dedicated
   `help_style.py` CSS is scoped to the guide and removed when it is destroyed.
@@ -309,6 +318,17 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   confirmed permanent-delete behavior. Plain Backspace remains untouched for
   navigation/editing, text fields retain native editing, and Quick Look blocks
   the shortcuts from acting on files behind its overlay.
+- Writable normal folders accept PNG clipboard images. Background and folder-item
+  menus show **Put Screenshot Here** only while `image/png` is advertised; files,
+  Recent, whole-computer search, special modes and unwritable destinations do not.
+  Ctrl+V retains copied/cut file-list precedence and otherwise saves PNG into the
+  current folder; Ctrl+Shift+V remains file-transfer staging only. Outputs use
+  Omarchy's `screenshot-YYYY-MM-DD_HH-MM-SS.png` naming and Gudfiles ` (1)`
+  collisions, with a 128 MiB asynchronous clipboard cap, exact byte preservation,
+  private same-folder staging and atomic no-overwrite publication. The clipboard
+  is never replaced. Visible destinations refresh; current-folder outputs are
+  selected/revealed. Read/write/publish failures report non-success and clean
+  unpublished staging.
 - Clicking outside a right-click menu now dismisses the entire cascade even
   when a hover submenu owns GTK's active popup grab. Intentional submenu
   switching and hover timeout closes keep the root menu open, while Escape
@@ -623,6 +643,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - File and background menus include rename, clipboard file operations,
   confirmed trash/permanent deletion, properties, bookmarks, view and sort.
   NAS connection is sidebar-only. Rename and paste never overwrite collisions.
+- PNG clipboard images add a distinct **Put Screenshot Here** action on writable
+  background/folder targets in normal browsing. Ordinary file targets and
+  Recent/computer/special modes omit it entirely. Explicit screenshot placement
+  remains available when file-list and PNG formats coexist; Ctrl+V instead gives
+  the supported file list precedence and falls back to PNG only without one.
 - A compact Omarchy-themed Transfers window is accessible from the header.
   Ctrl+V starts that clipboard batch; Ctrl+Shift+V / Add to Transfer Queue stages
   it without starting. Start runs one chosen batch, Start queue authorizes the
@@ -779,9 +804,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/model.py` — request parsing, filters, filesystem helpers.
 - `omarchy_file_picker/actions.py` — validated media commands, output naming,
   and NAS address normalization.
-- `omarchy_file_picker/file_actions.py` — filesystem operations and sorting.
+- `omarchy_file_picker/file_actions.py` — filesystem operations, screenshot
+  staging/atomic publication and sorting.
 - `omarchy_file_picker/file_management.py` — file dialogs, clipboard, shared
-  GTK bookmarks and persisted display preferences.
+  GTK bookmarks, bounded asynchronous screenshot reads and persisted display
+  preferences.
 - `omarchy_file_picker/folder_watch.py` — visible-directory event monitors,
   deferred state-preserving refresh and cancellable unavailable-root recovery.
 - `omarchy_file_picker/undo.py` — bounded session receipts and identity-checked
@@ -883,6 +910,7 @@ PYTHONPATH=. python tests/ui_transfer_visibility.py
 PYTHONPATH=. python tests/ui_drag_copy.py
 PYTHONPATH=. python tests/ui_tabs_drag.py
 PYTHONPATH=. python tests/ui_file_management.py
+GDK_BACKEND=wayland G_DEBUG=fatal-warnings PYTHONPATH=. python tests/ui_screenshot_paste.py
 PYTHONPATH=. python tests/ui_quicklook.py
 RAW_PREVIEW_SAMPLES=/path/to/known-good-raws PYTHONPATH=. python tests/ui_raw_preview.py
 PYTHONPATH=. python tests/ui_image_zoom.py
@@ -1242,10 +1270,9 @@ gdbus introspect --session \
   byte manifest before and after an atomic package exchange, and retained a
   rollback copy. All 70 staged runtime files matched installation; existing
   folder-size changes were preserved. Portal services and windows stayed running.
-  Existing windows need reopening. Source changes remain on
-  `codex/launch-update-notice`; reconcile them with concurrent main-checkout work
-  before publishing or replacing the installed package from a single checkout.
-  No release assets or AUR entry were published. Old preview users still need a
+  Existing windows need reopening. The source changes are consolidated into
+  `main` with the concurrent folder-size, Trash and screenshot work. No release
+  assets or AUR entry were published. Old preview users still need a
   one-time upgrade after an authorized stable release.
 - Help verification (September 21): 304 unit tests pass. Native checks cover
   source, a combined installation stage and the installed runtime in
@@ -1603,6 +1630,25 @@ gdbus introspect --session \
   a rollback backup and the installed source advertises both formats. A real
   pointer drop into Resolve remains the final acceptance check because the live
   Wayland-to-Xwayland pointer path was not synthesized by the test harness.
+- Screenshot clipboard verification (2026-09-18): 220 unit tests pass. The
+  focused native Wayland regression exercises live PNG format advertisement,
+  background/folder/file menu scope, Recent/computer/unwritable omissions,
+  clicked-folder and current-folder destinations, file-list Ctrl+V precedence,
+  exact output bytes, selected current-folder refresh, the 128 MiB read guard,
+  injected write failure and unchanged clipboard ownership. File-management,
+  whole-computer search, columns and Wayland context-switching regressions also
+  pass with GTK warnings fatal. Filesystem unit coverage verifies exact Omarchy
+  naming, file/directory collisions, non-PNG/oversize rejection and cleanup after
+  injected write or atomic-publish failure. Help catalog search exposes the new
+  entry. The full native Help run reaches the populated guide but its independent
+  initial size assertion is currently affected by the tiled test surface
+  (`875×600` versus its `820×720` floating bound); no Help layout code changed.
+  The guarded user installer passed its dependency/process/package checks and
+  backed up the previous runtime at
+  `~/.local/state/gudfiles/install-backups/20260918-150755-b4opl61l`. All 51
+  installed package files match source byte-for-byte, and the focused native
+  regression also passes with imports forced to the installed package. Existing
+  Gudfiles windows must be reopened to load the updated Python modules.
 
 - Context-menu outside-dismissal fix (2026-09-18): GTK closes the active modal
   child first for a click outside a nested popover. The root now enables native

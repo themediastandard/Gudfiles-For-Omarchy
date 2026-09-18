@@ -11,8 +11,9 @@ from gi.repository import Gdk, Gio, GLib, Gtk
 
 from .dialogs import PickerDialog, confirmation, detail_card, entry_field, file_summary, path_list, section
 
-from .file_actions import (RemovalError, TrashUnavailable, delete_after_trash_failure,
-                          parse_file_clipboard, remove_items, rename_item, transfer_items)
+from .file_actions import (MAX_SCREENSHOT_BYTES, RemovalError, TrashUnavailable,
+                          delete_after_trash_failure, parse_file_clipboard, remove_items,
+                          rename_item, save_screenshot_png, transfer_items)
 from .transfer_ui import TransferUI
 from .undo import UndoHistory, capture_receipt
 from .sound_effects import ActionSounds
@@ -48,6 +49,7 @@ class FileManagement(TransferUI):
     def _init_file_management(self):
         self.file_job_active = False
         self.undo_history = UndoHistory()
+        self._clipboard_image_reading = False
         self._init_transfers()
         self.preferences_path = Path.home() / '.config/omarchy-file-picker/preferences.json'
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
@@ -491,10 +493,23 @@ class FileManagement(TransferUI):
         if record:
             self._record_file_interaction(paths)
 
-    def _can_paste(self):
+    def _normal_writable_folder(self, destination=None):
+        destination = self.current_dir if destination is None else Path(destination)
+        return (not self._computer_search_active() and self.special_mode is None
+                and destination.is_dir() and os.access(destination, os.W_OK))
+
+    def _can_paste_files(self):
         formats = self.get_clipboard().get_formats()
-        return not self._computer_search_active() and self.special_mode is None and os.access(self.current_dir, os.W_OK) and any(
+        return self._normal_writable_folder() and any(
             formats.contain_mime_type(m) for m in ('x-special/gnome-copied-files', 'text/uri-list'))
+
+    def _can_put_screenshot(self, destination=None):
+        return (not self.file_job_active and not self._clipboard_image_reading
+                and self._normal_writable_folder(destination)
+                and self.get_clipboard().get_formats().contain_mime_type('image/png'))
+
+    def _can_paste(self):
+        return self._can_paste_files() or self._can_put_screenshot()
 
     def _choose_transfer_destination(self, paths, *, cut=False):
         """Keep the source selection fixed while a Gudfiles folder picker is open."""
@@ -544,7 +559,10 @@ class FileManagement(TransferUI):
         return chooser
 
     def _paste_files(self, *, queued=False):
-        if not self._can_paste(): return
+        if not self._can_paste_files():
+            if not queued and self._can_put_screenshot():
+                self._put_screenshot(self.current_dir)
+            return
         destination = self.current_dir
         clipboard = self.get_clipboard()
         original_provider = clipboard.get_content()
@@ -582,6 +600,78 @@ class FileManagement(TransferUI):
             stream.read_bytes_async(8192, GLib.PRIORITY_DEFAULT, None, data_ready)
         clipboard.read_async(['x-special/gnome-copied-files', 'text/uri-list'],
                              GLib.PRIORITY_DEFAULT, None, read)
+
+    def _put_screenshot(self, destination):
+        destination = Path(destination)
+        if not self._can_put_screenshot(destination):
+            return
+        self._clipboard_image_reading = True
+        clipboard = self.get_clipboard()
+
+        def failed(message):
+            self._clipboard_image_reading = False
+            self._show_error('Could not put screenshot here', message)
+
+        def read(clip, result):
+            try:
+                stream, mime = clip.read_finish(result)
+            except GLib.Error as error:
+                failed(str(error))
+                return
+            if mime != 'image/png':
+                stream.close(None)
+                failed('The clipboard no longer contains a PNG image.')
+                return
+            chunks = bytearray()
+
+            def data_ready(source, res):
+                try:
+                    chunk = source.read_bytes_finish(res).get_data()
+                    if len(chunks) + len(chunk) > MAX_SCREENSHOT_BYTES:
+                        raise ValueError(
+                            f'The clipboard image is larger than {MAX_SCREENSHOT_BYTES // (1024 * 1024)} MB.'
+                        )
+                    chunks.extend(chunk)
+                    if chunk:
+                        source.read_bytes_async(64 * 1024, GLib.PRIORITY_DEFAULT, None, data_ready)
+                        return
+                except (GLib.Error, ValueError) as error:
+                    try:
+                        source.close(None)
+                    except GLib.Error:
+                        pass
+                    failed(str(error))
+                    return
+                try:
+                    source.close(None)
+                except GLib.Error as error:
+                    failed(str(error))
+                    return
+
+                self._clipboard_image_reading = False
+
+                def refresh(paths):
+                    if not paths:
+                        return
+                    created = paths[0]
+                    if self.view_mode == 'columns':
+                        self.columns.refresh_paths({destination})
+                        if self.current_dir == destination:
+                            child = self.children_by_path.get(created)
+                            if child:
+                                self.flow.select_child(child)
+                                child.grab_focus()
+                    elif (self.special_mode is None and not self._computer_search_active()
+                          and self.current_dir == destination):
+                        self._refresh_files([created])
+
+                self._run_file_job('Put screenshot here',
+                                   lambda: [save_screenshot_png(destination, chunks)],
+                                   refresh=refresh)
+
+            stream.read_bytes_async(64 * 1024, GLib.PRIORITY_DEFAULT, None, data_ready)
+
+        clipboard.read_async(['image/png'], GLib.PRIORITY_DEFAULT, None, read)
 
     def _transfer_files(self, paths, destination, cut):
         """Run on the file-job worker; preserve confirmed moves even after a later failure."""
@@ -671,7 +761,7 @@ class FileManagement(TransferUI):
         self._record_file_interaction(paths)
         return dialog
 
-    def _append_common_context(self, menu, paths, *, background, qa):
+    def _append_common_context(self, menu, paths, *, background, qa, screenshot_destination=None):
         def action(text, callback, icon, enabled=True, detail=''):
             button = self._menu_button(text, callback, icon_name=icon, detail=detail)
             button.set_sensitive(enabled and not self.file_job_active)
@@ -701,7 +791,10 @@ class FileManagement(TransferUI):
             action('Move to…', lambda: self._choose_transfer_destination(paths, cut=True), 'go-jump-symbolic')
         action('Paste', self._paste_files, 'edit-paste-symbolic', self._can_paste(), 'Ctrl+V')
         action('Add to Transfer Queue', lambda: self._paste_files(queued=True),
-               'folder-download-symbolic', self._can_paste(), 'Ctrl+Shift+V')
+               'folder-download-symbolic', self._can_paste_files(), 'Ctrl+Shift+V')
+        if screenshot_destination is not None and self._can_put_screenshot(screenshot_destination):
+            action('Put Screenshot Here', lambda: self._put_screenshot(screenshot_destination),
+                   'image-x-generic-symbolic')
         if not background:
             action('Copy Location', lambda: self._copy_location(paths), 'edit-copy-symbolic')
             action('Properties', lambda: self._show_properties(paths), 'dialog-information-symbolic')

@@ -1,10 +1,19 @@
 """Filesystem operations used by explicit chooser actions."""
+from datetime import datetime
+import errno
 from pathlib import Path
 import os
 import shutil
+import uuid
 from urllib.parse import unquote, urlparse
 
 from gi.repository import Gio, GLib
+
+from .transfers import directory_fd, rename_noreplace
+
+
+MAX_SCREENSHOT_BYTES = 128 * 1024 * 1024
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 
 
 class RemovalError(Exception):
@@ -47,6 +56,45 @@ def create_untitled_text(directory: Path) -> Path:
             return target
         except FileExistsError:
             number += 1
+
+
+def save_screenshot_png(directory: Path, content: bytes | bytearray, *, when=None) -> Path:
+    """Stage exact PNG bytes, then publish one collision-safe local filename."""
+    if not content.startswith(PNG_SIGNATURE):
+        raise ValueError('The clipboard image does not have a PNG signature.')
+    if len(content) > MAX_SCREENSHOT_BYTES:
+        raise ValueError(f'The clipboard image is larger than {MAX_SCREENSHOT_BYTES // (1024 * 1024)} MB.')
+    timestamp = (when or datetime.now()).strftime('%Y-%m-%d_%H-%M-%S')
+    stem = f'screenshot-{timestamp}'
+    stage_name = f'.gudfiles-screenshot-{uuid.uuid4().hex}.tmp'
+    with directory_fd(directory) as parent:
+        try:
+            stage = os.open(stage_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                            0o644, dir_fd=parent)
+            try:
+                view = memoryview(content)
+                while view:
+                    written = os.write(stage, view)
+                    if written <= 0:
+                        raise OSError('Could not write screenshot data.')
+                    view = view[written:]
+                os.fsync(stage)
+            finally:
+                os.close(stage)
+            for number in range(100_000):
+                name = f'{stem}.png' if number == 0 else f'{stem} ({number}).png'
+                try:
+                    rename_noreplace(parent, stage_name, parent, name)
+                    return directory / name
+                except OSError as error:
+                    if error.errno != errno.EEXIST:
+                        raise
+            raise ValueError('Too many screenshots have the same timestamp.')
+        finally:
+            try:
+                os.unlink(stage_name, dir_fd=parent)
+            except FileNotFoundError:
+                pass
 
 
 def validate_name(name: str) -> str:
