@@ -7,6 +7,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Clicking outside a right-click menu now dismisses the entire cascade even
+  when a hover submenu owns GTK's active popup grab. Intentional submenu
+  switching and hover timeout closes keep the root menu open, while Escape
+  can still back out of the active submenu without immediately reopening it.
 - Switching right-click submenus closes the previous popup before mapping its
   sibling. The shared MenuButton pre-popup callback covers hover, click and
   keyboard activation and respects Wayland's popup-grab ordering.
@@ -825,6 +829,18 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Context-menu outside-dismissal fix (2026-09-18): GTK closes the active modal
+  child first for a click outside a nested popover. The root now enables native
+  cascade popdown, while the hover controller temporarily suppresses cascading
+  for sibling handoffs, delayed hover closes and Escape. The native Wayland
+  regression checks child-to-root dismissal, repeated sibling switching,
+  explicit teardown and subsequent actions in active/light palettes with GTK
+  warnings fatal. It passes against source and the installed package; all 216
+  unit tests pass, and all installed runtime files match source. Physical
+  pointer injection was unavailable for this pass, so the native regression
+  drives the same GTK child-popdown path directly rather than synthesizing the
+  compositor click.
 
 - Submenu-switching fix (2026-09-18): reproduced on native Wayland as
   `Tried to map a grabbing popup with a non-top most parent`; the first menu

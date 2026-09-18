@@ -1,5 +1,5 @@
 """Pointer navigation for the custom, native cascading context menus."""
-from gi.repository import GLib, Gtk
+from gi.repository import Gdk, GLib, Gtk
 
 
 class HoverSubmenus:
@@ -11,6 +11,10 @@ class HoverSubmenus:
         self.pending = 0
         self.active = None
         self.pointer_suspended = False
+        self.restore_cascade = 0
+        # An outside click first dismisses the active modal submenu. Cascade
+        # that dismissal through the root instead of leaving it stranded.
+        popover.set_cascade_popdown(True)
         popover.connect('closed', self._reset)
         popover.connect('unmap', self._reset)
         self._keys(popover)
@@ -43,12 +47,37 @@ class HoverSubmenus:
             motion.connect('leave', leave)
         widget.add_controller(motion)
 
-    def _key_pressed(self, *_):
+    def _key_pressed(self, _controller, keyval, *_):
         # Dismissing a popup changes GTK's pointer grab and can emit enter for
         # the row under a stationary pointer. Do not reopen after Escape.
         self.pointer_suspended = True
         self._cancel()
+        if keyval == Gdk.KEY_Escape and self.active:
+            # Escape backs out of one submenu level. The default key handler
+            # runs after this capture controller, so keep cascade disabled
+            # through the rest of this event dispatch.
+            self._suspend_cascade()
         return False
+
+    def _suspend_cascade(self):
+        self.popover.set_cascade_popdown(False)
+        if not self.restore_cascade:
+            self.restore_cascade = GLib.idle_add(self._restore_cascade)
+
+    def _restore_cascade(self):
+        self.restore_cascade = 0
+        if self.popover.get_parent() is not None:
+            self.popover.set_cascade_popdown(True)
+        return GLib.SOURCE_REMOVE
+
+    def _popdown_child(self, submenu):
+        # Hover-closing or switching a submenu is internal navigation, not a
+        # request to dismiss the root. GtkPopover otherwise cascades both.
+        self.popover.set_cascade_popdown(False)
+        try:
+            submenu.popdown()
+        finally:
+            self.popover.set_cascade_popdown(True)
 
     def _pointer_moved(self, motion, resume):
         was_suspended = self.pointer_suspended
@@ -95,7 +124,7 @@ class HoverSubmenus:
     def _close_active(self):
         self.pending = 0
         if self.active:
-            self.active.popdown()
+            self._popdown_child(self.active)
         return GLib.SOURCE_REMOVE
 
     def _prepare_popup(self, button, *_):
@@ -109,14 +138,14 @@ class HoverSubmenus:
             # This is a handoff, not dismissal. Its unmap must not suspend
             # hovering or cancel the incoming popup's native activation.
             self.active = None
-            previous.popdown()
+            self._popdown_child(previous)
 
     def _opened(self, submenu):
         self._cancel()
         previous = self.active
         self.active = submenu
         if previous and previous is not submenu:
-            previous.popdown()
+            self._popdown_child(previous)
 
     def _closed(self, submenu):
         if self.active is submenu:
@@ -128,4 +157,7 @@ class HoverSubmenus:
 
     def _reset(self, *_):
         self._cancel()
+        if self.restore_cascade:
+            GLib.source_remove(self.restore_cascade)
+            self.restore_cascade = 0
         self.active = None

@@ -95,7 +95,21 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-popup-order-') as temporary:
                                 assert transition.index(('unmap', previous)) < transition.index(('map', index))
                             previous = index
 
-                    # Dismiss normally, then ensure the root can be opened again.
+                    # Native outside-click dismissal closes the active modal
+                    # child first. Its close must cascade through the root.
+                    buttons[previous].get_popover().popdown()
+                    settle()
+                    assert not popover.get_mapped(), 'Child dismissal left the root menu open'
+                    assert window.context_popover is None
+
+                    # Explicit dismissal still closes every surface, and the
+                    # root can subsequently be opened again.
+                    window._show_context_menu(35, 35, target)
+                    settle()
+                    popover = window.context_popover
+                    buttons = [row for row in children(popover.get_child()) if isinstance(row, Gtk.MenuButton)]
+                    buttons[0].popup()
+                    settle()
                     window._close_context_menu()
                     settle()
                     assert not popover.get_mapped()
