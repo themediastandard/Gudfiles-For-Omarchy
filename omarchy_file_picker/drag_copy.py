@@ -122,9 +122,15 @@ class DragCopy:
         self.force_copy = bool(source.get_current_event_state() & Gdk.ModifierType.ALT_MASK)
         self.source.set_actions(Gdk.DragAction.COPY if self.force_copy else
                                 Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
-        files = Gdk.FileList.new_from_list([Gio.File.new_for_path(str(p)) for p in self.paths])
+        gio_files = [Gio.File.new_for_path(str(path)) for path in self.paths]
+        files = Gdk.FileList.new_from_list(gio_files)
+        # GdkFileList is enough for GTK receivers, but X11/Xwayland applications
+        # only see MIME offers. Publish the standard URI payload explicitly so
+        # editors such as DaVinci Resolve can accept Gudfiles drags.
+        uri_list = ''.join(f'{file.get_uri()}\r\n' for file in gio_files).encode()
         return Gdk.ContentProvider.new_union([
             Gdk.ContentProvider.new_for_value(files),
+            Gdk.ContentProvider.new_for_bytes('text/uri-list', GLib.Bytes.new(uri_list)),
             Gdk.ContentProvider.new_for_bytes(FILE_DRAG_MIME, GLib.Bytes.new(b'files')),
         ])
 

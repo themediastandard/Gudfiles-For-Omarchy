@@ -242,11 +242,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   retain verified copies, atomic moves, labels, progress and clipboard contents.
 - Drag sources preserve GTK click/range/double-click behavior until the drag
   threshold. FlowBox's duplicate native rubber-band controller is disabled;
-  the existing background selection overlay owns blank drags. Native FileList /
-  URI payloads support other windows/apps; Alt advertises COPY only. Gudfiles uses
-  a marker to negotiate MOVE internally, acknowledges outside sources as COPY
-  so they cannot delete before queued work, and never deletes URI sources based
-  solely on GDK's delete-data flag. Hover checks are bounded/latest-only;
+  the existing background selection overlay owns blank drags. Sources publish
+  both native `GdkFileList` data and an explicit CRLF-delimited, URI-escaped
+  `text/uri-list` offer so MIME-only X11/Xwayland receivers such as DaVinci
+  Resolve can import the files; Alt advertises COPY only. Gudfiles uses a marker
+  to negotiate MOVE internally, acknowledges outside sources as COPY so they
+  cannot delete before queued work, and never deletes URI sources based solely
+  on GDK's delete-data flag. Hover checks are bounded/latest-only;
   publication and identity verification remain the transfer engine's authority.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
@@ -689,8 +691,10 @@ gdbus introspect --session \
 - Drag-copy QA uses GTK prepare/drop signals and actual widget hit testing for
   three-view multi-selection, same-folder copies, folder/column destinations,
   clipboard preservation, recursive/nonlocal rejection and edge scrolling.
-  GTK URI serialization is round-tripped with escaped names. Inter-application
-  DND remains a separate manual check. Optional
+  GTK URI serialization is round-tripped with escaped names; the source's
+  explicit `text/uri-list` MIME offer and exact bytes are also read back through
+  `GdkContentProvider`. End-to-end inter-application pointer DND remains a
+  separate manual check. Optional
   `DRAG_COPY_QA_SCREENSHOT=/tmp/drag-copy.png` captures the native drop highlight.
   Backend tests cover collision races, ambiguous receipts, long/hidden names,
   folders/symlinks, identical basenames, verified resume and cancellation.
@@ -829,6 +833,17 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Resolve drag compatibility fix (2026-09-18): Gudfiles previously exposed its
+  private marker plus the GTK-only `GdkFileList` type, but no explicit
+  `text/uri-list` MIME format. DaVinci Resolve runs through Xwayland on the
+  verified workstation and could not consume that in-process GTK type. Sources
+  now offer standards-based, URI-escaped CRLF bytes alongside `GdkFileList`.
+  The native three-view drag and tab-drag suites pass, including exact provider
+  MIME/byte readback, as do all 216 unit tests. The guarded user installer made
+  a rollback backup and the installed source advertises both formats. A real
+  pointer drop into Resolve remains the final acceptance check because the live
+  Wayland-to-Xwayland pointer path was not synthesized by the test harness.
 
 - Context-menu outside-dismissal fix (2026-09-18): GTK closes the active modal
   child first for a click outside a nested popover. The root now enables native

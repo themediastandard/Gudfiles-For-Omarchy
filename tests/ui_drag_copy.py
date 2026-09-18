@@ -100,6 +100,7 @@ with tempfile.TemporaryDirectory(prefix='picker-drag-copy-') as temp, \
             provider = drag.source.emit('prepare', *point(path, column))
         assert provider is not None
         assert provider.ref_formats().contain_gtype(Gdk.FileList)
+        assert provider.ref_formats().contain_mime_type('text/uri-list')
         return Gdk.FileList.new_from_list([Gio.File.new_for_path(str(p)) for p in drag.paths])
 
     def drop(value, position):
@@ -151,6 +152,19 @@ with tempfile.TemporaryDirectory(prefix='picker-drag-copy-') as temp, \
             original_provider = clipboard.get_content()
             value = arm(first, [first, second])
             if mode == 'grid':
+                with patch.object(Gtk.DragSource, 'get_current_event_state',
+                                  return_value=Gdk.ModifierType.ALT_MASK):
+                    provider = drag.source.emit('prepare', *point(first))
+                output = Gio.MemoryOutputStream.new_resizable()
+                written = []
+                provider.write_mime_type_async('text/uri-list', output, GLib.PRIORITY_DEFAULT,
+                    None, lambda current, result: written.append(current.write_mime_type_finish(result)))
+                until(lambda: written)
+                assert written == [True]
+                output.close(None)
+                expected = ''.join(f'{Gio.File.new_for_path(str(path)).get_uri()}\r\n'
+                                   for path in drag.paths).encode()
+                assert bytes(output.steal_as_bytes().get_data()) == expected
                 # Use GTK's actual cross-process URI serializer/deserializer,
                 # including characters which require URI escaping.
                 output = Gio.MemoryOutputStream.new_resizable()
