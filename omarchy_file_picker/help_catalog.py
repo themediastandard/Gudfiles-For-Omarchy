@@ -46,7 +46,7 @@ FEATURES = (
             'Use Show in Files or Show in Folder in another app to open the containing folder with the requested items selected and scrolled into view. Hidden targets are shown too.',
             keywords='chromium downloads reveal external selection'),
     Feature('browse', 'Folder tabs',
-            'Use + or Ctrl + T for a new Gudfiles tab. Tabs share the full strip width equally and resize as tabs open or close. Each tab keeps its folder history, view, filters, selection and scroll. Ctrl + W closes a tab; Ctrl + Shift + T reopens it. Drag tabs to reorder them.',
+            'Use + or Ctrl + T for a new Gudfiles tab. Tabs expand and fade in when opened, collapse when closed, and smoothly share the strip width. System reduced-motion settings are respected. Each tab keeps its folder history, view, filters, selection and scroll. Ctrl + W closes a tab; Ctrl + Shift + T reopens it. Drag tabs to reorder them.',
             'Ctrl + T / W', 'finder tabs close reopen'),
     Feature('browse', 'Switch tabs and open folders',
             'Ctrl + Tab and Ctrl + Shift + Tab switch tabs. Alt + 1–8 selects a tab; Alt + 9 selects the last. Middle-click a folder or sidebar location to open a background tab, or use Open in New Tab in its menu.',

@@ -4,6 +4,7 @@ from pathlib import Path
 import uuid
 
 from gi.repository import Gdk, GLib, Gtk, Pango
+from .tab_strip import AnimatedTabStrip
 
 
 @dataclass(eq=False)
@@ -23,13 +24,15 @@ class BrowserTabs(Gtk.Box):
         self.generation = 0
         self.hover_tab = None
         self.hover_timer = 0
+        self.reveal_tick = 0
         self.add_css_class('browser-tabs')
         self.set_visible(owner.request.explorer)
         self.scroll = Gtk.ScrolledWindow(hexpand=True)
         self.scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
         self.scroll.set_min_content_width(1)
-        self.strip = Gtk.Box(spacing=6, homogeneous=True, hexpand=True)
+        self.strip = AnimatedTabStrip()
         self.scroll.set_child(self.strip)
+        self.scroll.get_child().set_scroll_to_focus(False)
         self.append(self.scroll)
         self.add_button = Gtk.Button.new_from_icon_name('list-add-symbolic')
         self.add_button.add_css_class('tab-new')
@@ -37,7 +40,14 @@ class BrowserTabs(Gtk.Box):
         self.add_button.set_tooltip_text('New Tab (Ctrl+T)')
         self.add_button.connect('clicked', lambda *_: self.new())
         self.append(self.add_button)
-        self.connect('unrealize', lambda *_: self.drag_hover(None))
+        self.connect('unrealize', self._stop_motion)
+
+    def _stop_motion(self, *_):
+        self.drag_hover(None)
+        self.strip.finish()
+        if self.reveal_tick:
+            self.remove_tick_callback(self.reveal_tick)
+            self.reveal_tick = 0
 
     def initialize(self):
         if self.owner.request.explorer:
@@ -71,7 +81,10 @@ class BrowserTabs(Gtk.Box):
         middle.connect('pressed', lambda gesture, *_: self._middle_close(gesture, tab))
         tab.widget.add_controller(middle)
         reorder = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
-        reorder.connect('prepare', lambda *_: Gdk.ContentProvider.new_for_value(tab.id))
+        def prepare(*_):
+            self.strip.finish()
+            return Gdk.ContentProvider.new_for_value(tab.id)
+        reorder.connect('prepare', prepare)
         tab.button.add_controller(reorder)
         target = Gtk.DropTarget.new(str, Gdk.DragAction.MOVE)
         target.connect('drop', lambda _t, value, x, _y: self.reorder(value, tab, x))
@@ -190,6 +203,8 @@ class BrowserTabs(Gtk.Box):
         self._reveal(tab)
 
     def _reveal(self, tab):
+        if self.reveal_tick:
+            self.remove_tick_callback(self.reveal_tick)
         frames = 0
         def reveal(*_):
             nonlocal frames
@@ -197,8 +212,8 @@ class BrowserTabs(Gtk.Box):
             # New pills receive their bounds after the first frame's layout.
             if frames < 2:
                 return True
-            if tab is self.current:
-                valid, bounds = tab.widget.compute_bounds(self.strip)
+            if tab is self.current and tab in self.items:
+                valid, bounds = tab.widget.get_parent().compute_bounds(self.strip)
                 if valid:
                     adjustment = self.scroll.get_hadjustment()
                     left, right = bounds.get_x(), bounds.get_x() + bounds.get_width()
@@ -206,8 +221,11 @@ class BrowserTabs(Gtk.Box):
                         adjustment.set_value(left)
                     elif right > adjustment.get_value() + adjustment.get_page_size():
                         adjustment.set_value(right - adjustment.get_page_size())
+                if self.strip.tick_id:
+                    return True
+            self.reveal_tick = 0
             return False
-        self.add_tick_callback(reveal)
+        self.reveal_tick = self.add_tick_callback(reveal)
 
     def close(self, tab=None):
         tab = tab or self.current
@@ -225,6 +243,7 @@ class BrowserTabs(Gtk.Box):
         self.items.remove(tab)
         self.strip.remove(tab.widget)
         self.drag_hover(None)
+        self._reveal(self.current)
 
     def reopen(self):
         if self.closed:

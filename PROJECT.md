@@ -159,6 +159,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Tabs are session-only; portal/explicit picker windows retain their original
   controls and result semantics.
 - Tabs fill the available strip width, sharing it equally as tabs open or close.
+  Opening tabs expand and fade in with a subtle vertical settle; closing tabs
+  collapse and fade out as their neighbors smoothly resize. Native frame-clock
+  motion lasts 220 ms with cubic easing, supports rapid interruption/reopening,
+  and settles immediately when GTK animations are disabled. Logical closure
+  happens immediately; outgoing tabs cannot receive clicks, focus or drops.
+  Drag reordering settles active motion first, and overflow reveal tracks the
+  selected tab throughout its expansion. Final-tab transfer guards are unchanged.
   They retain 28-pixel rounded styling, ellipsized labels and a 20-pixel circular
   close button on the left. A small New Tab control stays at the right edge;
   many tabs scroll horizontally when their minimum widths exceed the viewport.
@@ -361,6 +368,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/tab_strip.py` — equal-width native tab allocation with
+  clipped opening/closing slots, interruptible easing and reduced-motion cleanup.
 - `omarchy_file_picker/search.py` / `search_ui.py` — bounded filename scanner,
   process cancellation, one active/latest pending request, native scope controls
   and generation-checked result rendering with parent locations.
@@ -440,6 +449,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+TAB_MOTION_SCREENSHOTS=/tmp/gudfiles-tab-motion PYTHONPATH=. python tests/ui_tab_motion.py
 SEARCH_QA_SCREENSHOTS=/tmp/gudfiles-search PYTHONPATH=. python tests/ui_search_scope.py
 TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar PYTHONPATH=. python tests/ui_toolbar.py
 PYTHONPATH=. python tests/ui_sorting.py
@@ -791,6 +801,18 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Tab-motion verification (2026-09-17): native after-paint samples check gradual
+  width/fade changes, equal final sizes and no final spacing jump when closing
+  first/middle/last tabs. Active/light themes pass at 820/1200 pixels, including
+  rapid close/reopen, reorder during motion, overflow reveal, disabling animations
+  mid-transition, immediate reduced-motion actions, final-tab close and callback
+  cleanup. Existing native tab/drag behavior passes; the 216 unit tests pass.
+  Only fixture windows are floated/resized; native signals and rendered frames
+  are exercised, without injecting keyboard/pointer events on the live desktop.
+  The same motion suite passes against the installed package. All 50 installed
+  runtime files match source; the three new/updated modules were installed with
+  backups without closing user windows. Reopen existing windows for the update.
 
 - Search scope verification (2026-09-17): 216 unit tests pass, including real
   subprocess recursion, hidden/type/directory constraints, duplicate basenames,
