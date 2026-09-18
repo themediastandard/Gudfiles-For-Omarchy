@@ -72,12 +72,11 @@ class HoverSubmenus:
 
     def _popdown_child(self, submenu):
         # Hover-closing or switching a submenu is internal navigation, not a
-        # request to dismiss the root. GtkPopover otherwise cascades both.
-        self.popover.set_cascade_popdown(False)
-        try:
-            submenu.popdown()
-        finally:
-            self.popover.set_cascade_popdown(True)
+        # request to dismiss the root. GtkPopover unmaps asynchronously, so
+        # keep cascading disabled through the next main-loop iteration rather
+        # than restoring it immediately after popdown() returns.
+        self._suspend_cascade()
+        submenu.popdown()
 
     def _pointer_moved(self, motion, resume):
         was_suspended = self.pointer_suspended
