@@ -233,7 +233,7 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 settle()
                 try:
                     with patch.object(picker, '_finish') as finish:
-                        picker.search.grab_focus()
+                        picker._open_search()
                         assert press(picker, Gdk.KEY_F1)
                         settle()
                         assert picker.help_window.get_visible()

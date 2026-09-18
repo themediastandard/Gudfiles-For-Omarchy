@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-sort-') as temp, \
     window.present()
     settle()
     try:
-        assert window.sort_button.get_parent() is window.toolbar
+        assert window.sort_button.get_parent() is window.toolbar.actions
         assert window.sort_button.get_mapped()
         assert not window.preferences_path.exists(), 'Startup must not rewrite preferences'
         geometry = window.get_width(), window.get_height()

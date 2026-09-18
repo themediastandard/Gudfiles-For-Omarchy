@@ -92,11 +92,12 @@ with tempfile.TemporaryDirectory(prefix='list-keys-') as temp, \
             last = folders[-1] if directory else note
             assert window._selected_paths() == [last]
             assert window.get_focus()._picker_path == last
-            window.search.grab_focus()
+            window._open_search()
             before = window._selected_paths()
             assert not navigate_files(window, Gdk.KEY_Up, Gdk.ModifierType(0))
             send('key', 'Up')
             assert window._selected_paths() == before
+            send('key', 'Escape')
             window.list_button.grab_focus()
             assert not navigate_files(window, Gdk.KEY_Up, Gdk.ModifierType.ALT_MASK)
             sidebar = window.location_buttons[0]

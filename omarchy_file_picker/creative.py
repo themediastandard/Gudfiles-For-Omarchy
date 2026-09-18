@@ -245,6 +245,9 @@ class CreativeTools:
         mode, minimum, color = self.creative_filter
         items = []
         query = self.search.get_text()
+        search_toggle = self.search_button.get_first_child()
+        (search_toggle.add_css_class if query else search_toggle.remove_css_class)('active')
+        self.search_button.set_tooltip_text('Search active · Edit search (Ctrl+F)' if query else 'Search this folder (Ctrl+F)')
         if query:
             items.append(('search', 'Search: ' + query))
         file_filter = self._active_filter() if hasattr(self, 'filter_combo') else None

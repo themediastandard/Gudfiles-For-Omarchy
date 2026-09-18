@@ -103,7 +103,8 @@ with tempfile.TemporaryDirectory(prefix='tabs-drag-') as temporary, \
         assert window.current_dir == second and not window._selected_paths()
         window._set_view('grid')
         tabs.select(original)
-        settle(250)
+        # Tab selection is restored after allocation on the frame clock.
+        until(lambda: window._selected_paths() == paths[20:23])
         assert window.current_dir == first and window.view_mode == 'list'
         assert window._selected_paths() == paths[20:23], window._selected_paths()
         assert abs(window.file_scroller.get_vadjustment().get_value() - saved_scroll) < 2

@@ -323,6 +323,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         index = self.columns.index(self.active) + 1
         if index < len(self.columns) and self.columns[index].path == target:
             self.reveal_column(self.columns[index])
+            owner._rebuild_pathbar()
+            owner._update_nav_state()
             return False
         self.busy = True
         try:
@@ -335,6 +337,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             self.busy = False
         if target:
             self.append(target)
+        owner._rebuild_pathbar()
+        owner._update_nav_state()
         return False
 
     def enter_folder(self, column, path=None):

@@ -12,6 +12,7 @@ class BreadcrumbButton(Gtk.Button):
 
     def __init__(self, text, colors, *, first=False, current=False):
         super().__init__(label=text)
+        self.set_tooltip_text(text)
         self.colors, self.first, self.current = colors, first, current
         self.add_css_class('path-segment')
         if current:

@@ -28,7 +28,7 @@ class BrowserTabs(Gtk.Box):
         self.scroll = Gtk.ScrolledWindow(hexpand=True)
         self.scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
         self.scroll.set_min_content_width(1)
-        self.strip = Gtk.Box(spacing=6, halign=Gtk.Align.START)
+        self.strip = Gtk.Box(spacing=6, homogeneous=True, hexpand=True)
         self.scroll.set_child(self.strip)
         self.append(self.scroll)
         self.add_button = Gtk.Button.new_from_icon_name('list-add-symbolic')
@@ -53,9 +53,9 @@ class BrowserTabs(Gtk.Box):
 
     def _add(self, path):
         tab = Tab(path)
-        tab.widget = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER)
+        tab.widget = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER, hexpand=True)
         tab.widget.add_css_class('browser-tab')
-        tab.button = Gtk.Button()
+        tab.button = Gtk.Button(hexpand=True)
         tab.button.add_css_class('tab-label')
         tab.label = Gtk.Label(ellipsize=Pango.EllipsizeMode.MIDDLE, width_chars=6, max_width_chars=20)
         tab.button.set_child(tab.label)

@@ -7,6 +7,18 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- The toolbar has an Up one folder button beside Back/Forward, sharing Alt+Up
+  behavior and disabled at `/` and in Recent. Search is a magnifying-glass
+  button with a focused popover and Ctrl+F support. Enter applies the query and
+  focuses results; Escape closes the popover while retaining the filter, and
+  the search chip clears it. Navigation and actions share one row when space
+  allows; actions wrap below navigation in narrow windows or with a wide
+  sidebar. Controls fit at the existing 820-pixel minimum window width.
+- `tests/ui_toolbar.py` verifies native bounds, wrapping/unwrapping, location
+  entry, sidebar resizing, Up/history, search, filter clearing and tab state in
+  active/light palettes. Its windows alone are floated/resized; optional
+  `TOOLBAR_QA_SCREENSHOTS` captures the actual GTK surfaces. Keyboard checks use
+  native signals, not physical pointer/key injection.
 - Locations without Trash support, including the verified SMB NAS shares, show
   an explicit permanent-delete confirmation after GIO reports `NOT_SUPPORTED`.
   Cancel keeps the unsupported items intact; successful Trash items are excluded
@@ -133,9 +145,14 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   file drag. All tabs share the existing transfer queue and guarded final close.
   Tabs are session-only; portal/explicit picker windows retain their original
   controls and result semantics.
-- Tab styling follows Tommy's compact Finder preference: 28-pixel rounded pills,
-  bounded labels that do not expand across the strip, and a 20-pixel circular
-  close button on the left. A small New Tab control stays at the right edge.
+- Tabs fill the available strip width, sharing it equally as tabs open or close.
+  They retain 28-pixel rounded styling, ellipsized labels and a 20-pixel circular
+  close button on the left. A small New Tab control stays at the right edge;
+  many tabs scroll horizontally when their minimum widths exceed the viewport.
+  Native sizing checks cover one/two/three tabs, unequal folder-name lengths,
+  820/1200-pixel windows, close/reopen expansion and overflow reveal. Tab/drag
+  regression checks pass; they await frame-clock selection restoration rather
+  than assuming a fixed 250 ms delay.
   New-tab scrolling waits for GTK layout before revealing the selected pill.
 - Header Help / F1 opens a compact, searchable feature guide with seven categories,
   shortcut badges, empty-search recovery and active Omarchy colors. Ctrl+F focuses
@@ -282,9 +299,14 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Breadcrumbs scroll within a bounded toolbar viewport; long metadata, type,
   sidebar and selection labels ellipsize instead of growing the window.
 - Breadcrumbs are connected chevron buttons with matching notch hit tests and
-  a highlighted current folder. Wheel input scrolls the trail horizontally,
-  never navigates folders. File rows, breadcrumbs and metadata paths do not
-  show full-path hover tooltips.
+  a highlighted current folder. In columns, the trail includes the single
+  selected folder whose contents have opened beside its parent; selection and
+  file actions remain owned by the active column. Up and the location field
+  follow the displayed folder. The current breadcrumb is revealed after layout,
+  including equal-width sibling changes. Hover shows each breadcrumb's full
+  folder name. Wheel input scrolls ancestors without navigating folders or
+  being overridden by pending automatic reveal. File rows and metadata paths
+  retain their existing tooltip behavior.
 - In-window Quick Look expands from the selected tile on Space and contracts
   on Space/Escape. Includes images, bounded read-only text, first-page PDFs,
   adjacent-file browsing, reduced motion and optional GStreamer media playback.
@@ -326,6 +348,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/toolbar.py` — native height-for-width layout that keeps
+  navigation together and wraps the action group according to available space.
 - `omarchy_file_picker/archives.py` — streamed ZIP validation/extraction, private
   staging, collision naming and atomic publication; `FileManagement._extract_zip`
   owns background work and the shared operation notice.
@@ -400,6 +424,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar PYTHONPATH=. python tests/ui_toolbar.py
 PYTHONPATH=. python tests/ui_sorting.py
 LIGHT_THEME_QA_SCREENSHOTS=/tmp/gudfiles-light PYTHONPATH=. python tests/ui_light_theme.py
 SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action_sounds.py
@@ -749,6 +774,30 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Breadcrumb verification (2026-09-17): single-click column navigation now
+  includes the opened child folder while preserving the parent's selected row
+  for file operations. Up/location entry follow the displayed folder. A second
+  reproduced lag came from changing the horizontal adjustment during GTK
+  viewport allocation: the value reached the end while the child retained its
+  previous translation. Reveal now runs after layout. The native regression
+  checks actual breadcrumb bounds as well as adjustment values, equal-width
+  siblings, nested/empty columns, deselection, tabs, Up and full-name tooltips.
+  Breadcrumb, column, tab/drag and active/light toolbar checks pass, along with
+  all 206 unit tests. Updated modules are installed with backups; all 47 runtime
+  files match source. Reopen existing windows to load the changes.
+
+- Toolbar verification (2026-09-17): 206 unit tests and native toolbar checks
+  passed, including active/light layouts at 820, 960 and 1200 pixels, sidebar
+  resizing, path entry, all-view Up/search, root/Recent and per-tab filters.
+  Source sorting, breadcrumbs and explorer/Open/Save checks passed; tab/drag
+  checks passed on rerun after an initial selection-restoration timing failure.
+  The toolbar checks also pass against the installed package; all 47 runtime
+  files match source. Updated runtime files were backed up without closing
+  existing user windows; those windows need reopening to load the update.
+  The broader Help test stops at its native geometry assertion on both unchanged
+  HEAD and this version in the current desktop session. Physical X11 input
+  suites were not run because Xvfb/xdotool are unavailable here.
 
 - Portrait navigation verification (2026-09-08): actual isolated Up/Down input
   reproduced the open image card reverting to a 940-pixel-wide loading frame.

@@ -114,9 +114,10 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-arrows-') as temp, \
             before = window._selected_paths()
             send('key', 'Down')
             assert window._selected_paths() == before
-            window.search.grab_focus()
+            window._open_search()
             send('key', 'Up', 'Down')
             assert window._selected_paths() == before
+            send('key', 'Escape')
             # File previews accept vertical and horizontal next/previous keys
             # in the current sorted order, including after closing the overlay.
             window._set_sort('modified', True)

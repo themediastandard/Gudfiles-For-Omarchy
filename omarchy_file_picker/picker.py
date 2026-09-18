@@ -52,6 +52,7 @@ from .sidebar import SidebarMenus
 from .help_window import show_help
 from .list_navigation import navigate_files
 from .tabs import BrowserTabs
+from .toolbar import AdaptiveToolbar
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -274,8 +275,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.tabs = BrowserTabs(self)
         browser.append(self.tabs)
 
-        self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.toolbar.add_css_class("toolbar")
+        self.toolbar = AdaptiveToolbar()
         browser.append(self.toolbar)
         self._build_toolbar()
         browser.append(self._build_active_filters())
@@ -467,8 +467,11 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _build_toolbar(self) -> None:
         self.back_button = self._icon_button("go-previous-symbolic", "Back (Alt+Left)", self._go_back)
         self.forward_button = self._icon_button("go-next-symbolic", "Forward (Alt+Right)", self._go_forward)
-        self.toolbar.append(self.back_button)
-        self.toolbar.append(self.forward_button)
+        self.up_button = self._icon_button("go-up-symbolic", "Up one folder (Alt+Up)", self._go_up)
+        self.up_button.update_property([Gtk.AccessibleProperty.LABEL], ['Up one folder'])
+        self.toolbar.navigation.append(self.back_button)
+        self.toolbar.navigation.append(self.forward_button)
+        self.toolbar.navigation.append(self.up_button)
 
         self.path_stack = Gtk.Stack()
         self.path_stack.set_hexpand(True)
@@ -480,33 +483,47 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.path_scroll.set_min_content_width(80)
         self.path_scroll.set_propagate_natural_width(False)
         self.path_scroll.set_child(self.path_box)
-        self.path_scroll.get_hadjustment().connect('changed', self._scroll_path_to_current)
+        self.path_reveal_tick = 0
+        # GtkViewport emits this while allocating. Changing the scroll value
+        # there can leave its child positioned at the previous folder's offset.
+        self.path_scroll.get_hadjustment().connect('changed', lambda _adjustment: self._reveal_current_breadcrumb())
         self.path_wheel = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.BOTH_AXES)
         self.path_wheel.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        self.path_wheel.connect('scroll', lambda controller, dx, dy:
-                                scroll_breadcrumbs(controller, dx, dy, self.path_scroll.get_hadjustment()))
+        self.path_wheel.connect('scroll', self._on_path_scroll)
         self.path_scroll.add_controller(self.path_wheel)
         self.path_stack.add_named(self.path_scroll, "crumbs")
         self.path_entry = Gtk.Entry()
+        self.path_entry.set_width_chars(1)
         self.path_entry.connect("activate", self._on_path_activate)
         self.path_stack.add_named(self.path_entry, "entry")
         self.path_stack.set_visible_child_name("crumbs")
-        self.toolbar.append(self.path_stack)
+        self.toolbar.navigation.append(self.path_stack)
 
         location_button = self._icon_button("document-edit-symbolic", "Type a location (Ctrl+L)", self._toggle_path_entry)
-        self.toolbar.append(location_button)
+        self.toolbar.navigation.append(location_button)
 
+        self.search_button = Gtk.MenuButton(icon_name='system-search-symbolic')
+        self.search_button.set_tooltip_text('Search this folder (Ctrl+F)')
+        self.search_button.update_property([Gtk.AccessibleProperty.LABEL], ['Search this folder'])
+        self.search_popover = Gtk.Popover()
+        self.search_button.set_popover(self.search_popover)
         self.search = Gtk.SearchEntry(placeholder_text="Search this folder")
-        self.search.set_size_request(240, -1)
+        self.search.set_size_request(280, -1)
+        for side in ('top', 'bottom', 'start', 'end'):
+            getattr(self.search, 'set_margin_' + side)(10)
         self._last_search = ""
         self.search.connect("search-changed", self._search_changed)
-        self.toolbar.append(self.search)
-        self.toolbar.append(self._creative_filter_button())
+        self.search.connect('stop-search', lambda *_: self.search_button.popdown())
+        self.search.connect('activate', self._search_activated)
+        self.search_popover.set_child(self.search)
+        self.search_popover.connect('map', lambda *_: self.search.grab_focus())
+        self.toolbar.actions.append(self.search_button)
+        self.toolbar.actions.append(self._creative_filter_button())
 
         self.hidden_button = self._icon_button("view-conceal-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
         self.hidden_button.add_css_class('hidden-toggle')
-        self.toolbar.append(self.hidden_button)
-        self.toolbar.append(self._build_sort_button())
+        self.toolbar.actions.append(self.hidden_button)
+        self.toolbar.actions.append(self._build_sort_button())
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
         self.columns_button = self._icon_button('view-dual-symbolic', 'Column view', lambda _b: self._set_view('columns'))
@@ -514,8 +531,19 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         views.add_css_class('view-switcher')
         for button in (self.grid_button, self.list_button, self.columns_button):
             views.append(button)
-        self.toolbar.append(views)
+        self.toolbar.actions.append(views)
         self.grid_button.add_css_class('active')
+
+    def _open_search(self):
+        self.search_button.popup()
+        self.search.grab_focus()
+        self.search.select_region(0, -1)
+
+    def _search_activated(self, _entry):
+        # Apply immediately if Return beats SearchEntry's debounce timer.
+        self._search_changed(self.search)
+        self.search_button.popdown()
+        self.flow.child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _build_footer(self) -> None:
         if self.request.choices:
@@ -658,6 +686,9 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
         focus = self.get_focus()
         editing = isinstance(focus, (Gtk.Editable, Gtk.TextView))
+        if keyval == Gdk.KEY_Escape and self.search_popover.get_visible():
+            self.search_button.popdown()
+            return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_Escape and self.context_popover:
             self._close_context_menu()
             return Gdk.EVENT_STOP
@@ -705,14 +736,14 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
                 if self.special_mode is None: self._show_create_dialog('folder')
                 return Gdk.EVENT_STOP
             if alt and keyval == Gdk.KEY_Up:
-                self.navigate(self.current_dir.parent)
+                self._go_up(None)
                 return Gdk.EVENT_STOP
             if alt and keyval == Gdk.KEY_Return:
                 self._show_properties(selected or [self.current_dir])
                 return Gdk.EVENT_STOP
         if keyval == Gdk.KEY_Escape:
             if self.path_stack.get_visible_child_name() == "entry":
-                self.path_stack.set_visible_child_name("crumbs")
+                self._toggle_path_entry(None)
             elif self.search.get_text():
                 self.search.set_text("")
             elif self.request.explorer:
@@ -724,7 +755,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self._toggle_path_entry(None)
             return Gdk.EVENT_STOP
         if control and keyval in (Gdk.KEY_f, Gdk.KEY_F):
-            self.search.grab_focus()
+            self._open_search()
             return Gdk.EVENT_STOP
         if control and keyval in (Gdk.KEY_h, Gdk.KEY_H):
             self._toggle_hidden(None)
@@ -777,8 +808,8 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         self.entries = self._creative_entries(self.entries)
         self.entries = sort_entries(self.entries, self.file_preferences['sort_key'],
                                     self.file_preferences['descending'], self.file_preferences['folders_first'])
-        self._rebuild_pathbar()
         self._rebuild_files()
+        self._rebuild_pathbar()
         self._update_nav_state()
         self._update_active_location()
 
@@ -884,14 +915,53 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
     def _scroll_path_to_current(self, adjustment) -> None:
         adjustment.set_value(max(adjustment.get_lower(), adjustment.get_upper() - adjustment.get_page_size()))
 
+    def _on_path_scroll(self, controller, dx, dy):
+        if self.path_reveal_tick:
+            self.path_scroll.remove_tick_callback(self.path_reveal_tick)
+            self.path_reveal_tick = 0
+        return scroll_breadcrumbs(controller, dx, dy, self.path_scroll.get_hadjustment())
+
+    def _reveal_current_breadcrumb(self):
+        if self.path_reveal_tick:
+            self.path_scroll.remove_tick_callback(self.path_reveal_tick)
+        frames = 0
+
+        def reveal(_widget, _clock):
+            nonlocal frames
+            frames += 1
+            # Wait for the new buttons and GTK's focus scrolling to be allocated.
+            # Equal-width sibling paths do not emit an adjustment size change.
+            if frames < 3:
+                return True
+            self._scroll_path_to_current(self.path_scroll.get_hadjustment())
+            self.path_reveal_tick = 0
+            return False
+
+        self.path_reveal_tick = self.path_scroll.add_tick_callback(reveal)
+
+    def _breadcrumb_directory(self):
+        # Column selection stays in its parent for drag/file operations, while
+        # the path includes the folder whose contents were opened beside it.
+        if self.view_mode == 'columns' and self.special_mode is None:
+            active = self.columns.active
+            if active in self.columns.columns:
+                index = self.columns.columns.index(active) + 1
+                selected = active.flow.get_selected_children()
+                if index < len(self.columns.columns) and len(selected) == 1:
+                    child = self.columns.columns[index]
+                    if child.path == selected[0]._picker_path:
+                        return child.path
+        return self.current_dir
+
     def _rebuild_pathbar(self) -> None:
         while child := self.path_box.get_first_child():
             self.path_box.remove(child)
         if self.special_mode == "recent":
             button = BreadcrumbButton('Recent', self.colors, first=True, current=True)
             self.path_box.append(button)
+            self._reveal_current_breadcrumb()
             return
-        path = self.current_dir.resolve()
+        path = self._breadcrumb_directory().resolve()
         home = Path.home().resolve()
         if path == home or home in path.parents:
             current = home
@@ -911,6 +981,7 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             button.connect("clicked", lambda _b, p=current: self.navigate(p))
             self.path_box.append(button)
         self.path_entry.set_text(str(path))
+        self._reveal_current_breadcrumb()
 
     def _clear_metadata(self) -> None:
         self.media_details.cancel()
@@ -1710,9 +1781,16 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
             self.special_mode = None
             self._load()
 
+    def _go_up(self, _button) -> None:
+        path = self._breadcrumb_directory()
+        if self.special_mode is None and path != path.parent:
+            self.navigate(path.parent)
+
     def _update_nav_state(self) -> None:
         self.back_button.set_sensitive(self.history_index > 0)
         self.forward_button.set_sensitive(self.history_index < len(self.history) - 1)
+        path = self._breadcrumb_directory()
+        self.up_button.set_sensitive(self.special_mode is None and path != path.parent)
 
     def _update_active_location(self) -> None:
         if hasattr(self, "tabs"):
@@ -1800,10 +1878,13 @@ class PickerWindow(SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationW
         return GLib.SOURCE_REMOVE
 
     def _toggle_path_entry(self, _button) -> None:
+        self.search_button.popdown()
         if self.path_stack.get_visible_child_name() == "entry":
             self.path_stack.set_visible_child_name("crumbs")
+            if self.path_box.buttons:
+                self.path_box.buttons[-1].grab_focus()
         else:
-            self.path_entry.set_text(str(self.current_dir))
+            self.path_entry.set_text(str(self._breadcrumb_directory()))
             self.path_stack.set_visible_child_name("entry")
             self.path_entry.grab_focus()
             self.path_entry.select_region(0, -1)
