@@ -258,7 +258,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - New Text File creates and selects an empty `untitled.txt` immediately, with
   numbered collision-safe names and no naming dialog. Rename remains available.
 - Context-menu surfaces use scoped GTK CSS, compact flat rows, and inward
-  submenu placement near the chooser's right edge.
+  submenu placement near the chooser's right edge. Submenus open after 140 ms
+  of hover, with a 280 ms grace period for crossing into the submenu. Hovering
+  another submenu switches it; ordinary actions dismiss it. Click/keyboard
+  controls remain available. Popup-grab changes after dismissal cannot reopen
+  a submenu until the pointer moves; closing the root cancels pending timers.
 - File and background menus include rename, clipboard file operations,
   confirmed trash/permanent deletion, properties, bookmarks, view and sort.
   NAS connection is sidebar-only. Rename and paste never overwrite collisions.
@@ -368,6 +372,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/context_menu.py` — shared hover navigation, delayed
+  submenu handoff, native keyboard/pointer transitions and menu-bound cleanup.
 - `omarchy_file_picker/tab_strip.py` — equal-width native tab allocation with
   clipped opening/closing slots, interruptible easing and reduced-motion cleanup.
 - `omarchy_file_picker/search.py` / `search_ui.py` — bounded filename scanner,
@@ -449,6 +455,8 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+# On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
 TAB_MOTION_SCREENSHOTS=/tmp/gudfiles-tab-motion PYTHONPATH=. python tests/ui_tab_motion.py
 SEARCH_QA_SCREENSHOTS=/tmp/gudfiles-search PYTHONPATH=. python tests/ui_search_scope.py
 TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar PYTHONPATH=. python tests/ui_toolbar.py
@@ -801,6 +809,17 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Context-hover verification (2026-09-17): real pointer/keyboard input on an
+  isolated Xvfb display passes in active/light themes at 820/1200 pixels, with
+  submenus opening both left and right. Checks cover hover, crossing popup
+  boundaries, sibling switching, quick pass-through, disabled rows, click
+  toggling, keyboard opening/Escape, resuming the mouse, an actual right-click
+  and action, menu replacement and destruction during a delayed open. GTK
+  callback exceptions fail the test. All 216 unit tests pass. The same pointer
+  suite passes against the installed package; all 51 runtime files match source.
+  Updated modules have backups, and existing windows need reopening. These
+  physical-input checks use X11; live Wayland pointer input remains separate.
 
 - Tab-motion verification (2026-09-17): native after-paint samples check gradual
   width/fade changes, equal final sizes and no final spacing jump when closing

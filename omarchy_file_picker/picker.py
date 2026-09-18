@@ -54,6 +54,7 @@ from .list_navigation import navigate_files
 from .tabs import BrowserTabs
 from .toolbar import AdaptiveToolbar
 from .search_ui import SearchTools
+from .context_menu import HoverSubmenus
 
 
 IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
@@ -1343,6 +1344,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             ))
 
         self.context_popover = popover
+        HoverSubmenus(popover)
         popover.popup()
         if automation == "context-submenu" and self.qa_submenu_button:
             GLib.timeout_add(150, self._open_qa_submenu)

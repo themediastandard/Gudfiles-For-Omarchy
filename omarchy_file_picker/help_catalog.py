@@ -131,7 +131,7 @@ FEATURES = (
             'Delete moves selected items to Trash after confirmation. If a location such as a NAS does not support Trash, Gudfiles explains this and offers a separate permanent-delete confirmation for those items. Cancel keeps them in place. Shift + Delete permanently deletes after confirmation. All destructive dialogs start on Cancel.',
             'Delete / Shift + Delete'),
     Feature('organize', 'Right-click actions',
-            'Right-click a file, blank folder space or a sidebar location for its actions. Shift + F10 opens the menu for the focused item.',
+            'Right-click a file, blank folder space or a sidebar location for its actions. Hover over a row with an arrow to open its submenu. Shift + F10 opens the menu for the focused item.',
             'Shift + F10', 'context menu'),
 
     Feature('transfers', 'Copy, cut & paste',
