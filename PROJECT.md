@@ -296,7 +296,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   picker footer controls and result semantics.
 - List view uses compact 28-pixel rows with a 2-pixel gap (30-pixel pitch).
   Column rows also have a 2-pixel gap; grid spacing is unchanged. Selected
-  files use the soft accent fill without a blue selection border. Native range and individual selection remain supported.
+  files use the soft accent fill without a blue selection border. List and column
+  rows fill the content width without left/right outer padding; list headings
+  retain alignment with the cells. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
@@ -914,6 +916,12 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 full-width file rows: native list/column bounds confirm zero
+  horizontal outer inset while retaining 2-pixel vertical gaps. Pinned headings,
+  column alignment, horizontal scrolling and list behavior pass at 820/1200
+  pixels in active/light/dark palettes. Native selection snapshots were reviewed.
+  The updated theme is installed with a rollback backup; reopen existing windows.
 
 - September 19 edge/selection refinements: native bounds confirm zero outer
   tab-row gaps, + flush right, and no gap between the last tab and +. Tab-motion
