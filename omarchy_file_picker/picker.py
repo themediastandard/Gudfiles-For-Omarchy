@@ -668,7 +668,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 self.quicklook.step(-1 if keyval in (Gdk.KEY_Up, Gdk.KEY_Left) else 1)
                 return Gdk.EVENT_STOP
             # Preview must not accept/delete/rename a file behind the overlay.
-            if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_Delete, Gdk.KEY_F2):
+            if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_F2) or \
+                    self._remove_shortcut(keyval, state):
                 return Gdk.EVENT_STOP
             return Gdk.EVENT_PROPAGATE
         editing = isinstance(self.get_focus(), (Gtk.Editable, Gtk.TextView))
@@ -707,7 +708,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 else:
                     self._show_context_menu(24, 24, selected[0] if selected else None, keyboard=True)
                 return Gdk.EVENT_STOP
-            if self.file_job_active and (keyval in (Gdk.KEY_F2, Gdk.KEY_Delete) or
+            if self.file_job_active and (keyval == Gdk.KEY_F2 or self._remove_shortcut(keyval, state) or
                     (control and keyval in (Gdk.KEY_v, Gdk.KEY_V, Gdk.KEY_n, Gdk.KEY_N))):
                 return Gdk.EVENT_STOP
             if keyval == Gdk.KEY_F2 and selected:
@@ -718,7 +719,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 return Gdk.EVENT_STOP
             if self._creative_shortcut(keyval, state, selected):
                 return Gdk.EVENT_STOP
-            if keyval == Gdk.KEY_Delete and selected:
+            if self._remove_shortcut(keyval, state) and selected:
                 self._confirm_remove(selected, permanent=shift)
                 return Gdk.EVENT_STOP
             if keyval == Gdk.KEY_F5:
@@ -771,6 +772,11 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self._go_forward(None)
             return Gdk.EVENT_STOP
         return Gdk.EVENT_PROPAGATE
+
+    @staticmethod
+    def _remove_shortcut(keyval, state):
+        return keyval == Gdk.KEY_Delete or (
+            keyval == Gdk.KEY_BackSpace and bool(state & Gdk.ModifierType.SUPER_MASK))
 
     def _active_filter(self):
         index = self.filter_combo.get_active() - 1

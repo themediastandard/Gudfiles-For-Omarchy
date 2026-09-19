@@ -120,6 +120,17 @@ def moved():
     w.flow.grab_focus()
     w._on_key_pressed(None, Gdk.KEY_F2, 0, Gdk.ModifierType(0))
     dialog('Rename').response(Gtk.ResponseType.CANCEL)
+    removal_shortcuts=[]
+    confirm_remove=w._confirm_remove
+    w._confirm_remove=lambda paths, permanent=False: removal_shortcuts.append((list(paths), permanent))
+    assert w._on_key_pressed(None, Gdk.KEY_BackSpace, 0, Gdk.ModifierType(0)) == Gdk.EVENT_PROPAGATE
+    assert w._on_key_pressed(None, Gdk.KEY_BackSpace, 0, Gdk.ModifierType.SUPER_MASK) == Gdk.EVENT_STOP
+    assert w._on_key_pressed(None, Gdk.KEY_Delete, 0, Gdk.ModifierType.SUPER_MASK) == Gdk.EVENT_STOP
+    assert w._on_key_pressed(None, Gdk.KEY_BackSpace, 0,
+        Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.SHIFT_MASK) == Gdk.EVENT_STOP
+    assert [permanent for _paths, permanent in removal_shortcuts] == [False, False, True]
+    assert all(paths == [dest/'b.txt'] for paths, _permanent in removal_shortcuts)
+    w._confirm_remove=confirm_remove
     w.flow.select_all()
     w._show_context_menu(24,24,dest/'b.txt')
     assert len(w._selected_paths()) == 2
@@ -143,7 +154,7 @@ def cancel_delete():
     assert (dest/'b.txt').read_text()=='collision'
     assert not w.file_job_active
     passed=True
-    print('PASS: background/empty hit tests; create; rename collision/F2; bookmarks; view/sort; clipboard copy/cut/paste; single/multi context; properties; delete confirmation cancellation')
+    print('PASS: background/empty hit tests; create; rename collision/F2; bookmarks; view/sort; clipboard copy/cut/paste; single/multi context; properties; delete shortcuts and confirmation cancellation')
     loop.quit()
     return False
 

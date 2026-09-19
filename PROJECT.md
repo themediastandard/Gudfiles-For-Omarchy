@@ -7,6 +7,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- File deletion accepts `Super+Backspace` and `Super+Delete` as confirmed
+  Move-to-Trash shortcuts alongside `Delete`; adding Shift keeps the existing
+  confirmed permanent-delete behavior. Plain Backspace remains untouched for
+  navigation/editing, text fields retain native editing, and Quick Look blocks
+  the shortcuts from acting on files behind its overlay.
 - Clicking outside a right-click menu now dismisses the entire cascade even
   when a hover submenu owns GTK's active popup grab. Intentional submenu
   switching and hover timeout closes keep the root menu open, while Escape

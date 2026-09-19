@@ -165,8 +165,9 @@ transfers and file operations must finish or be cancelled first. Right-click
 keeps the current folder and file selection; `Shift+F10` opens the menu for a
 focused sidebar item.
 
-Keyboard actions include `F2` Rename, `Delete` Trash, `Shift+Delete` permanent
-delete, `Ctrl+X/C/V` Cut/Copy/Paste, `Ctrl+Shift+C` Copy Location,
+Keyboard actions include `F2` Rename, `Delete`, `Super+Backspace`, or
+`Super+Delete` to Trash, `Shift+Delete` permanent delete, `Ctrl+X/C/V`
+Cut/Copy/Paste, `Ctrl+Shift+C` Copy Location,
 `Ctrl+Shift+N` New Folder, `F5` Refresh, `Alt+Enter` Properties, and
 `Shift+F10` context menu. `Ctrl+A` selects all when the caller permits multiple
 files. Text-entry editing retains its normal clipboard shortcuts.
