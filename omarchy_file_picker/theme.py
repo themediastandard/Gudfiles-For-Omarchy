@@ -155,8 +155,10 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     headerbar.compact-header button.header-utility image,
     headerbar.compact-header windowcontrols button image {{ -gtk-icon-size: 12px; }}
-    headerbar.compact-header windowcontrols button image {{
+    headerbar.compact-header windowcontrols button image,
+    headerbar.compact-header windowcontrols button:hover image {{
       min-width: 12px; min-height: 12px; padding: 0; margin: 0;
+      background: transparent; border: 0; box-shadow: none;
     }}
     headerbar.compact-header windowcontrols {{ padding: 0; margin: 0; }}
     .toolbar.compact-toolbar {{ padding: 0; border: 0; }}
@@ -174,18 +176,25 @@ def build_css(colors: dict[str, str]) -> str:
     headerbar.compact-header button.compact-control,
     headerbar.compact-header .compact-control > button,
     headerbar.compact-header button.header-utility,
-    headerbar.compact-header windowcontrols button {{
-      background: transparent; background-image: none; border: 0;
-      border-radius: 0; box-shadow: none; text-shadow: none;
-    }}
+    headerbar.compact-header windowcontrols button,
     headerbar.compact-header button.compact-control:hover,
     headerbar.compact-header .compact-control > button:hover,
     headerbar.compact-header button.header-utility:hover,
-    headerbar.compact-header windowcontrols button:hover,
+    headerbar.compact-header windowcontrols button:hover {{
+      background: transparent; background-image: none; border: 0;
+      border-radius: 0; box-shadow: none; text-shadow: none;
+      color: {colors['light_foreground']};
+    }}
     headerbar.compact-header button.compact-control.active,
+    headerbar.compact-header button.compact-control.active:hover,
+    headerbar.compact-header button.header-utility.active,
+    headerbar.compact-header button.header-utility.active:hover,
+    headerbar.compact-header .compact-control.active > button,
+    headerbar.compact-header .compact-control.active > button:hover,
     headerbar.compact-header .compact-control > button:checked {{
       background: transparent; color: {colors['accent_ink']};
     }}
+    headerbar.compact-header button:disabled {{ opacity: 0.45; }}
     .files-help windowhandle.titlebar {{ background: {colors['background']}; border: 0; box-shadow: none; }}
     .files-help .help-heading {{ padding: 12px 14px 8px; }}
     .files-help .help-title {{ font-size: 15px; font-weight: 600; }}
@@ -404,7 +413,7 @@ def build_css(colors: dict[str, str]) -> str:
     button.list-heading-button {{ min-height: 24px; padding: 0; margin: 0;
       border: 0; border-radius: 0; background: transparent; box-shadow: none; }}
     button.list-heading-button {{ color: {colors['muted']}; }}
-    button.list-heading-button:hover {{ background: alpha({colors['foreground']}, 0.04); color: {colors['foreground']}; }}
+    button.list-heading-button:hover {{ background: transparent; color: {colors['muted']}; }}
     button.list-heading-button.active {{ color: {colors['foreground']}; }}
     button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
     .list-cell label {{ font-size: 13px; }}

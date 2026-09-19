@@ -12,6 +12,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   25 pixels including its separator. Equal-width expansion, drag/reordering,
   keyboard shortcuts and reduced-motion behavior remain supported. List headings
   use the app background with a subtle separator and readable active sort state.
+  Explorer top-bar controls, breadcrumbs and list headings do not change visually
+  on hover, including the native close icon. Active selections and keyboard focus
+  stay visible; breadcrumb press feedback remains.
 - Mounted sidebar entries have no status dots. SMB/NFS labels remove only the
   host suffix matching their own URI, preserving share names and local-device
   names; the safe address remains in the tooltip for distinguishing hosts.
@@ -907,6 +910,12 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 hover correction: native rendered PNGs are identical before and
+  after GTK hover state for the top toolbar, breadcrumbs and list headings in
+  active/light/dark palettes. The native toolbar regression passes at 820/1200
+  pixels. Both changed modules are installed with a rollback backup and complete
+  runtime/source parity; reopen existing windows.
 
 - September 19 compact surfaces: 228 unit tests pass. Native Wayland list and
   tab-motion suites pass at 820/1200 pixels; toolbar, destination picker and

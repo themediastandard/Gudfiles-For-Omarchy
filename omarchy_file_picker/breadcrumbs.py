@@ -29,9 +29,9 @@ class BreadcrumbButton(Gtk.Button):
         w, h = self.get_width(), self.get_height()
         if not w or not h:
             return
-        hovered = bool(self.get_state_flags() & (Gtk.StateFlags.PRELIGHT | Gtk.StateFlags.ACTIVE))
+        pressed = bool(self.get_state_flags() & Gtk.StateFlags.ACTIVE)
         color = Gdk.RGBA()
-        color.parse(self.colors['selection' if self.current else 'lighter_background' if hovered else 'dark_background'])
+        color.parse(self.colors['selection' if self.current else 'lighter_background' if pressed else 'dark_background'])
         cr = snapshot.append_cairo(Graphene.Rect().init(0, 0, w, h))
         cr.move_to(0, 0)
         cr.line_to(w - TIP, 0)
