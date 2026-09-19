@@ -4,6 +4,8 @@ HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 Uses disposable files/preferences and GTK controller signals, not pointer input.
 """
 import os
+import json
+import subprocess
 import tempfile
 import threading
 from pathlib import Path
@@ -24,6 +26,22 @@ def settle():
     loop = GLib.MainLoop()
     GLib.timeout_add(250, lambda: loop.quit() or False)
     loop.run()
+
+
+def size_fixture(window):
+    """Only float/size this test's window; desktop tiling owns other geometry."""
+    if not os.environ.get('HYPRLAND_INSTANCE_SIGNATURE') or os.environ.get('GDK_BACKEND') == 'x11':
+        return
+    client = next(c for c in json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
+                  if c['pid'] == os.getpid() and c['title'] == window.get_title())
+    selector = json.dumps('address:' + client['address'])
+    if not client['floating']:
+        subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'],
+                       check=True, capture_output=True)
+    width, height = window.get_default_size()
+    subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.resize({x=' + str(width) + ',y=' + str(height) +
+                    ',relative=false,window=' + selector + '})'], check=True, capture_output=True)
+    settle()
 
 
 def widgets(widget):
@@ -75,9 +93,10 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 window.help_button.emit('clicked')
                 settle()
                 guide = window.help_window
+                size_fixture(guide)
                 assert guide.get_visible() and guide.get_transient_for() is window
                 assert guide.visible_features == list(FEATURES)
-                assert (guide.get_width(), guide.get_height()) <= (820, 720)
+                assert guide.get_width() <= 820 and guide.get_height() <= 720
                 original_size = guide.get_width(), guide.get_height()
                 capture(guide, name + '-overview')
                 for group in CATEGORIES:
@@ -167,13 +186,16 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 # A mapped Wayland window keeps its current size when its
                 # default changes. Present a fresh surface at the minimum.
                 compact = HelpWindow(window)
+                compact.set_title('Gudfiles Help Compact QA')
                 compact.set_default_size(660, 480)
                 compact.nav_buttons['preview'].emit('clicked')
                 compact.present()
                 settle()
-                # The compositor may round up a requested native size.
-                assert 660 <= compact.get_width() < original_size[0]
-                assert 480 <= compact.get_height() < original_size[1]
+                size_fixture(compact)
+                # Native sizes include X11's client-side decoration; content
+                # bounds below still verify that actions and text fit inside.
+                assert 660 <= compact.get_surface().get_width() < guide.get_surface().get_width()
+                assert 480 <= compact.get_surface().get_height() < guide.get_surface().get_height()
                 ok, bounds = compact.footer.compute_bounds(compact)
                 assert ok and bounds.get_y() + bounds.get_height() <= compact.get_height()
                 assert compact.scroll.get_hadjustment().get_upper() <= compact.scroll.get_hadjustment().get_page_size()

@@ -68,7 +68,9 @@ def dismiss(dialog):
     assert not dialog.get_visible()
 
 
-palettes = [('dark', load_colors()), ('light', DEFAULT_COLORS)]
+palettes = [('active', load_colors()), ('light', DEFAULT_COLORS),
+            ('dark', {**DEFAULT_COLORS, 'background': '#17191f', 'foreground': '#d7dce4',
+                      'bright_foreground': '#ffffff', 'accent': '#86a6f4'})]
 with tempfile.TemporaryDirectory(prefix='dialog-qa-') as directory:
     root = Path(directory)
     app = PickerApplication(PickerRequest(current_folder=root), None)
@@ -204,4 +206,4 @@ with tempfile.TemporaryDirectory(prefix='dialog-qa-') as directory:
             dismiss(dialog)
             window.destroy()
             settle()
-print('PASS: dark/light dialog geometry; long names/paths; name selection, inline collisions and Enter; properties, links and totals; Escape/close/cancel; confirmed fixture deletion; Save replacement protocol')
+print('PASS: active/light/dark dialog geometry; long names/paths; name selection, inline collisions and Enter; properties, links and totals; Escape/close/cancel; confirmed fixture deletion; Save replacement protocol')

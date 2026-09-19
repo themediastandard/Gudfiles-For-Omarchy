@@ -27,6 +27,7 @@ class ListDetails:
         self.status.add_css_class('list-sort-status')
         self.widget.append(self.status)
         self.popover = Gtk.Popover()
+        self.popover.add_css_class('compact-popover')
         self.popover.set_parent(self.header)
         gesture = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
         gesture.connect('pressed', self.show_menu)
@@ -90,6 +91,7 @@ class ListDetails:
         for key, button in self.buttons.items():
             title = COLUMNS[key][0]
             active = key == prefs['sort_key']
+            (button.add_css_class if active else button.remove_css_class)('active')
             button.get_child().set_text(title + (' ↓' if prefs['descending'] else ' ↑') if active else title)
             button.set_tooltip_text(f'Sort by {title}. Click again to reverse. Right-click to choose columns.')
             button.update_property([Gtk.AccessibleProperty.LABEL],

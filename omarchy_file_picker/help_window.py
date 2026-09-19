@@ -22,7 +22,7 @@ class HelpWindow(Gtk.Window):
     def __init__(self, owner):
         super().__init__(title='Gudfiles Help', transient_for=owner,
                          application=owner.get_application(), destroy_with_parent=True)
-        self.set_default_size(800, 680)
+        self.set_default_size(760, 600)
         self.set_size_request(660, 480)
         self.set_hide_on_close(True)
         self.add_css_class('files-help')
@@ -31,10 +31,10 @@ class HelpWindow(Gtk.Window):
         self.update_running = False
         self.update_result = None
 
-        heading = Gtk.Box(spacing=14)
+        heading = Gtk.Box(spacing=8)
         heading.add_css_class('help-heading')
         icon = Gtk.Image.new_from_icon_name('help-browser-symbolic')
-        icon.set_pixel_size(26)
+        icon.set_pixel_size(18)
         icon.add_css_class('help-emblem')
         heading.append(icon)
         titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
@@ -66,7 +66,7 @@ class HelpWindow(Gtk.Window):
         root.append(body)
         nav_scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=False)
         nav_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        nav_scroll.set_size_request(190, -1)
+        nav_scroll.set_size_request(176, -1)
         nav_scroll.add_css_class('help-nav')
         nav = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         nav.append(text('EXPLORE', 'help-eyebrow'))
@@ -90,7 +90,7 @@ class HelpWindow(Gtk.Window):
 
         self.scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.content.add_css_class('help-content')
         self.scroll.set_child(self.content)
         body.append(self.scroll)

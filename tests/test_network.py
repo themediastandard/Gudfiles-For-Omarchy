@@ -1,10 +1,23 @@
 import unittest
 from pathlib import Path
 from unittest.mock import patch, Mock
-from omarchy_file_picker.network import NetworkLocation, discover_network, parse_avahi, safe_network_uri, mounted_local_path
+from omarchy_file_picker.network import NetworkLocation, discover_network, parse_avahi, safe_network_uri, mounted_local_path, mount_display_name
 
 
 class NetworkTests(unittest.TestCase):
+    def test_mount_labels_preserve_share_names_and_local_devices(self):
+        cases = [
+            ('Media on nas-tms.local', 'smb://nas-tms.local/Media', 'Media'),
+            ('Work on location on NAS-TMS.local', 'smb://nas-tms.local/Work%20on%20location', 'Work on location'),
+            ('Archive on nas.local', 'nfs://nas.local/archive', 'Archive'),
+            ('Custom label', 'smb://nas.local/media', 'Custom label'),
+            ('Work on location', 'smb://nas.local/Work%20on%20location', 'Work on location'),
+            ('Drive on nas.local', 'file:///media/drive', 'Drive on nas.local'),
+        ]
+        for name, uri, expected in cases:
+            with self.subTest(name=name, uri=uri):
+                self.assertEqual(mount_display_name(name, uri), expected)
+
     def setUp(self):
         gvfs = patch('omarchy_file_picker.network.discover_gvfs', return_value=[])
         gvfs.start()

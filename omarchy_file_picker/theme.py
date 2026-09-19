@@ -128,6 +128,26 @@ def build_css(colors: dict[str, str]) -> str:
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
     headerbar.compact-header {{ min-height: 26px; padding: 0 4px; }}
+    .file-chooser headerbar {{ min-height: 38px; padding: 0 8px; }}
+    .file-chooser headerbar .metadata-title {{ font-size: 13px; }}
+    .file-chooser headerbar .muted {{ font-size: 11px; }}
+    .file-chooser .toolbar {{ padding: 6px 10px; }}
+    .file-chooser .footer {{ padding: 8px 10px; }}
+    .file-chooser .footer button {{
+      min-height: 26px; padding: 1px 6px; border-radius: 4px;
+      background-image: none; box-shadow: none; text-shadow: none;
+    }}
+    .file-chooser .footer entry {{ min-height: 28px; padding: 1px 8px; border-radius: 4px; }}
+    .file-chooser .toolbar .view-switcher {{ background: transparent; }}
+    .file-chooser .toolbar button.compact-control,
+    .file-chooser .toolbar .compact-control > button {{
+      background: transparent; border: 0; border-radius: 0; box-shadow: none; text-shadow: none;
+    }}
+    .file-chooser .toolbar button.compact-control:hover,
+    .file-chooser .toolbar .compact-control > button:hover,
+    .file-chooser .toolbar button.compact-control.active {{ color: {colors['accent_ink']}; }}
+    .file-chooser .toolbar .path-segment {{ min-height: 24px; padding: 0; }}
+    .file-chooser .toolbar .path-segment label {{ font-size: 11px; }}
     headerbar.compact-header button.header-utility,
     headerbar.compact-header windowcontrols button {{
       min-width: 20px; min-height: 20px; padding: 1px; margin: 0;
@@ -166,38 +186,40 @@ def build_css(colors: dict[str, str]) -> str:
     headerbar.compact-header .compact-control > button:checked {{
       background: transparent; color: {colors['accent_ink']};
     }}
-    .files-help .help-heading {{ padding: 20px 22px 16px; }}
-    .files-help .help-title {{ font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }}
+    .files-help windowhandle.titlebar {{ background: {colors['background']}; border: 0; box-shadow: none; }}
+    .files-help .help-heading {{ padding: 12px 14px 8px; }}
+    .files-help .help-title {{ font-size: 15px; font-weight: 600; }}
     .files-help .help-emblem {{
-      color: {colors['accent_ink']}; background: alpha({colors['accent']}, 0.10);
-      border: 1px solid alpha({colors['accent']}, 0.16); border-radius: 12px; padding: 12px;
+      color: {colors['light_foreground']}; background: transparent;
+      border: 0; padding: 0;
     }}
     .files-help .help-description {{ color: {colors['light_foreground']}; font-size: 12px; }}
-    .files-help .help-search-box {{ padding: 0 22px 18px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .files-help .help-search-box {{ padding: 0 14px 10px; border-bottom: 1px solid {colors['darker_background']}; }}
     .files-help searchentry {{
-      min-height: 34px; padding: 3px 10px; border-radius: 8px;
+      min-height: 28px; padding: 1px 8px; border-radius: 4px;
       background: alpha({colors['foreground']}, 0.035); color: {colors['foreground']};
       border: 1px solid {colors['darker_background']}; box-shadow: none;
     }}
-    .files-help searchentry:focus-within {{ border-color: {colors['accent']}; }}
-    .files-help .help-nav {{ border-right: 1px solid {colors['darker_background']}; padding: 18px 10px 14px; }}
+    .files-help searchentry:focus-within {{ border-color: {colors['accent']}; box-shadow: none; }}
+    .files-help .help-nav {{ border-right: 1px solid {colors['darker_background']}; padding: 10px 6px; }}
     .files-help .help-eyebrow {{ font-size: 10px; font-weight: 700; letter-spacing: 1px; color: {colors['light_foreground']}; margin: 0 10px 9px; }}
-    .files-help button {{ background-image: none; box-shadow: none; text-shadow: none; }}
-    .files-help button.flat {{ background: transparent; border: 0; padding: 6px; }}
+    .files-help button {{ min-height: 26px; padding: 1px 8px; border-radius: 4px;
+      background-image: none; box-shadow: none; text-shadow: none; }}
+    .files-help button.flat {{ background: transparent; border: 0; padding: 2px; min-height: 24px; min-width: 24px; }}
     .files-help button.help-category {{
-      background: transparent; border: 1px solid transparent; border-radius: 7px;
-      padding: 9px; min-height: 20px; color: {colors['foreground']};
+      background: transparent; border: 1px solid transparent; border-radius: 4px;
+      padding: 4px 6px; min-height: 20px; color: {colors['foreground']};
     }}
     .files-help .help-nav-title {{ font-size: 12px; font-weight: 550; }}
     .files-help button.help-category:hover, .files-help button.flat:hover {{ background: alpha({colors['foreground']}, 0.06); }}
     .files-help button.help-category:checked {{ background: alpha({colors['accent']}, 0.12); color: {colors['accent_ink']}; border-color: alpha({colors['accent']}, 0.18); }}
-    .files-help .help-content {{ padding: 22px; }}
-    .files-help .help-section-title {{ font-size: 20px; font-weight: 700; letter-spacing: -0.4px; }}
+    .files-help .help-content {{ padding: 14px; }}
+    .files-help .help-section-title {{ font-size: 15px; font-weight: 600; }}
     .files-help .help-group-heading {{ color: {colors['accent_ink']}; margin-top: 4px; }}
     .files-help .help-group-title {{ font-size: 12px; font-weight: 650; }}
-    .files-help .help-card {{ border: 1px solid {colors['darker_background']}; border-radius: 10px; background: alpha({colors['foreground']}, 0.02); }}
+    .files-help .help-card {{ border: 1px solid {colors['darker_background']}; border-radius: 4px; background: alpha({colors['foreground']}, 0.02); }}
     .files-help .help-card separator {{ background: {colors['darker_background']}; min-height: 1px; margin: 0 14px; }}
-    .files-help .help-feature {{ padding: 13px 14px; }}
+    .files-help .help-feature {{ padding: 8px 10px; }}
     .files-help .help-feature-title {{ font-size: 13px; font-weight: 650; }}
     .files-help .help-key {{
       font-size: 10px; font-weight: 600; color: {colors['light_foreground']};
@@ -205,27 +227,27 @@ def build_css(colors: dict[str, str]) -> str:
       border-bottom-width: 2px; padding: 2px 6px; border-radius: 5px;
     }}
     .files-help .help-empty {{ padding: 30px 14px; color: {colors['light_foreground']}; }}
-    .files-help .help-footer {{ padding: 11px 22px; border-top: 1px solid {colors['darker_background']}; }}
-    .files-help .help-about-title {{ font-size: 28px; font-weight: 750; letter-spacing: 0.6px; }}
-    .files-help .help-about-card {{ padding: 18px; }}
+    .files-help .help-footer {{ padding: 8px 14px; border-top: 1px solid {colors['darker_background']}; }}
+    .files-help .help-about-title {{ font-size: 18px; font-weight: 600; }}
+    .files-help .help-about-card {{ padding: 10px; }}
     .files-help .help-license-text {{ color: {colors['light_foreground']}; font-size: 12px; }}
     .files-help button.help-link, .files-help button.help-link:visited {{
       background: transparent; border: 0; padding: 3px 0; min-height: 22px;
       color: {colors['accent_ink']};
     }}
     .files-help button.help-link:hover {{ color: {colors['foreground']}; }}
-    .transfer-window .transfer-toolbar {{ padding: 14px 16px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .transfer-window .transfer-toolbar {{ padding: 8px 12px; border-bottom: 1px solid {colors['darker_background']}; }}
     .transfer-window .transfer-row {{
       background: alpha({colors['foreground']}, 0.025); border: 1px solid {colors['darker_background']};
-      padding: 14px; border-radius: 10px;
+      padding: 10px; border-radius: 4px;
     }}
-    .transfer-window .transfer-title {{ font-size: 14px; font-weight: 650; }}
+    .transfer-window .transfer-title {{ font-size: 13px; font-weight: 600; }}
     .transfer-window .transfer-subtitle {{ color: {colors['light_foreground']}; font-size: 12px; }}
     .transfer-window .transfer-icon, .transfer-window .transfer-status.running {{ color: {colors['accent_ink']}; }}
     .transfer-window .transfer-status {{ color: {colors['light_foreground']}; font-size: 10px; font-weight: 700; }}
     .transfer-window .transfer-status.failed {{ color: {colors['error_ink']}; }}
     .transfer-window .transfer-status.completed {{ color: {colors['accent_ink']}; }}
-    .transfer-window button {{ min-height: 28px; padding: 2px 10px; background-image: none; box-shadow: none; text-shadow: none; }}
+    .transfer-window button {{ min-height: 24px; padding: 1px 8px; border-radius: 4px; background-image: none; box-shadow: none; text-shadow: none; }}
     .transfer-window button.flat {{ background: transparent; border: 1px solid transparent; }}
     .transfer-window button.flat:hover {{ background: alpha({colors['foreground']}, 0.07); }}
     .transfer-window button.transfer-action {{
@@ -236,8 +258,11 @@ def build_css(colors: dict[str, str]) -> str:
     .transfer-window button:disabled {{ opacity: 0.45; }}
     .transfer-window progressbar trough {{ min-width: 0; min-height: 4px; padding: 0; background: {colors['darker_background']}; border: 0; border-radius: 3px; }}
     .transfer-window progressbar progress {{ min-width: 0; min-height: 4px; margin: 0; padding: 0; background: {colors['accent']}; border: 0; border-radius: 3px; }}
-    .transfer-window .transfer-footer {{ padding: 12px 16px; border-top: 1px solid {colors['darker_background']}; }}
-    .transfer-window .transfer-close-box {{ padding: 14px 16px; background: alpha({colors['accent']}, 0.07); border-top: 1px solid {colors['darker_background']}; }}
+    .transfer-window .transfer-footer {{ padding: 8px 12px; border-top: 1px solid {colors['darker_background']}; }}
+    .transfer-window .transfer-close-box {{ padding: 8px 12px; background: alpha({colors['accent']}, 0.07); border-top: 1px solid {colors['darker_background']}; }}
+    .transfer-window headerbar {{ min-height: 32px; padding: 0 8px; }}
+    .transfer-window headerbar windowcontrols button {{ min-width: 24px; min-height: 24px; padding: 0; }}
+    .transfer-window headerbar windowcontrols button image {{ min-width: 12px; min-height: 12px; padding: 0; -gtk-icon-size: 12px; }}
     .toolbar, .footer, .metadata-strip {{
       background: {colors['background']};
     }}
@@ -294,7 +319,6 @@ def build_css(colors: dict[str, str]) -> str:
       color: {colors['dark_foreground']}; border-radius: 0;
     }}
     button.sidebar-connect:hover {{ color: {colors['foreground']}; background: {colors['lighter_background']}; }}
-    .sidebar-mounted {{ min-width: 6px; min-height: 6px; background: {colors['accent']}; }}
     .location-button {{
       min-height: 28px;
       padding: 0 12px;
@@ -375,12 +399,14 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 10px; }}
-    .list-heading {{ padding: 0 17px; background: {colors['dark_background']};
-      border-bottom: 1px solid {colors['darker_background']}; }}
-    button.list-heading-button {{ min-height: 26px; padding: 0; margin: 0;
+    .list-heading {{ padding: 0 17px; background: {colors['background']};
+      border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
+    button.list-heading-button {{ min-height: 24px; padding: 0; margin: 0;
       border: 0; border-radius: 0; background: transparent; box-shadow: none; }}
-    button.list-heading-button:hover {{ background: {colors['lighter_background']}; }}
-    button.list-heading-button label {{ font-size: 11px; font-weight: 600; }}
+    button.list-heading-button {{ color: {colors['muted']}; }}
+    button.list-heading-button:hover {{ background: alpha({colors['foreground']}, 0.04); color: {colors['foreground']}; }}
+    button.list-heading-button.active {{ color: {colors['foreground']}; }}
+    button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
     .list-cell label {{ font-size: 13px; }}
     .list-sort-status {{ font-size: 11px; padding: 3px 17px; color: {colors['muted']}; }}
     .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
@@ -403,33 +429,28 @@ def build_css(colors: dict[str, str]) -> str:
       border-color: {colors['accent']};
       color: {colors['foreground']};
     }}
-    .browser-tabs {{ padding: 5px 12px; border-bottom: 1px solid {colors['dark_background']}; }}
+    .browser-tabs {{ padding: 0 6px; border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
     .browser-tab {{
-      padding: 3px; border: 1px solid alpha({colors['foreground']}, 0.07);
-      border-radius: 999px; background: alpha({colors['foreground']}, 0.035);
+      padding: 1px 3px; border: 0; border-right: 1px solid alpha({colors['foreground']}, 0.08);
+      border-radius: 0; background: transparent;
     }}
-    .browser-tab:hover {{ background: alpha({colors['foreground']}, 0.07); }}
-    .browser-tab.active {{
-      background: alpha({colors['accent']}, 0.10);
-      border-color: alpha({colors['accent']}, 0.24);
-    }}
+    .browser-tab:hover {{ background: alpha({colors['foreground']}, 0.04); }}
+    .browser-tab.active {{ background: alpha({colors['foreground']}, 0.06); }}
     .browser-tab button, .browser-tabs button.tab-new {{
       background: transparent; background-image: none; border: 0; box-shadow: none;
-      text-shadow: none; min-width: 0; min-height: 20px; padding: 0; margin: 0;
-      border-radius: 999px; color: {colors['light_foreground']};
+      text-shadow: none; min-width: 0; min-height: 22px; padding: 0; margin: 0;
+      border-radius: 0; color: {colors['light_foreground']};
     }}
     .browser-tab button.tab-label {{ padding: 0 7px 0 4px; }}
-    .browser-tab .tab-label label {{ font-size: 12px; font-weight: 500; }}
+    .browser-tab .tab-label label {{ font-size: 12px; font-weight: 400; }}
     .browser-tab.active .tab-label {{ color: {colors['foreground']}; }}
-    .browser-tab button.tab-close {{
-      min-width: 20px; background: alpha({colors['foreground']}, 0.075);
-    }}
+    .browser-tab button.tab-close {{ min-width: 22px; background: transparent; }}
     .browser-tab .tab-close image {{ -gtk-icon-size: 10px; }}
-    .browser-tab button.tab-close:hover {{ background: alpha({colors['foreground']}, 0.17); color: {colors['foreground']}; }}
-    .browser-tabs button.tab-new {{ min-width: 28px; min-height: 28px; }}
-    .browser-tabs .tab-new image {{ -gtk-icon-size: 14px; }}
-    .browser-tabs button.tab-new:hover {{ background: alpha({colors['foreground']}, 0.08); color: {colors['foreground']}; }}
-    .browser-tabs button:focus-visible {{ outline: 2px solid {colors['accent']}; outline-offset: -1px; }}
+    .browser-tab button.tab-close:hover {{ background: alpha({colors['foreground']}, 0.10); color: {colors['foreground']}; }}
+    .browser-tabs button.tab-new {{ min-width: 24px; min-height: 24px; }}
+    .browser-tabs .tab-new image {{ -gtk-icon-size: 12px; }}
+    .browser-tabs button.tab-new:hover {{ background: alpha({colors['foreground']}, 0.06); color: {colors['foreground']}; }}
+    .browser-tabs button:focus-visible {{ outline: 1px solid {colors['accent']}; outline-offset: -1px; }}
     .drop-copy-target {{ box-shadow: inset 0 0 0 2px {colors['accent']}; }}
     .file-copy-drag {{
       background: {colors['background']}; color: {colors['foreground']};
@@ -544,11 +565,18 @@ def build_css(colors: dict[str, str]) -> str:
     .label-green, .color-swatch.label-green, .label-green > button, .rating-controls .label-green > button {{ color: {swatches['green']}; }}
     .label-blue, .color-swatch.label-blue, .label-blue > button, .rating-controls .label-blue > button {{ color: {swatches['blue']}; }}
     .label-purple, .color-swatch.label-purple, .label-purple > button, .rating-controls .label-purple > button {{ color: {swatches['purple']}; }}
+    popover.compact-popover > contents,
     popover.creative-popover > contents, popover.media-details-popover > contents {{
       background: {colors['background']}; color: {colors['foreground']};
-      border: 1px solid {colors['darker_background']}; border-radius: 10px;
-      padding: 16px; box-shadow: 0 6px 20px alpha(#000000, 0.14);
+      border: 1px solid {colors['darker_background']}; border-radius: 6px;
+      padding: 10px; box-shadow: 0 6px 20px alpha(#000000, 0.14);
     }}
+    popover.compact-popover > contents {{ padding: 0; }}
+    .compact-popover label {{ font-size: 12px; }}
+    .compact-popover button {{ min-height: 26px; padding: 1px 8px; border-radius: 4px;
+      background-image: none; box-shadow: none; text-shadow: none; }}
+    .compact-popover checkbutton {{ min-height: 22px; padding: 0; }}
+    .compact-popover searchentry {{ min-height: 28px; padding: 1px 8px; border-radius: 4px; }}
     .creative-heading {{ font-weight: 600; font-size: 14px; }}
     .creative-choice, .color-swatch {{
       background: transparent; background-image: none; border: 1px solid transparent;
@@ -589,26 +617,27 @@ def dialog_css(c):
     c = prepare_colors(c)
     muted = c['light_foreground'] if c.get('mode') == 'light' else f"alpha({c['foreground']}, 0.85)"
     return f"""
-    window.picker-dialog {{ border-radius: 14px; }}
-    .picker-dialog .dialog-heading {{ padding: 24px 24px 12px; }}
-    .picker-dialog .dialog-title {{ color: {c['bright_foreground']}; font-size: 22px; font-weight: 700; }}
+    window.picker-dialog {{ border-radius: 8px; }}
+    .picker-dialog windowhandle.titlebar {{ background: {c['background']}; border: 0; box-shadow: none; }}
+    .picker-dialog .dialog-heading {{ padding: 10px 14px 8px; }}
+    .picker-dialog .dialog-title {{ color: {c['bright_foreground']}; font-size: 15px; font-weight: 600; }}
     .picker-dialog .dialog-description {{ color: {muted}; font-size: 12px; }}
-    .picker-dialog .dialog-body {{ padding: 10px 24px 24px; }}
+    .picker-dialog .dialog-body {{ padding: 6px 14px 14px; }}
     .picker-dialog .dialog-footer {{
-      padding: 16px 24px; border-top: 1px solid alpha({c['foreground']}, 0.10);
-      background: alpha({c['foreground']}, 0.025);
+      padding: 8px 14px; border-top: 1px solid alpha({c['foreground']}, 0.10);
+      background: transparent;
     }}
     .picker-dialog button {{ background-image: none; text-shadow: none; box-shadow: none; }}
     .picker-dialog button.flat {{ background: transparent; border: 0; }}
     .picker-dialog button.dialog-close {{
-      background: transparent; border: 0; min-width: 28px; min-height: 28px;
-      padding: 3px; margin: -3px -5px 0 0; color: alpha({c['foreground']}, 0.7);
-      border-radius: 7px;
+      background: transparent; border: 0; min-width: 24px; min-height: 24px;
+      padding: 0; margin: 0; color: alpha({c['foreground']}, 0.7);
+      border-radius: 4px;
     }}
     .picker-dialog button.dialog-close:hover {{ background: alpha({c['foreground']}, 0.09); color: {c['foreground']}; }}
     .picker-dialog button.secondary-action, .picker-dialog button.suggested-action,
     .picker-dialog button.destructive-action {{
-      min-width: 82px; min-height: 36px; padding: 2px 16px; border-radius: 8px;
+      min-width: 64px; min-height: 26px; padding: 1px 10px; border-radius: 4px;
       font-weight: 600;
     }}
     .picker-dialog button.secondary-action {{
@@ -625,57 +654,58 @@ def dialog_css(c):
     }}
     .picker-dialog button.destructive-action:hover {{ background: shade({c['red']}, 1.08); }}
     .picker-dialog button:disabled {{ opacity: 0.45; }}
-    .picker-dialog button:focus-visible {{ outline: 2px solid {c['accent']}; outline-offset: 3px; }}
+    .picker-dialog button:focus-visible {{ outline: 1px solid {c['accent']}; outline-offset: 1px; }}
     .picker-dialog entry {{
       background: {c['dark_background']}; color: {c['foreground']};
-      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 8px;
-      min-height: 42px; padding: 2px 12px; caret-color: {c['accent']};
+      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 4px;
+      min-height: 28px; padding: 1px 8px; caret-color: {c['accent']};
     }}
-    .picker-dialog entry:focus-within {{ border-color: {c['accent']}; box-shadow: 0 0 0 2px alpha({c['accent']}, 0.14); }}
+    .picker-dialog entry:focus-within {{ border-color: {c['accent']}; box-shadow: none; }}
     .picker-dialog entry.error {{ border-color: {c['red']}; }}
     .picker-dialog entry selection {{ background: alpha({c['accent']}, 0.3); color: {c['bright_foreground']}; }}
-    .picker-dialog .dialog-field-label {{ font-size: 13px; font-weight: 600; color: {c['foreground']}; }}
+    .picker-dialog .dialog-field-label {{ font-size: 12px; font-weight: 500; color: {c['foreground']}; }}
     .picker-dialog .dialog-file-summary {{
-      background: alpha({c['foreground']}, 0.035); border: 1px solid alpha({c['foreground']}, 0.10);
-      border-radius: 10px; padding: 16px;
+      background: transparent; border: 0;
+      border-radius: 4px; padding: 6px 0;
     }}
     .picker-dialog .dialog-file-icon {{
-      background: alpha({c['accent']}, 0.12); color: {c['accent_ink']}; border-radius: 10px; padding: 12px;
+      background: transparent; color: {c['light_foreground']}; border-radius: 0; padding: 4px;
     }}
-    .picker-dialog .dialog-file-name {{ color: {c['bright_foreground']}; font-size: 15px; font-weight: 600; }}
+    .picker-dialog .dialog-file-name {{ color: {c['bright_foreground']}; font-size: 13px; font-weight: 500; }}
     .picker-dialog .dialog-section-title {{ color: {muted}; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }}
     .picker-dialog .dialog-detail-card {{
-      border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 10px;
-      background: alpha({c['foreground']}, 0.025);
+      border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 4px;
+      background: transparent;
     }}
-    .picker-dialog .dialog-detail-row {{ padding: 12px 14px; }}
+    .picker-dialog .dialog-detail-row {{ padding: 6px 10px; }}
     .picker-dialog .dialog-detail-row.divided {{ border-top: 1px solid alpha({c['foreground']}, 0.08); }}
     .picker-dialog .dialog-detail-key {{ color: {muted}; font-size: 12px; }}
     .picker-dialog .dialog-detail-value {{ color: {c['foreground']}; font-size: 13px; }}
-    .picker-dialog .dialog-path-row {{ padding: 10px 14px; }}
+    .picker-dialog .dialog-path-row {{ padding: 6px 10px; }}
     .picker-dialog .dialog-path-row image {{ color: {c['accent_ink']}; }}
     .picker-dialog .dialog-path-row label {{ font-size: 13px; }}
     .picker-dialog .dialog-error {{
-      margin: 0 24px 18px; padding: 10px 12px; border-radius: 8px;
+      margin: 0 14px 10px; padding: 6px 8px; border-radius: 4px;
       color: {c['error_ink']}; background: alpha({c['red']}, 0.08); font-size: 12px;
     }}
-    .picker-dialog .error-detail {{ padding: 14px; font-size: 13px; }}
+    .picker-dialog .error-detail {{ padding: 8px; font-size: 12px; }}
     .picker-dialog .rename-preview {{
-      background: alpha({c['foreground']}, 0.025); border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 10px;
+      background: transparent; border: 1px solid alpha({c['foreground']}, 0.12); border-radius: 4px;
     }}
-    .picker-dialog .rename-preview-heading {{ padding: 10px 14px; border-bottom: 1px solid alpha({c['foreground']}, 0.10); }}
+    .picker-dialog .rename-preview-heading {{ padding: 6px 10px; border-bottom: 1px solid alpha({c['foreground']}, 0.10); }}
     .picker-dialog .rename-preview-heading label {{ color: {muted}; font-size: 11px; font-weight: 600; }}
-    .picker-dialog .rename-preview-row {{ padding: 10px 14px; border-bottom: 1px solid alpha({c['foreground']}, 0.07); }}
+    .picker-dialog .rename-preview-row {{ padding: 6px 10px; border-bottom: 1px solid alpha({c['foreground']}, 0.07); }}
     .picker-dialog .rename-before {{ color: {muted}; font-size: 12px; }}
     .picker-dialog .rename-after {{ color: {c['accent_ink']}; font-size: 12px; }}
     .picker-dialog .rename-status {{ color: {muted}; font-size: 12px; }}
     .picker-dialog .rename-status.error {{ color: {c['error_ink']}; }}
-    .picker-dialog .linked {{ background: alpha({c['foreground']}, 0.05); border-radius: 8px; padding: 3px; }}
-    .picker-dialog .linked button {{ border: 0; background: transparent; border-radius: 6px; padding: 3px 14px; }}
+    .picker-dialog .linked {{ background: alpha({c['foreground']}, 0.05); border-radius: 4px; padding: 3px; }}
+    .picker-dialog .linked button {{ border: 0; background: transparent; border-radius: 3px; padding: 2px 10px; }}
     .picker-dialog .linked button:checked {{ background: alpha({c['accent']}, 0.15); color: {c['accent_ink']}; }}
+    .picker-dialog stackswitcher button {{ min-height: 26px; padding: 1px 10px; border-radius: 4px; }}
     .picker-dialog spinbutton {{
       background: {c['dark_background']}; color: {c['foreground']};
-      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 7px; box-shadow: none;
+      border: 1px solid alpha({c['foreground']}, 0.20); border-radius: 4px; box-shadow: none;
     }}
     .picker-dialog spinbutton text {{ background: transparent; color: {c['foreground']}; padding: 4px 8px; }}
     .picker-dialog spinbutton button {{
@@ -685,11 +715,11 @@ def dialog_css(c):
     .picker-dialog spinbutton button:hover {{ background: alpha({c['foreground']}, 0.08); }}
     .picker-dialog button.network-location {{
       background: alpha({c['foreground']}, 0.035); border: 1px solid alpha({c['foreground']}, 0.12);
-      border-radius: 9px; padding: 12px 14px;
+      border-radius: 4px; padding: 6px 10px;
     }}
     .picker-dialog button.network-location:hover {{ background: alpha({c['accent']}, 0.09); border-color: alpha({c['accent']}, 0.30); }}
     .picker-dialog .network-locations .muted, .picker-dialog .muted {{ color: {muted}; }}
-    .picker-dialog .network-heading {{ font-size: 13px; font-weight: 600; }}
+    .picker-dialog .network-heading {{ font-size: 12px; font-weight: 500; }}
     """
 
 
@@ -729,7 +759,7 @@ def light_controls_css(c):
     }}
     .location-button.active {{ background: alpha({c['foreground']}, 0.07); }}
     .creative-choice.active, .color-swatch.active {{ background: {c['selection']}; }}
-    .browser-tab button.tab-close {{ background: alpha({c['foreground']}, 0.075); }}
+    .browser-tab button.tab-close {{ background: transparent; }}
     .browser-tab button.tab-close:hover {{ background: alpha({c['foreground']}, 0.17); }}
     entry:focus-within, searchentry:focus-within {{
       border-color: {c['accent']}; outline: none;

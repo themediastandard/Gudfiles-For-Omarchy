@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from gi.repository import Gio, GLib, Gtk, Pango
-from .network import NetworkLocation, discover_network, safe_network_uri
+from .network import NetworkLocation, discover_network, safe_network_uri, mount_display_name
 
 
 class NetworkBrowser(Gtk.Box):
@@ -55,7 +55,7 @@ class NetworkBrowser(Gtk.Box):
         for mount in self.owner.volume_monitor.get_mounts():
             uri = mount.get_root().get_uri()
             if urlsplit(uri).scheme in {'smb', 'smbs', 'nfs'}:
-                known.append(NetworkLocation(mount.get_name(), uri, 'Mounted share'))
+                known.append(NetworkLocation(mount_display_name(mount.get_name(), uri), uri, 'Mounted share'))
         try:
             for line in self.owner.bookmarks_path.read_text().splitlines():
                 uri, _, name = line.partition(' ')

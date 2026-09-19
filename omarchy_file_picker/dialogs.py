@@ -27,13 +27,12 @@ class PickerDialog(Gtk.Dialog):
         self.set_resizable(False)
         self._error_entry = None
 
-        heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         heading.add_css_class('dialog-heading')
-        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5, hexpand=True)
+        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
         self.heading = text_label(title, 'dialog-title')
         self.heading.set_lines(2)
         self.heading.set_ellipsize(Pango.EllipsizeMode.END)
-        self.heading.set_tooltip_text(title)
         copy.append(self.heading)
         if subtitle:
             copy.append(text_label(subtitle, 'dialog-description'))
@@ -48,7 +47,7 @@ class PickerDialog(Gtk.Dialog):
         handle.set_child(heading)
         self.set_titlebar(handle)
 
-        self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, vexpand=True)
+        self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, vexpand=True)
         self.body.add_css_class('dialog-body')
         content = self.get_content_area()
         content.append(self.body)
@@ -56,7 +55,7 @@ class PickerDialog(Gtk.Dialog):
         self.error_label.add_css_class('error')
         self.error_label.set_visible(False)
         content.append(self.error_label)
-        self.footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.footer.add_css_class('dialog-footer')
         self.footer.append(Gtk.Box(hexpand=True))
         content.append(self.footer)
@@ -120,11 +119,11 @@ def file_icon(path):
 
 
 def file_summary(path=None, *, title='', detail='', icon=None):
-    card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+    card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
     card.add_css_class('dialog-file-summary')
     glyph = icon or (file_icon(path) if path else 'edit-select-all-symbolic')
     image = Gtk.Image.new_from_icon_name(glyph) if isinstance(glyph, str) else Gtk.Image.new_from_gicon(glyph)
-    image.set_pixel_size(30)
+    image.set_pixel_size(20)
     plate = Gtk.Box(valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
     plate.add_css_class('dialog-file-icon')
     plate.append(image)
@@ -143,7 +142,7 @@ def file_summary(path=None, *, title='', detail='', icon=None):
 
 
 def entry_field(title, entry, hint=''):
-    field = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    field = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     caption = text_label(title, 'dialog-field-label')
     caption.set_mnemonic_widget(entry)
     entry.update_property([Gtk.AccessibleProperty.LABEL], [title])
@@ -159,7 +158,7 @@ def detail_card(rows):
     card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     card.add_css_class('dialog-detail-card')
     for index, (title, value) in enumerate(rows):
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         row.add_css_class('dialog-detail-row')
         if index:
             row.add_css_class('divided')
@@ -173,7 +172,7 @@ def detail_card(rows):
 
 
 def section(title, child):
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.append(text_label(title, 'dialog-section-title'))
     box.append(child)
     return box

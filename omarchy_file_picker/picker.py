@@ -38,7 +38,7 @@ from .quicklook import QuickLook
 from .drag_selection import BackgroundSelection
 from .drag_copy import DragCopy, disable_native_rubberband
 from .network_ui import NetworkBrowser
-from .network import NetworkLocation, safe_network_uri, mounted_local_path
+from .network import NetworkLocation, safe_network_uri, mounted_local_path, mount_display_name
 from .creative import CreativeTools
 from .hover_scrub import HoverScrub
 from .media_details import MediaDetailsService, make_details_widget
@@ -119,6 +119,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.set_default_size(1200, 800)
         self.set_size_request(820, 560)
         self.add_css_class("picker-root")
+        if not request.explorer:
+            self.add_css_class('file-chooser')
         self._install_theme()
         self._build_header()
         self._build_content()
@@ -439,18 +441,15 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         for mount in mounts:
             root = mount.get_root().get_path()
             path = Path(root)
+            uri = mount.get_root().get_uri()
             button = self._sidebar_button(
-                mount.get_name(), icon_name,
-                lambda _b, uri=mount.get_root().get_uri(): self._open_mounted_location(uri)
+                mount_display_name(mount.get_name(), uri), icon_name,
+                lambda _b, uri=uri: self._open_mounted_location(uri)
             )
+            button.set_tooltip_text(safe_network_uri(uri) or str(path))
             button._picker_path = path  # type: ignore[attr-defined]
             button._sidebar_kind = 'mount'
             button._sidebar_mount = mount
-            indicator = Gtk.Box()
-            indicator.add_css_class('sidebar-mounted')
-            indicator.set_valign(Gtk.Align.CENTER)
-            indicator.set_tooltip_text('Mounted')
-            button.get_child().append(indicator)
             self.sidebar.append(button)
 
     def _refresh_sidebar(self) -> None:
@@ -513,6 +512,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.search_button.set_tooltip_text('Search (Ctrl+F)')
         self.search_button.update_property([Gtk.AccessibleProperty.LABEL], ['Search'])
         self.search_popover = Gtk.Popover()
+        self.search_popover.add_css_class('compact-popover')
         self.search_button.set_popover(self.search_popover)
         self._build_search_controls()
         self.search_popover.connect('map', lambda *_: self.search.grab_focus())
@@ -530,17 +530,17 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         if not self.request.explorer:
             views.add_css_class('view-switcher')
         for button in (self.grid_button, self.list_button, self.columns_button):
+            button.add_css_class('compact-control')
             views.append(button)
         if not self.request.explorer:
             self.toolbar.actions.append(views)
         self.grid_button.add_css_class('active')
-        if self.request.explorer:
-            for row in (self.toolbar.navigation, self.toolbar.actions):
-                child = row.get_first_child()
-                while child:
-                    if isinstance(child, (Gtk.Button, Gtk.MenuButton)):
-                        child.add_css_class('compact-control')
-                    child = child.get_next_sibling()
+        for row in (self.toolbar.navigation, self.toolbar.actions):
+            child = row.get_first_child()
+            while child:
+                if isinstance(child, (Gtk.Button, Gtk.MenuButton)):
+                    child.add_css_class('compact-control')
+                child = child.get_next_sibling()
 
     def _open_search(self):
         self.search_button.popup()

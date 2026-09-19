@@ -39,7 +39,7 @@ class TabSlot(Gtk.Widget):
 
 class AnimatedTabStrip(Gtk.Widget):
     duration = 220_000
-    spacing = 6
+    spacing = 0
 
     def __init__(self):
         super().__init__(hexpand=True)
@@ -149,7 +149,7 @@ class AnimatedTabStrip(Gtk.Widget):
             minimum, weights = self._metrics()
             width = max(0, math.ceil((minimum + self.spacing) * weights - self.spacing))
             return width, width, -1, -1
-        height = max((slot.content.measure(orientation, for_size)[1] for slot in self.slots), default=28)
+        height = max((slot.content.measure(orientation, for_size)[1] for slot in self.slots), default=24)
         return height, height, -1, -1
 
     def do_size_allocate(self, width, height, baseline):

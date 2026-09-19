@@ -141,7 +141,7 @@ def _dialog_class():
             self.active, self.plan, self.cancelled = False, [], threading.Event()
             self.alive, self.preview_running = True, False
             self.preview_generation, self.preview_timer, self.preview_pending = 0, 0, None
-            self.set_default_size(680, 640)
+            self.set_default_size(680, 520)
             self.set_resizable(True)
             self.add_css_class('batch-rename-dialog')
             outer = self.body

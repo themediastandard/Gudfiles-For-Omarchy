@@ -17,6 +17,16 @@ class NetworkLocation:
     server: bool = False
 
 
+def mount_display_name(name, uri):
+    """Drop GVfs's redundant host suffix without truncating a share's name."""
+    parsed = urlsplit(uri)
+    if parsed.scheme in {'smb', 'smbs', 'nfs'} and parsed.hostname:
+        suffix = ' on ' + parsed.hostname
+        if name.casefold().endswith(suffix.casefold()) and len(name) > len(suffix):
+            return name[:-len(suffix)]
+    return name
+
+
 def mounted_local_path(uri):
     """Resolve an already-mounted location, repairing a missing GVfs bridge.
 

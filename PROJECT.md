@@ -7,6 +7,24 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- September 19 compact visual pass: tabs are 24-pixel rectangular segments with
+  square corners, quiet dividers and flat close buttons; the complete strip is
+  25 pixels including its separator. Equal-width expansion, drag/reordering,
+  keyboard shortcuts and reduced-motion behavior remain supported. List headings
+  use the app background with a subtle separator and readable active sort state.
+- Mounted sidebar entries have no status dots. SMB/NFS labels remove only the
+  host suffix matching their own URI, preserving share names and local-device
+  names; the safe address remains in the tooltip for distinguishing hosts.
+  The NAS browser uses the same share labels.
+- Shared Rename, New Folder, Properties, Trash/Delete, replacement and error
+  dialogs use 15-pixel titles, compact fields/actions and flat file summaries.
+  Batch Rename, NAS, Help/About, Transfers, search/column/media popovers and
+  Open/Save/destination pickers follow the lighter spacing and controls.
+  Destination pickers open at 960×640; Help at 760×600, Transfers at 640×460,
+  and Batch Rename at 680×520. Native scrolling, keyboard focus, inline errors,
+  cancellation, destructive-action defaults and transfer close guards remain.
+  Keep future secondary surfaces compact and consistent with the browser.
+
 - List view has a pinned, aligned heading row directly above the files. Click a
   heading to sort/reverse; right-click or Shift+F10 chooses Name, Size, Type,
   Date Created, Date Modified, Resolution, FPS, Duration and Codec. Name stays
@@ -230,8 +248,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   happens immediately; outgoing tabs cannot receive clicks, focus or drops.
   Drag reordering settles active motion first, and overflow reveal tracks the
   selected tab throughout its expansion. Final-tab transfer guards are unchanged.
-  They retain 28-pixel rounded styling, ellipsized labels and a 20-pixel circular
-  close button on the left. A small New Tab control stays at the right edge;
+  They use 24-pixel square segments, ellipsized labels and a flat 22-pixel
+  close target on the left. A small New Tab control stays at the right edge;
   many tabs scroll horizontally when their minimum widths exceed the viewport.
   Native sizing checks cover one/two/three tabs, unequal folder-name lengths,
   820/1200-pixel windows, close/reopen expansion and overflow reveal. Tab/drag
@@ -375,8 +393,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   shortcuts and bookmarks; Music appears when present and Recent remains available.
   Network has a compact accessible + connection button. Mounts are grouped by
   native URI rather than their GVfs bridge path; local disks and MTP/camera/phone
-  devices stay under Devices, which hides when empty. Small accent squares mean
-  mounted, not verified server health. The sidebar retains the app background.
+  devices stay under Devices, which hides when empty. Mounted entries show only their name and icon, without status dots or the
+  redundant host suffix. The sidebar retains the app background.
 - Sidebar items have native pointer/keyboard context menus for Open, a separate
   Gudfiles window, enclosing-folder reveal, Copy Location and Properties. Right-click
   preserves the current directory, browser selection, column trail and geometry.
@@ -889,6 +907,26 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 compact surfaces: 228 unit tests pass. Native Wayland list and
+  tab-motion suites pass at 820/1200 pixels; toolbar, destination picker and
+  five-palette checks pass. Dialog QA now includes an explicit dark palette,
+  alongside active/light, and verifies bounded long content, Enter/Escape,
+  collision errors, safe confirmation defaults and disposable file outcomes.
+  Batch Rename, NAS validation/discovery, Transfers pause/resume/cancel/close
+  guards and Help/About/search/lifecycle checks pass. Native snapshots of the
+  browser, dialogs, NAS, batch rename, Help/About, Transfers and destination
+  picker were visually inspected. Help QA sizes only its own Wayland windows;
+  minimum-size assertions use native surfaces to account for X11 decorations.
+  The code package was atomically exchanged with a complete runtime rollback
+  backup in `~/.local/state/gudfiles/install-backups`. All 56 installed runtime
+  files match source. Installed dialog and Help suites pass on isolated Xvfb;
+  an installed Wayland fixture confirms three 24-pixel tabs, a 25-pixel strip,
+  live share-only mount labels and no indicators. Existing sessions are retained;
+  reopen Gudfiles to load this update. System-owned credential prompts remain
+  GTK/GVfs surfaces; no authentication flow or desktop theme was changed.
+  The AI-OS project route already points here; unrelated dirty AI-OS files were
+  preserved. No new shared procedure is needed for this visual pass.
 
 - September 19 list headings: 227 unit tests passed, including numeric media
   sorting, unavailable birth time, versioned cache invalidation, changed sources,
