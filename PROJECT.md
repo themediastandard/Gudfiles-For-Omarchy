@@ -7,6 +7,22 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- List view has a pinned, aligned heading row directly above the files. Click a
+  heading to sort/reverse; right-click or Shift+F10 chooses Name, Size, Type,
+  Date Created, Date Modified, Resolution, FPS, Duration and Codec. Name stays
+  visible, choices persist, and horizontal scrolling keeps headings aligned.
+  File rows are 28 pixels with 14-pixel icons, 13-pixel names and 11-pixel
+  metadata. `list_details.py` owns the native
+  header/cells/menu; `list_metadata.py` owns formatting and a single background
+  worker with replaceable batches of at most 16 and a versioned 512-entry cache.
+  Normal browsing probes visible rows only. Media/creation-date sorting reports
+  progress while reading entries, then applies one stable order without losing
+  selection. Navigation and close invalidate late replies. Missing values show
+  a dash and sort last within folders-first groups. Date Created uses actual
+  filesystem birth time, never Linux ctime. Media helpers retain their existing
+  six-second deadlines; a running probe can finish after cancellation but cannot
+  update the new view. F5 refreshes changed files.
+
 - Image, Nikon NEF / camera RAW and video thumbnails load only for visible tiles
   and the selection strip, through two background workers with no pending decode
   queue. Scrolling/view/tab/close changes cancel obsolete jobs and release hidden
@@ -350,10 +366,17 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Failed cleanup offers an explicit leave-partials exit. No automatic reconnect,
   credentials, persisted queue, background service or restart recovery is added.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
-  prompts; mounted shares are refreshed into the Devices sidebar.
+  prompts; mounted shares are refreshed into the Network sidebar section.
 - Reads the active Omarchy `colors.toml` on every launch.
 - User-local portal installation with GTK retained as the fallback backend.
-- Sidebar uses the same application background, not a contrasting white panel.
+- Sidebar follows the clean September 19 reference: flat 28-pixel rows, 14-pixel
+  symbolic icons and 13-pixel labels, quiet uppercase headings, a subtle active fill with a thin
+  accent edge, and whitespace between sections. Places includes existing local
+  shortcuts and bookmarks; Music appears when present and Recent remains available.
+  Network has a compact accessible + connection button. Mounts are grouped by
+  native URI rather than their GVfs bridge path; local disks and MTP/camera/phone
+  devices stay under Devices, which hides when empty. Small accent squares mean
+  mounted, not verified server health. The sidebar retains the app background.
 - Sidebar items have native pointer/keyboard context menus for Open, a separate
   Gudfiles window, enclosing-folder reveal, Copy Location and Properties. Right-click
   preserves the current directory, browser selection, column trail and geometry.
@@ -361,7 +384,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   only the shared GTK bookmark. Restore Default Locations is available from the
   sidebar context menu. Recent has Open/removal actions; devices expose supported
   Eject/Unmount/Disconnect actions and the NAS entry opens its connection dialog.
-- Native draggable sidebar divider with a 280-pixel minimum and 300-pixel default,
+- Native draggable sidebar divider with a 180-pixel minimum and 220-pixel default,
   older narrower saved widths clamped on load, scrollable places,
   and debounced width persistence without reloading files or clearing selection.
 - Hidden-file visibility uses open/concealed eye icons, an active state and Ctrl+H.
@@ -866,6 +889,39 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 list headings: 227 unit tests passed, including numeric media
+  sorting, unavailable birth time, versioned cache invalidation, changed sources,
+  worker cancellation and replacement of queued batches. Native
+  `PYTHONPATH=. python tests/ui_list_details.py` passed pinned heading/cell
+  alignment, horizontal scrolling at 820/1200 pixels, pointer/keyboard column
+  menus, preference restoration, real-video FPS/resolution sorting, retained
+  selection and visible-only reads in active/light/dark themes. Set
+  `LIST_QA_SCREENSHOTS` for native captures. Selection, sorting, search and compact
+  toolbar regressions also passed. Tests present fixture windows before destroying
+  them; destroying a never-presented PickerWindow triggered a GTK surface crash
+  during test development. The combined runtime, including compact sidebar and
+  flat top-bar controls, is installed with a rollback backup; all 56 runtime
+  files match source. List-heading and all-view selection suites also passed
+  against that installed package, measuring 28-pixel list rows. Reopen existing
+  windows to load the update. Unrelated AI-OS changes remain untouched.
+
+- September 19 sidebar cleanup: all 222 unit tests passed. Native Wayland
+  sidebar-action QA passed across grid/list/columns, including selection and
+  history preservation, bookmark hide/restore, mount actions and popup lifetime.
+  Active/light/dark fixture snapshots were reviewed; grouping (including MTP
+  cameras), + connection control, available icons, mount removal and
+  180/220/280-pixel widths passed after the requested extra compaction. Native
+  splitter persistence and Open/Save/browser view restoration also passed after
+  correcting the QA selector to the current picker application ID. Explorer view
+  icons now sit directly in the top-bar action row; icon buttons have no nested
+  group surface, filled background or border, with accent hover/active feedback.
+  The complete native toolbar suite passed in active/light palettes at 820–1200
+  pixels. The verified sidebar/top-bar changes were isolated from concurrent list
+  work, then installed as three atomic module replacements with a rollback backup.
+  Installed bytes match the verified staging copy; a fresh installed Gudfiles
+  window was opened and visually checked. The saved sidebar width is 220.
+  The list-column task owns the later combined update and full source parity.
 
 - Thumbnail verification (2026-09-19): the native fixture with 1,000 24-megapixel
   images switches list→grid in about 0.14 seconds, retains only visible thumbnails

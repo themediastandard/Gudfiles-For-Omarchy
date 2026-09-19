@@ -158,6 +158,17 @@ bookmarks use the shared GTK `~/.config/gtk-3.0/bookmarks` file.
 Your last chosen grid, list, or column view is saved as soon as you select it
 and restored when you open Gudfiles or an Open/Save dialog again.
 
+List view has a fixed heading row directly above the files. Click a heading to
+sort and click again to reverse. Right-click the heading row (or focus a heading
+and press `Shift+F10`) to choose Size, Type, Date Created, Date Modified,
+Resolution, FPS, Duration and Codec; Name always stays visible. Your choices are
+saved. Wide lists scroll horizontally with their headings. Media details load
+off the UI thread for visible rows; sorting by media reads the folder's entries
+in bounded batches and shows progress before applying the order. Missing values
+show a dash and sort last within the optional folders-first groups. Date Created
+uses filesystem birth time only; unavailable birth time is never replaced by
+Linux metadata-change time. Refresh with `F5` after changing files elsewhere.
+
 Right-click a sidebar location for **Open**, **Open in New Window**, **Copy
 Location**, and **Properties**. Local folders also offer **Show in Enclosing
 Folder**. **Remove from Sidebar** hides a default location or removes a shared

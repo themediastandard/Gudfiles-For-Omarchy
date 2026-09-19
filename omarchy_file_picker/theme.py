@@ -151,6 +151,21 @@ def build_css(colors: dict[str, str]) -> str:
     .compact-toolbar .path-segment label {{ font-size: 11px; }}
     entry.compact-location {{ min-height: 20px; padding: 1px 5px; margin: 0; font-size: 11px; }}
     .compact-toolbar .view-switcher {{ border-radius: 5px; }}
+    headerbar.compact-header button.compact-control,
+    headerbar.compact-header .compact-control > button,
+    headerbar.compact-header button.header-utility,
+    headerbar.compact-header windowcontrols button {{
+      background: transparent; background-image: none; border: 0;
+      border-radius: 0; box-shadow: none; text-shadow: none;
+    }}
+    headerbar.compact-header button.compact-control:hover,
+    headerbar.compact-header .compact-control > button:hover,
+    headerbar.compact-header button.header-utility:hover,
+    headerbar.compact-header windowcontrols button:hover,
+    headerbar.compact-header button.compact-control.active,
+    headerbar.compact-header .compact-control > button:checked {{
+      background: transparent; color: {colors['accent_ink']};
+    }}
     .files-help .help-heading {{ padding: 20px 22px 16px; }}
     .files-help .help-title {{ font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }}
     .files-help .help-emblem {{
@@ -256,7 +271,7 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['background']};
       color: {colors['foreground']};
       border-right: 1px solid {colors['darker_background']};
-      padding: 12px 8px;
+      padding: 6px 0;
     }}
     .sidebar-split > separator {{
       min-width: 5px;
@@ -266,23 +281,36 @@ def build_css(colors: dict[str, str]) -> str:
     .sidebar-split > separator:hover {{ background: alpha({colors['accent']}, 0.35); }}
     .sidebar-heading {{
       color: {colors['dark_foreground']};
-      font-size: 12px;
-      font-weight: 700;
-      margin: 10px 10px 6px 10px;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 1.2px;
+      margin: 8px 12px 4px 12px;
     }}
+    .sidebar-section {{ margin-top: 12px; }}
+    .sidebar-section .sidebar-heading {{ margin-top: 0; }}
+    button.sidebar-connect {{
+      min-width: 20px; min-height: 20px; padding: 0; margin: 0 8px 2px 0;
+      background: transparent; background-image: none; border: 0;
+      color: {colors['dark_foreground']}; border-radius: 0;
+    }}
+    button.sidebar-connect:hover {{ color: {colors['foreground']}; background: {colors['lighter_background']}; }}
+    .sidebar-mounted {{ min-width: 6px; min-height: 6px; background: {colors['accent']}; }}
     .location-button {{
-      min-height: 38px;
-      padding: 0 10px;
-      border-radius: 7px;
+      min-height: 28px;
+      padding: 0 12px;
+      font-size: 13px;
+      border-radius: 0;
       background: transparent;
+      background-image: none;
       color: {colors['foreground']};
       border: 0;
       box-shadow: none;
     }}
     .location-button:hover {{ background: {colors['lighter_background']}; }}
     .location-button.active {{
-      background: {colors['selection']};
-      color: {colors['accent_ink']};
+      background: alpha({colors['foreground']}, 0.07);
+      color: {colors['foreground']};
+      box-shadow: inset 2px 0 {colors['accent']};
     }}
     .quicklook-card {{
       background: {colors['background']};
@@ -347,6 +375,14 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 10px; }}
+    .list-heading {{ padding: 0 17px; background: {colors['dark_background']};
+      border-bottom: 1px solid {colors['darker_background']}; }}
+    button.list-heading-button {{ min-height: 26px; padding: 0; margin: 0;
+      border: 0; border-radius: 0; background: transparent; box-shadow: none; }}
+    button.list-heading-button:hover {{ background: {colors['lighter_background']}; }}
+    button.list-heading-button label {{ font-size: 11px; font-weight: 600; }}
+    .list-cell label {{ font-size: 13px; }}
+    .list-sort-status {{ font-size: 11px; padding: 3px 17px; color: {colors['muted']}; }}
     .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
     .view-switcher {{ background: {colors['dark_background']}; border-radius: 8px; }}
     .browser-column {{ background: {colors['background']}; border-right: 1px solid {colors['lighter_background']}; }}
@@ -360,6 +396,8 @@ def build_css(colors: dict[str, str]) -> str:
       padding: 1px 6px;
       border-radius: 4px;
     }}
+    .file-list .filename {{ font-size: 13px; }}
+    .file-list .muted {{ font-size: 11px; }}
     flowboxchild:selected {{
       background: alpha({colors['accent']}, 0.10);
       border-color: {colors['accent']};
@@ -689,7 +727,8 @@ def light_controls_css(c):
     .creative-choice:hover, .color-swatch:hover, .quicklook-bar button:hover {{
       background: {c['lighter_background']};
     }}
-    .location-button.active, .creative-choice.active, .color-swatch.active {{ background: {c['selection']}; }}
+    .location-button.active {{ background: alpha({c['foreground']}, 0.07); }}
+    .creative-choice.active, .color-swatch.active {{ background: {c['selection']}; }}
     .browser-tab button.tab-close {{ background: alpha({c['foreground']}, 0.075); }}
     .browser-tab button.tab-close:hover {{ background: alpha({c['foreground']}, 0.17); }}
     entry:focus-within, searchentry:focus-within {{

@@ -50,6 +50,8 @@ from .help_window import show_help
 from .list_navigation import navigate_files
 from .tabs import BrowserTabs
 from .toolbar import AdaptiveToolbar
+from .list_details import ListDetails
+from .list_metadata import EXTRA_SORTS
 from .search_ui import SearchTools
 from .context_menu import HoverSubmenus
 from .thumbnails import IMAGE_TYPES, VIDEO_TYPES, thumbnail_file
@@ -220,7 +222,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         body.set_vexpand(True)
         root.append(body)
 
-        self.sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.sidebar.add_css_class("sidebar")
         sidebar_scroll = Gtk.ScrolledWindow()
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -291,6 +293,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.standard_flow = self.flow
         self.standard_scroller = scroller
         self.standard_selection_handler = self.selection_changed_handler
+        self.list_details = ListDetails(self)
+        browser.insert_child_after(self.list_details.widget, self.browser_overlay.get_prev_sibling())
         self.columns = ColumnBrowser(self)
         self.browser_stack.add_named(self.columns, 'columns')
         self.drag_selection = BackgroundSelection(self)
@@ -351,9 +355,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         button.add_css_class("location-button")
         button._sidebar_kind = 'location'
         button._sidebar_key = text.casefold()
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(18)
+        icon.set_pixel_size(14)
         row.append(icon)
         item_label = label(text)
         item_label.set_hexpand(True)
@@ -367,16 +371,17 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         return button
 
     def _build_sidebar(self) -> None:
-        self.sidebar.append(label("LOCATIONS", "sidebar-heading"))
+        self.sidebar.append(label("PLACES", "sidebar-heading"))
         home = Path.home()
         locations = [
             ("Home", "user-home-symbolic", home),
-            ("Recent", "document-open-recent-symbolic", None),
-            ("Documents", "folder-documents-symbolic", home / "Documents"),
             ("Downloads", "folder-download-symbolic", home / "Downloads"),
+            ("Documents", "folder-documents-symbolic", home / "Documents"),
+            ("Music", "folder-music-symbolic", home / "Music"),
             ("Pictures", "folder-pictures-symbolic", home / "Pictures"),
             ("Videos", "folder-videos-symbolic", home / "Videos"),
             ("Projects", "folder-symbolic", home / "Documents/Omarchy"),
+            ("Recent", "document-open-recent-symbolic", None),
         ]
         existing_locations = {path for _, _, path in locations if path is not None}
         for name, icon, path in locations:
@@ -391,40 +396,62 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 button._picker_path = path  # type: ignore[attr-defined]
             self.sidebar.append(button)
 
-        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        separator.set_margin_top(10)
-        separator.set_margin_bottom(6)
-        self.sidebar.append(separator)
         extra_bookmarks = [(path, name) for path, name in self._bookmarks() if path not in existing_locations]
-        if extra_bookmarks:
-            self.sidebar.append(label('BOOKMARKS', 'sidebar-heading'))
         for path, name in extra_bookmarks:
             button = self._sidebar_button(name, 'folder-symbolic', lambda _b, p=path: self.navigate(p))
             button._picker_path = path
             button._sidebar_kind = 'bookmark'
             self.sidebar.append(button)
-        self.sidebar.append(label("DEVICES", "sidebar-heading"))
-
+        # Group from the mount's native URI: GVfs exposes network shares as
+        # local paths too, so checking the filesystem path mislabels them.
+        network, devices = [], []
         seen: set[str] = set()
         for mount in self.volume_monitor.get_mounts():
             root = mount.get_root().get_path()
             if not root or root in seen:
                 continue
             seen.add(root)
+            scheme = mount.get_root().get_uri().partition(':')[0].lower()
+            target = devices if scheme in {'file', 'mtp', 'gphoto2', 'afc'} else network
+            target.append(mount)
+
+        heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        heading.add_css_class('sidebar-section')
+        title = label('NETWORK', 'sidebar-heading')
+        title.set_hexpand(True)
+        heading.append(title)
+        connect = self._sidebar_button('Connect to NAS…', 'list-add-symbolic', self._show_nas_dialog)
+        connect.remove_css_class('location-button')
+        connect.add_css_class('sidebar-connect')
+        connect.set_child(Gtk.Image.new_from_icon_name('list-add-symbolic'))
+        connect.update_property([Gtk.AccessibleProperty.LABEL], ['Connect to NAS'])
+        connect._sidebar_kind = 'connect'
+        heading.append(connect)
+        self.sidebar.append(heading)
+        self._append_sidebar_mounts(network, 'network-server-symbolic')
+        if devices:
+            heading = label('DEVICES', 'sidebar-heading')
+            heading.add_css_class('sidebar-section')
+            self.sidebar.append(heading)
+            self._append_sidebar_mounts(devices, 'drive-harddisk-symbolic')
+
+    def _append_sidebar_mounts(self, mounts, icon_name):
+        for mount in mounts:
+            root = mount.get_root().get_path()
             path = Path(root)
             button = self._sidebar_button(
-                mount.get_name(), "drive-harddisk-symbolic",
+                mount.get_name(), icon_name,
                 lambda _b, uri=mount.get_root().get_uri(): self._open_mounted_location(uri)
             )
             button._picker_path = path  # type: ignore[attr-defined]
             button._sidebar_kind = 'mount'
             button._sidebar_mount = mount
+            indicator = Gtk.Box()
+            indicator.add_css_class('sidebar-mounted')
+            indicator.set_valign(Gtk.Align.CENTER)
+            indicator.set_tooltip_text('Mounted')
+            button.get_child().append(indicator)
             self.sidebar.append(button)
-
-        connect = self._sidebar_button("Connect to NAS…", "network-server-symbolic", self._show_nas_dialog)
-        connect.add_css_class("nas-button")
-        connect._sidebar_kind = 'connect'
-        self.sidebar.append(connect)
 
     def _refresh_sidebar(self) -> None:
         if not hasattr(self, "sidebar"):
@@ -499,14 +526,16 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
         self.columns_button = self._icon_button('view-dual-symbolic', 'Column view', lambda _b: self._set_view('columns'))
-        views = Gtk.Box()
-        views.add_css_class('view-switcher')
+        views = self.toolbar.actions if self.request.explorer else Gtk.Box()
+        if not self.request.explorer:
+            views.add_css_class('view-switcher')
         for button in (self.grid_button, self.list_button, self.columns_button):
             views.append(button)
-        self.toolbar.actions.append(views)
+        if not self.request.explorer:
+            self.toolbar.actions.append(views)
         self.grid_button.add_css_class('active')
         if self.request.explorer:
-            for row in (self.toolbar.navigation, self.toolbar.actions, views):
+            for row in (self.toolbar.navigation, self.toolbar.actions):
                 child = row.get_first_child()
                 while child:
                     if isinstance(child, (Gtk.Button, Gtk.MenuButton)):
@@ -759,12 +788,18 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return self.request.filters[index]
         return None
 
+    def _sort_entries(self, entries, *, metadata=None):
+        prefs = self.file_preferences
+        if prefs['sort_key'] in EXTRA_SORTS:
+            metadata = {**(metadata or {}), **self.list_details.data}
+        return sort_entries(entries, prefs['sort_key'], prefs['descending'],
+                            prefs['folders_first'], metadata=metadata)
+
     def _directory_entries(self, path):
         entries = list_directory(path, show_hidden=self.show_hidden,
             active_filter=self._active_filter(), query=self.search.get_text(),
             directories_only=self.request.directory)
-        return sort_entries(self._creative_entries(entries), self.file_preferences['sort_key'],
-                            self.file_preferences['descending'], self.file_preferences['folders_first'])
+        return self._sort_entries(self._creative_entries(entries))
 
     def _load(self) -> None:
         if getattr(self, "_restoring_tab", False):
@@ -795,14 +830,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 directories_only=self.request.directory,
             )
         self.entries = self._creative_entries(self.entries)
-        self.entries = sort_entries(self.entries, self.file_preferences['sort_key'],
-                                    self.file_preferences['descending'], self.file_preferences['folders_first'])
+        self.entries = self._sort_entries(self.entries)
         self._rebuild_files()
         self._rebuild_pathbar()
         self._update_nav_state()
         self._update_active_location()
 
     def _rebuild_files(self) -> None:
+        self.list_details.reset()
         self.drag_selection.cancel()
         self._close_context_menu()
         self.empty_title.set_text('Nothing here')
@@ -888,47 +923,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         return item
 
     def _list_item(self, path: Path) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        row.set_size_request(-1, 28)
-        image = Gtk.Image.new_from_gicon(self._search_result_icon(path) if self._computer_search_active() else icon_for(path))
-        image.set_pixel_size(18)
-        row.append(image)
-        name = label(path.name, "filename")
-        name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        name.set_hexpand(True)
-        if self._computer_search_active():
-            title = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
-            title.append(name)
-            title.append(self._search_location_label(path))
-            row.append(title)
-        else:
-            row.append(name)
-        row.append(self._rating_badge(path))
-        if self._computer_search_active():
-            info = self.search_result.metadata.get(path, {}) if self.search_result else {}
-            size_text = format_size(info['size']) if 'size' in info and not info.get('directory') else '—'
-            if self.file_preferences['show_size']:
-                row.append(label(size_text, 'muted'))
-            return row
-        kind = label(file_type(path), "muted")
-        kind.set_size_request(150, -1)
-        kind.set_ellipsize(Pango.EllipsizeMode.END)
-        kind.set_max_width_chars(20)
-        kind.set_tooltip_text(file_type(path))
-        if self.file_preferences['show_type']: row.append(kind)
-        try:
-            size_text = "—" if path.is_dir() else format_size(path.stat().st_size)
-            date_format = "%b %-d, %H:%M" if self.file_preferences['show_time'] else "%b %-d, %Y"
-            modified_text = datetime.fromtimestamp(path.stat().st_mtime).strftime(date_format)
-        except OSError:
-            size_text, modified_text = "—", "—"
-        size = label(size_text, "muted")
-        size.set_size_request(95, -1)
-        if self.file_preferences['show_size']: row.append(size)
-        modified = label(modified_text, "muted")
-        modified.set_size_request(125, -1)
-        row.append(modified)
-        return row
+        return self.list_details.row(path)
 
     def _scroll_path_to_current(self, adjustment) -> None:
         adjustment.set_value(max(adjustment.get_lower(), adjustment.get_upper() - adjustment.get_page_size()))

@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='picker-sidebar-') as temp, patch.object
     settle()
     try:
         clients = json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
-        client = next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker')
+        client = next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker.Picker')
         selector = json.dumps('address:' + client['address'])
         if not client['floating']:
             subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True)

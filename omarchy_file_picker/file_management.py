@@ -15,9 +15,10 @@ from .file_actions import (RemovalError, TrashUnavailable, delete_after_trash_fa
                           parse_file_clipboard, remove_items, rename_item, transfer_items)
 from .transfer_ui import TransferUI
 from .sound_effects import ActionSounds
+from .list_metadata import COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, normalize_columns
 
-SIDEBAR_MIN_WIDTH = 280
-SIDEBAR_DEFAULT_WIDTH = 300
+SIDEBAR_MIN_WIDTH = 180
+SIDEBAR_DEFAULT_WIDTH = 220
 from .model import file_type, format_size
 
 SORT_OPTIONS = (
@@ -50,7 +51,9 @@ class FileManagement(TransferUI):
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
         defaults = dict(sort_key='name', descending=False, folders_first=True,
                         show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH,
-                        transfer_mode='queue', hidden_locations=[], view_mode='grid', sound_effects=True)
+                        transfer_mode='queue', hidden_locations=[], view_mode='grid', sound_effects=True,
+                        list_columns=list(DEFAULT_COLUMNS))
+        saved = {}
         try:
             saved = json.loads(self.preferences_path.read_text())
             if not isinstance(saved, dict):
@@ -60,7 +63,12 @@ class FileManagement(TransferUI):
                     defaults[key] = saved[key]
         except (OSError, ValueError, TypeError):
             pass
-        if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'}:
+        defaults['list_columns'] = normalize_columns(defaults['list_columns'])
+        if 'list_columns' not in saved and not defaults['show_size']:
+            defaults['list_columns'].remove('size')
+        defaults['show_size'] = 'size' in defaults['list_columns']
+        defaults['show_type'] = 'type' in defaults['list_columns']
+        if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'} | EXTRA_SORTS:
             defaults['sort_key'] = 'name'
         if defaults['transfer_mode'] not in {'queue', 'all'}:
             defaults['transfer_mode'] = 'queue'
@@ -82,7 +90,16 @@ class FileManagement(TransferUI):
             self.action_sounds.stop()
 
     def _set_file_preference(self, key, value, *, reload=True):
-        self._set_file_preferences({key: value}, reload=reload)
+        changes = {key: value}
+        if key in {'show_size', 'show_type'}:
+            column = key.removeprefix('show_')
+            columns = list(self.file_preferences['list_columns'])
+            if value and column not in columns:
+                columns.append(column)
+            elif not value and column in columns:
+                columns.remove(column)
+            changes['list_columns'] = normalize_columns(columns)
+        self._set_file_preferences(changes, reload=reload)
 
     def _set_file_preferences(self, changes, *, reload=True):
         self.file_preferences.update(changes)
@@ -127,15 +144,24 @@ class FileManagement(TransferUI):
 
     def _update_sort_button(self):
         prefs = self.file_preferences
-        title = next(title for key, descending, title in SORT_OPTIONS
-                     if (key, descending) == (prefs['sort_key'], prefs['descending']))
+        title = next((title for key, descending, title in SORT_OPTIONS
+                      if (key, descending) == (prefs['sort_key'], prefs['descending'])),
+                     COLUMNS.get(prefs['sort_key'], ('Name', 0))[0] +
+                     (' descending' if prefs['descending'] else ' ascending'))
         detail = ' · Date modified' if prefs['sort_key'] == 'modified' else ''
         self.sort_button.set_tooltip_text(f'Sort: {title}{detail}')
+        if hasattr(self, 'list_details'):
+            self.list_details.update_header()
 
     def _sort_menu_entries(self):
         prefs = self.file_preferences
         entries = []
-        for key, descending, title in SORT_OPTIONS:
+        options = list(SORT_OPTIONS)
+        if prefs['sort_key'] in EXTRA_SORTS:
+            key = prefs['sort_key']
+            options.extend((key, descending, COLUMNS[key][0] + (' descending' if descending else ' ascending'))
+                           for descending in (False, True))
+        for key, descending, title in options:
             selected = (key, descending) == (prefs['sort_key'], prefs['descending'])
             entries.append((title, 'Date modified' if key == 'modified' else '',
                             'object-select-symbolic' if selected else
@@ -149,8 +175,9 @@ class FileManagement(TransferUI):
         menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         for side in ('top', 'bottom', 'start', 'end'):
             getattr(menu, 'set_margin_' + side)(7)
-        for index, (title, detail, icon, callback) in enumerate(self._sort_menu_entries()):
-            if index == len(SORT_OPTIONS):
+        entries = self._sort_menu_entries()
+        for index, (title, detail, icon, callback) in enumerate(entries):
+            if index == len(entries) - 1:
                 menu.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
             menu.append(self._menu_button(title, callback, icon_name=icon, detail=detail))
         popover.set_child(menu)

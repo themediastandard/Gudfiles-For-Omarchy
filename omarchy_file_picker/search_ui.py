@@ -4,7 +4,6 @@ from pathlib import Path
 
 from gi.repository import Gtk, GLib, Gio, Pango
 
-from .file_actions import sort_entries
 from .search import SearchService
 
 
@@ -162,9 +161,7 @@ class SearchTools:
     def _show_computer_results(self, result):
         selected = self._selected_paths() or getattr(self, '_search_restore_selection', [])
         self._search_restore_selection = []
-        self.entries = sort_entries(self._creative_entries(result.paths),
-                                    self.file_preferences['sort_key'], self.file_preferences['descending'],
-                                    self.file_preferences['folders_first'], metadata=result.metadata)
+        self.entries = self._sort_entries(self._creative_entries(result.paths), metadata=result.metadata)
         self._rebuild_files()
         for path in selected:
             if path in self.children_by_path:
