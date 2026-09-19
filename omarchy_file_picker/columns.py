@@ -168,6 +168,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         flow.set_activate_on_single_click(False)
         flow.set_min_children_per_line(1)
         flow.set_max_children_per_line(1)
+        flow.set_row_spacing(2)
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_child(flow)

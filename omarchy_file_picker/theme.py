@@ -127,7 +127,7 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['background']}; color: {colors['accent_ink']};
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
-    headerbar.compact-header {{ min-height: 26px; padding: 0 4px; }}
+    headerbar.compact-header {{ min-height: 30px; padding: 0 4px; }}
     .file-chooser headerbar {{ min-height: 38px; padding: 0 8px; }}
     .file-chooser headerbar .metadata-title {{ font-size: 13px; }}
     .file-chooser headerbar .muted {{ font-size: 11px; }}
@@ -150,14 +150,14 @@ def build_css(colors: dict[str, str]) -> str:
     .file-chooser .toolbar .path-segment label {{ font-size: 11px; }}
     headerbar.compact-header button.header-utility,
     headerbar.compact-header windowcontrols button {{
-      min-width: 20px; min-height: 20px; padding: 1px; margin: 0;
+      min-width: 24px; min-height: 24px; padding: 1px; margin: 0;
       border-radius: 5px;
     }}
     headerbar.compact-header button.header-utility image,
-    headerbar.compact-header windowcontrols button image {{ -gtk-icon-size: 12px; }}
+    headerbar.compact-header windowcontrols button image {{ -gtk-icon-size: 14px; }}
     headerbar.compact-header windowcontrols button image,
     headerbar.compact-header windowcontrols button:hover image {{
-      min-width: 12px; min-height: 12px; padding: 0; margin: 0;
+      min-width: 14px; min-height: 14px; padding: 0; margin: 0;
       background: transparent; border: 0; box-shadow: none;
     }}
     headerbar.compact-header windowcontrols {{ padding: 0; margin: 0; }}
@@ -169,7 +169,11 @@ def build_css(colors: dict[str, str]) -> str:
     menubutton.compact-control {{ margin: 0; padding: 0; }}
     button.compact-control > image, .compact-control > button image {{ -gtk-icon-size: 12px; }}
     button.compact-control label, .compact-control > button label {{ font-size: 11px; }}
-    .compact-toolbar .path-segment {{ min-height: 24px; padding: 0; margin: 0; }}
+    headerbar.compact-header button.compact-control,
+    headerbar.compact-header .compact-control > button {{ min-width: 24px; min-height: 24px; }}
+    headerbar.compact-header button.compact-control > image,
+    headerbar.compact-header .compact-control > button image {{ -gtk-icon-size: 14px; }}
+    .compact-toolbar .path-segment {{ min-height: 28px; padding: 0; margin: 0; }}
     .compact-toolbar .path-segment label {{ font-size: 11px; }}
     entry.compact-location {{ min-height: 20px; padding: 1px 5px; margin: 0; font-size: 11px; }}
     .compact-toolbar .view-switcher {{ border-radius: 5px; }}
@@ -435,10 +439,10 @@ def build_css(colors: dict[str, str]) -> str:
     .file-list .muted {{ font-size: 11px; }}
     flowboxchild:selected {{
       background: alpha({colors['accent']}, 0.10);
-      border-color: {colors['accent']};
+      border-color: transparent;
       color: {colors['foreground']};
     }}
-    .browser-tabs {{ padding: 0 6px; border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
+    .browser-tabs {{ padding: 0; border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
     .browser-tab {{
       padding: 1px 3px; border: 0; border-right: 1px solid alpha({colors['foreground']}, 0.08);
       border-radius: 0; background: transparent;

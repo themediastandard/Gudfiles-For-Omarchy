@@ -1873,7 +1873,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.children_by_path = {}
         self.flow.set_homogeneous(False)
         self.flow.set_max_children_per_line(6 if mode == "grid" else 1)
-        self.flow.set_row_spacing(12 if mode == "grid" else 0)
+        self.flow.set_row_spacing(12 if mode == "grid" else 2)
         self.flow.set_column_spacing(12 if mode == "grid" else 0)
         if mode == "list":
             self.flow.add_css_class('file-list')

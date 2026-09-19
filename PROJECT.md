@@ -9,7 +9,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 - September 19 compact visual pass: tabs are 24-pixel rectangular segments with
   square corners, quiet dividers and flat close buttons; the complete strip is
-  25 pixels including its separator. Equal-width expansion, drag/reordering,
+  25 pixels including its separator. The first tab and rightmost + control sit
+  flush with the tab row edges, with no outer padding or gap beside +.
+  Equal-width expansion, drag/reordering,
   keyboard shortcuts and reduced-motion behavior remain supported. List headings
   use the app background with a subtle separator and readable active sort state.
   Explorer top-bar controls, breadcrumbs and list headings do not change visually
@@ -32,7 +34,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   heading to sort/reverse; right-click or Shift+F10 chooses Name, Size, Type,
   Date Created, Date Modified, Resolution, FPS, Duration and Codec. Name stays
   visible, choices persist, and horizontal scrolling keeps headings aligned.
-  File rows are 28 pixels with 14-pixel icons, 13-pixel names and 11-pixel
+  File rows are 28 pixels with a 2-pixel inter-row gap, 14-pixel icons,
+  13-pixel names and 11-pixel
   metadata. `list_details.py` owns the native
   header/cells/menu; `list_metadata.py` owns formatting and a single background
   worker with replaceable batches of at most 16 and a versioned 512-entry cache.
@@ -97,8 +100,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   focuses results; Escape closes the popover while retaining the filter, and
   the search chip clears it. Explorer navigation, scrollable/editable path,
   search, rating/hidden filters, sort and three view buttons now share the compact
-  title bar with Help, Transfers and close. Its controls use 12-pixel icons and
-  24-pixel targets; the bar measures 26 pixels plus its separator. It fits the
+  title bar with Help, Transfers and close. Its controls use 14-pixel icons and
+  26-pixel targets; the bar measures 30 pixels plus its separator. It fits the
   820-pixel minimum width independently of sidebar width. Open/Save pickers keep
   their titled header and responsive body toolbar. Quick Look disables the moved
   browsing controls while its overlay owns navigation and restores them on close;
@@ -211,7 +214,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Product name is Gudfiles in the launcher, Help, transfer messages, notifications
   and installation output. Tommy requested a very small, minimal top bar with no
   app name, with small options, the path and view buttons in the top bar
-  (2026-09-19). The standalone browser now uses one compact 26-pixel title bar
+  (2026-09-19). The standalone browser now uses one compact 30-pixel title bar
   for these controls; Open/Save pickers retain their task headings.
   Native active/light checks verify the height, utility actions, transfer badge,
   820–1200-pixel layouts and picker titles. All 222 unit tests pass. The complete
@@ -291,8 +294,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   file opening without quitting, and Escape clears selection. The preview strip
   remains. Portal requests, CLI `--result`, folder picking and Save modes retain
   picker footer controls and result semantics.
-- List view uses compact 32-pixel rows with no inter-row gap; grid spacing is
-  unchanged. Native range and individual selection remain supported.
+- List view uses compact 28-pixel rows with a 2-pixel gap (30-pixel pitch).
+  Column rows also have a 2-pixel gap; grid spacing is unchanged. Selected
+  files use the soft accent fill without a blue selection border. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
@@ -910,6 +914,16 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 edge/selection refinements: native bounds confirm zero outer
+  tab-row gaps, + flush right, and no gap between the last tab and +. Tab-motion
+  checks pass in active/light palettes at 820/1200 pixels. Toolbar QA passes with
+  the requested 30-pixel heading and 14-pixel icons. Native list/column bounds
+  measure exactly 2 pixels between rows; list pitch is 30 pixels. All-view range,
+  toggle, discontiguous and Select All checks pass. Rendered top-bar/headings
+  pixels still match before/after hover in active/light/dark palettes. The four
+  changed runtime modules are installed with a rollback backup; all 56 runtime
+  files match source. Reopen existing windows to load the refinements.
 
 - September 19 hover correction: native rendered PNGs are identical before and
   after GTK hover state for the top toolbar, breadcrumbs and list headings in

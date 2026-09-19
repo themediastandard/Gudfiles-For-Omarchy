@@ -16,7 +16,7 @@ class Tab:
 
 class BrowserTabs(Gtk.Box):
     def __init__(self, owner):
-        super().__init__(spacing=2)
+        super().__init__(spacing=0)
         self.owner = owner
         self.items = []
         self.current = None

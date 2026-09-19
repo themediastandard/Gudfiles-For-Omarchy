@@ -92,13 +92,13 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-toolbar-') as temp:
                     assert actions.get_y() == nav.get_y(), (width, nav, actions)
                     header = window.get_titlebar()
                     assert window.toolbar.is_ancestor(header)
-                    assert header.get_height() <= 28, header.get_height()
+                    assert 30 <= header.get_height() <= 32, header.get_height()
                     contained(window.toolbar, header)
                     for control in (window.back_button, window.up_button, window.search_button,
                                     window.hidden_button, window.sort_button, window.grid_button,
                                     window.list_button, window.columns_button):
                         contained(control, header)
-                        assert control.get_height() <= 26, (control, control.get_height())
+                        assert control.get_height() <= 30, (control, control.get_height())
                     window._toggle_path_entry(None)
                     settle()
                     contained(window.path_entry, window.toolbar)
