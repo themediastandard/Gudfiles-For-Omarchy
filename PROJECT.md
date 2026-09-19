@@ -300,7 +300,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   rows fill the content width without left/right outer padding; file icons sit
   6 pixels inside the selection's left edge, and list headings retain alignment
   with the cells. The last visible metadata column and its heading align right,
-  2 pixels inside the content edge. Native range and individual selection remain supported.
+  6 pixels inside the content edge. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.

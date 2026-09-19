@@ -411,7 +411,7 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 0; }}
-    .list-heading {{ padding: 0 2px 0 6px; background: {colors['background']};
+    .list-heading {{ padding: 0 6px; background: {colors['background']};
       border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
     button.list-heading-button {{ min-height: 24px; padding: 0; margin: 0;
       border: 0; border-radius: 0; background: transparent; box-shadow: none; }}
@@ -420,7 +420,7 @@ def build_css(colors: dict[str, str]) -> str:
     button.list-heading-button.active {{ color: {colors['foreground']}; }}
     button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
     .list-cell label {{ font-size: 13px; }}
-    .list-sort-status {{ font-size: 11px; padding: 3px 2px 3px 6px; color: {colors['muted']}; }}
+    .list-sort-status {{ font-size: 11px; padding: 3px 6px; color: {colors['muted']}; }}
     .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
     .view-switcher {{ background: {colors['dark_background']}; border-radius: 8px; }}
     .browser-column {{ background: {colors['background']}; border-right: 1px solid {colors['lighter_background']}; }}
@@ -431,7 +431,7 @@ def build_css(colors: dict[str, str]) -> str:
     flowbox.column-files {{ padding: 6px 0; }}
     .column-files .rating-badge {{ padding: 0; }}
     flowbox.file-list > flowboxchild {{
-      padding: 1px 1px 1px 5px;
+      padding: 1px 5px;
       border-radius: 0;
     }}
     .file-list .filename {{ font-size: 13px; }}
