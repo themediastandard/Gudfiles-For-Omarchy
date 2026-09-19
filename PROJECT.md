@@ -34,6 +34,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   heading to sort/reverse; right-click or Shift+F10 chooses Name, Size, Type,
   Date Created, Date Modified, Resolution, FPS, Duration and Codec. Name stays
   visible, choices persist, and horizontal scrolling keeps headings aligned.
+  The column customization popup uses square corners and checkbox indicators,
+  compact 24-pixel rows, 8-pixel outer spacing and a flat reset action. Native
+  active/light/dark checks cover appearance, toggles, keyboard opening, reset
+  and persisted choices.
   File rows are 28 pixels with a 2-pixel inter-row gap, 14-pixel icons,
   13-pixel names and 11-pixel
   metadata. `list_details.py` owns the native

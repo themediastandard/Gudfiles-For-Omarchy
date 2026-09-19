@@ -28,6 +28,7 @@ class ListDetails:
         self.widget.append(self.status)
         self.popover = Gtk.Popover()
         self.popover.add_css_class('compact-popover')
+        self.popover.add_css_class('columns-popover')
         self.popover.set_parent(self.header)
         gesture = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
         gesture.connect('pressed', self.show_menu)
@@ -131,10 +132,13 @@ class ListDetails:
         return False
 
     def show_menu(self, gesture, _count, x, y):
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        content.set_size_request(160, -1)
         for side in ('top', 'bottom', 'start', 'end'):
-            getattr(content, 'set_margin_' + side)(10)
-        content.append(Gtk.Label(label='Show columns', xalign=0))
+            getattr(content, 'set_margin_' + side)(8)
+        heading = Gtk.Label(label='Show columns', xalign=0)
+        heading.add_css_class('columns-heading')
+        content.append(heading)
         for key, (title, _) in COLUMNS.items():
             check = Gtk.CheckButton(label=title)
             check.set_active(key in self.columns())
@@ -142,6 +146,7 @@ class ListDetails:
             check.connect('toggled', lambda button, key=key: self.choose(key, button.get_active()))
             content.append(check)
         reset = Gtk.Button(label='Reset columns')
+        reset.add_css_class('columns-reset')
         reset.connect('clicked', lambda *_: self.set_columns(DEFAULT_COLUMNS))
         content.append(reset)
         self.popover.set_child(content)

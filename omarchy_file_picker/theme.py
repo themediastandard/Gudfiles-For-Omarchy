@@ -588,6 +588,25 @@ def build_css(colors: dict[str, str]) -> str:
     .compact-popover button {{ min-height: 26px; padding: 1px 8px; border-radius: 4px;
       background-image: none; box-shadow: none; text-shadow: none; }}
     .compact-popover checkbutton {{ min-height: 22px; padding: 0; }}
+    popover.columns-popover > contents {{ border-radius: 0; }}
+    .columns-popover .columns-heading {{ font-weight: 600; margin: 2px 0 6px; }}
+    .columns-popover checkbutton {{ min-height: 24px; padding: 0 4px; border-radius: 0; }}
+    .columns-popover checkbutton:hover {{ background: alpha({colors['foreground']}, 0.05); }}
+    .columns-popover checkbutton check {{
+      min-width: 12px; min-height: 12px; padding: 0; margin: 0 7px 0 0;
+      border: 1px solid alpha({colors['foreground']}, 0.35); border-radius: 0;
+      background: transparent; background-image: none; box-shadow: none;
+    }}
+    .columns-popover checkbutton check:checked {{
+      background: {colors['selection']}; color: {colors['accent_ink']};
+      border-color: {colors['accent_ink']};
+    }}
+    .columns-popover checkbutton:disabled {{ opacity: 0.45; }}
+    .columns-popover button.columns-reset {{
+      margin-top: 6px; min-height: 24px; border-radius: 0;
+      border: 1px solid {colors['darker_background']}; background: transparent;
+    }}
+    .columns-popover button.columns-reset:hover {{ background: {colors['dark_background']}; }}
     .compact-popover searchentry {{ min-height: 28px; padding: 1px 8px; border-radius: 4px; }}
     .creative-heading {{ font-weight: 600; font-size: 14px; }}
     .creative-choice, .color-swatch {{
