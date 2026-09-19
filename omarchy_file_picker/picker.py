@@ -51,7 +51,7 @@ from .list_navigation import navigate_files
 from .tabs import BrowserTabs
 from .toolbar import AdaptiveToolbar
 from .list_details import ListDetails
-from .list_metadata import EXTRA_SORTS
+from .list_metadata import ANNOTATION_COLUMNS, EXTRA_SORTS, annotation_values
 from .search_ui import SearchTools
 from .context_menu import HoverSubmenus
 from .thumbnails import IMAGE_TYPES, VIDEO_TYPES, thumbnail_file
@@ -250,9 +250,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._build_toolbar()
         if self.request.explorer:
             self.toolbar.set_valign(Gtk.Align.CENTER)
-            self.toolbar.actions.append(self.transfer_button)
-            self.toolbar.actions.append(self.help_button)
-            self.toolbar.actions.append(Gtk.WindowControls(side=Gtk.PackType.END))
+            self.toolbar.add_action_group('Tools', (self.transfer_button, self.help_button), utility=True)
+            self.toolbar.add_action_group('Window', (Gtk.WindowControls(side=Gtk.PackType.END),), utility=True)
             self.get_titlebar().set_title_widget(self.toolbar)
         else:
             browser.append(self.toolbar)
@@ -384,6 +383,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             ("Videos", "folder-videos-symbolic", home / "Videos"),
             ("Projects", "folder-symbolic", home / "Documents/Omarchy"),
             ("Recent", "document-open-recent-symbolic", None),
+            ("Trash", "user-trash-symbolic", None),
         ]
         existing_locations = {path for _, _, path in locations if path is not None}
         for name, icon, path in locations:
@@ -393,6 +393,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 continue
             if name == "Recent":
                 button = self._sidebar_button(name, icon, lambda _b: self._open_recent())
+            elif name == "Trash":
+                button = self._sidebar_button(name, icon, lambda _b: self._open_trash())
             else:
                 button = self._sidebar_button(name, icon, lambda _b, p=path: self.navigate(p))
                 button._picker_path = path  # type: ignore[attr-defined]
@@ -450,7 +452,30 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             button._picker_path = path  # type: ignore[attr-defined]
             button._sidebar_kind = 'mount'
             button._sidebar_mount = mount
-            self.sidebar.append(button)
+            row = Gtk.Box()
+            row.add_css_class('sidebar-mount-row')
+            button.set_hexpand(True)
+            row.append(button)
+            if mount.can_eject() or mount.can_unmount():
+                action = self._sidebar_mount_action(mount)
+                name = mount_display_name(mount.get_name(), uri)
+                remove = Gtk.Button.new_from_icon_name('media-eject-symbolic')
+                remove.add_css_class('sidebar-unmount')
+                remove.set_valign(Gtk.Align.CENTER)
+                remove.set_tooltip_text(f'{action} {name}')
+                remove.update_property([Gtk.AccessibleProperty.LABEL], [f'{action} {name}'])
+                remove._sidebar_owner = button
+                remove.connect('clicked', lambda _b, m=mount: self._remove_sidebar_mount(m))
+                button._unmount_button = remove
+                remove.set_sensitive(uri not in getattr(self, 'sidebar_mount_operations', {}))
+                row.append(remove)
+            self.sidebar.append(row)
+
+    def _open_trash(self) -> None:
+        from .trash_ui import TrashDialog
+        if getattr(self, 'trash_dialog', None) is None:
+            self.trash_dialog = TrashDialog(self)
+        self.trash_dialog.present()
 
     def _refresh_sidebar(self) -> None:
         if not hasattr(self, "sidebar"):
@@ -516,24 +541,16 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.search_button.set_popover(self.search_popover)
         self._build_search_controls()
         self.search_popover.connect('map', lambda *_: self.search.grab_focus())
-        self.toolbar.actions.append(self.search_button)
-        self.toolbar.actions.append(self._creative_filter_button())
+        filters = self._creative_filter_button()
 
         self.hidden_button = self._icon_button("view-conceal-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
         self.hidden_button.add_css_class('hidden-toggle')
-        self.toolbar.actions.append(self.hidden_button)
-        self.toolbar.actions.append(self._build_sort_button())
+        self.toolbar.add_action_group('Find and filter', (self.search_button, filters, self.hidden_button))
+        sort = self._build_sort_button()
         self.list_button = self._icon_button("view-list-symbolic", "List view", lambda _b: self._set_view("list"))
         self.grid_button = self._icon_button("view-grid-symbolic", "Grid view", lambda _b: self._set_view("grid"))
         self.columns_button = self._icon_button('view-dual-symbolic', 'Column view', lambda _b: self._set_view('columns'))
-        views = self.toolbar.actions if self.request.explorer else Gtk.Box()
-        if not self.request.explorer:
-            views.add_css_class('view-switcher')
-        for button in (self.grid_button, self.list_button, self.columns_button):
-            button.add_css_class('compact-control')
-            views.append(button)
-        if not self.request.explorer:
-            self.toolbar.actions.append(views)
+        self.toolbar.add_action_group('Sort and view', (sort, self.grid_button, self.list_button, self.columns_button))
         self.grid_button.add_css_class('active')
         for row in (self.toolbar.navigation, self.toolbar.actions):
             child = row.get_first_child()
@@ -792,6 +809,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         prefs = self.file_preferences
         if prefs['sort_key'] in EXTRA_SORTS:
             metadata = {**(metadata or {}), **self.list_details.data}
+        elif prefs['sort_key'] in ANNOTATION_COLUMNS:
+            metadata = {path: dict(annotation_values(self.ratings.get(path)),
+                                   directory=self._entry_is_dir(path)) for path in entries}
         return sort_entries(entries, prefs['sort_key'], prefs['descending'],
                             prefs['folders_first'], metadata=metadata)
 
@@ -1119,14 +1139,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         detail: str = "",
         end_icon: str = "",
     ) -> Gtk.Widget:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         row.set_hexpand(True)
         icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(17)
+        icon.set_pixel_size(14)
         icon.add_css_class("context-icon")
         row.append(icon)
 
-        copy = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        copy = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
         copy.set_hexpand(True)
         copy.set_valign(Gtk.Align.CENTER)
         title = label(text, "context-label")
@@ -1139,7 +1159,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
 
         if end_icon:
             arrow = Gtk.Image.new_from_icon_name(end_icon)
-            arrow.set_pixel_size(14)
+            arrow.set_pixel_size(12)
             arrow.add_css_class("context-arrow")
             row.append(arrow)
         return row
@@ -1190,11 +1210,11 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         submenu.add_css_class("file-context-menu")
         submenu.add_css_class("file-submenu")
         submenu.set_position(Gtk.PositionType.RIGHT)
-        submenu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        submenu_box.set_margin_top(7)
-        submenu_box.set_margin_bottom(7)
-        submenu_box.set_margin_start(7)
-        submenu_box.set_margin_end(7)
+        submenu_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        submenu_box.set_margin_top(4)
+        submenu_box.set_margin_bottom(4)
+        submenu_box.set_margin_start(4)
+        submenu_box.set_margin_end(4)
         for item_text, detail, item_icon, callback in items:
             item_button = self._menu_button(
                     item_text,
@@ -1216,7 +1236,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._close_context_menu()
         automation = os.environ.get("OMARCHY_FILE_PICKER_AUTOMATION")
         keep_open_for_qa = automation in {"context-menu", "context-submenu", "context-background"}
-        popover = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=True)
+        popover = Gtk.Popover(autohide=not keep_open_for_qa, has_arrow=False)
         popover.add_css_class("file-context-menu")
         # Search, view changes, and refresh rebuild tiles. Keep the popup on the
         # stable browser surface, never on a tile that can be destroyed.
@@ -1243,10 +1263,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         popover.set_pointing_to(rectangle)
 
         menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
-        menu.set_margin_top(5)
-        menu.set_margin_bottom(5)
-        menu.set_margin_start(5)
-        menu.set_margin_end(5)
+        menu.set_margin_top(4)
+        menu.set_margin_bottom(4)
+        menu.set_margin_start(4)
+        menu.set_margin_end(4)
         popover.set_child(menu)
 
         self.context_submenus.clear()

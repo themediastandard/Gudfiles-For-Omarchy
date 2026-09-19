@@ -6,11 +6,34 @@ import unittest
 from unittest.mock import patch
 
 from omarchy_file_picker.file_actions import sort_entries
-from omarchy_file_picker.list_metadata import ListMetadataWorker, media_values, read_values, format_value
+from omarchy_file_picker.list_metadata import (ListMetadataWorker, annotation_values,
+    media_values, read_values, format_value, normalize_columns)
 from omarchy_file_picker.media_details import details_from_probe
 
 
 class ListMetadataTests(unittest.TestCase):
+    def test_column_order_roundtrip_and_invalid_saved_entries(self):
+        columns = ['color', 'rating', 'name', 'size']
+        self.assertEqual(normalize_columns(columns), ['name', 'color', 'rating', 'size'])
+        self.assertEqual(normalize_columns(['rating', {}, 'rating', 'obsolete', 'color']),
+                         ['name', 'rating', 'color'])
+        self.assertEqual(normalize_columns([]), ['name'])
+
+    def test_annotations_sort_saved_values_and_keep_unrated_last(self):
+        a, b, empty = map(Path, ['a.txt', 'b.txt', 'empty.txt'])
+        data = {a: annotation_values((2, 'red', False)),
+                b: annotation_values((5, 'blue', True)),
+                empty: annotation_values((0, '', False))}
+        self.assertEqual(format_value('rating', data[b]), '★★★★★')
+        self.assertEqual(format_value('rating', data[empty]), '—')
+        self.assertEqual(format_value('color', data[b]), '● Blue')
+        self.assertEqual(format_value('rejected', data[b]), 'Yes')
+        for key, descending, expected in [('rating', True, [b, a, empty]),
+                                          ('rating', False, [a, b, empty]),
+                                          ('color', False, [b, a, empty]),
+                                          ('rejected', True, [b, a, empty])]:
+            self.assertEqual(sort_entries([empty, a, b], key, descending, False, metadata=data), expected)
+
     def test_busy_worker_replaces_pending_batch_and_closes(self):
         with tempfile.TemporaryDirectory() as temp:
             paths = [Path(temp) / str(i) for i in range(40)]

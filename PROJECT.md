@@ -16,7 +16,15 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   use the app background with a subtle separator and readable active sort state.
   Explorer top-bar controls, breadcrumbs and list headings do not change visually
   on hover, including the native close icon. Active selections and keyboard focus
-  stay visible; breadcrumb press feedback remains.
+  stay visible; breadcrumb press feedback remains. Right-hand toolbar actions
+  are grouped into Find and filter, Sort and view, Tools, and Window controls
+  with subtle dividers and spacing. Help, Transfers and window controls remain
+  available while Quick Look disables browser actions.
+- Supported devices and network mounts show a separate trailing eject icon.
+  Its accessible name/tooltip identifies Eject, Unmount or Disconnect and the
+  target; it never activates folder navigation. Pending operations disable the
+  control, failures re-enable it, and existing busy-transfer/no-force guards
+  remain shared with the context menu. Non-removable entries omit the icon.
 - Mounted sidebar entries have no status dots. SMB/NFS labels remove only the
   host suffix matching their own URI, preserving share names and local-device
   names; the safe address remains in the tooltip for distinguishing hosts.
@@ -29,15 +37,35 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   and Batch Rename at 680×520. Native scrolling, keyboard focus, inline errors,
   cancellation, destructive-action defaults and transfer close guards remain.
   Keep future secondary surfaces compact and consistent with the browser.
+- Space preview follows the compact browser styling: a 31-pixel single-row
+  header (26-pixel controls plus padding/separator), 13-pixel filename, flat
+  controls, 6-pixel card corners and a quieter shadow. Media fills the frame
+  without an inner gutter; the compact footer shows file details and PDF page
+  count, with interaction hints on hover. Narrow previews retain a second row
+  for ratings. Text uses 12-pixel margins; native playback controls are compact.
+  Aspect fitting, opening animation, keyboard navigation and zoom are preserved.
 
 - List view has a pinned, aligned heading row directly above the files. Click a
-  heading to sort/reverse; right-click or Shift+F10 chooses Name, Size, Type,
-  Date Created, Date Modified, Resolution, FPS, Duration and Codec. Name stays
-  visible, choices persist, and horizontal scrolling keeps headings aligned.
+  heading to sort/reverse; right-click or Shift+F10 chooses Name, Rating,
+  Color Label, Rejected, Size, Type, Date Created, Date Modified, Resolution,
+  FPS, Duration and Codec. Rating is included in new/reset layouts; existing
+  custom column choices remain intact. Saved annotations update immediately
+  after successful writes, and can be sorted without media probing. Unrated
+  files show a dash and sort last in either direction; color labels have text
+  as well as colored dots. Name badges omit annotations already shown in columns.
+  Name stays fixed in the first position, including when loading older layouts.
+  Drag other headings or use Alt+Left/Right to reorder them to its right. A
+  floating header follows the pointer; the full column is shaded and neighboring
+  headings/cells move aside live. Preferences change only on release. Escape or
+  dropping outside restores the original order. Edge dragging scrolls; header
+  and body remain aligned throughout. Column choices/order persist. Reordering preserves file selection and the current sort.
   The column customization popup uses square corners and checkbox indicators,
   compact 24-pixel rows, 8-pixel outer spacing and a flat reset action. Native
   active/light/dark checks cover appearance, toggles, keyboard opening, reset
   and persisted choices.
+  App typography uses Noto Sans, with a generic sans-serif fallback. This
+  replaces the briefly used Omarchy monospace font and the older Adwaita Sans.
+  Text previews and path/keyboard hints retain their purposeful monospace rules.
   File rows are 28 pixels with a 2-pixel inter-row gap, 14-pixel icons,
   13-pixel names and 11-pixel
   metadata. `list_details.py` owns the native
@@ -480,6 +508,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `omarchy_file_picker/trash.py` / `trash_ui.py` — desktop Trash enumeration,
+  safe original-location restoration and the native sidebar-launched browser.
 - `omarchy_file_picker/context_menu.py` — shared hover navigation, delayed
   submenu handoff, native keyboard/pointer transitions and menu-bound cleanup.
 - `omarchy_file_picker/tab_strip.py` — equal-width native tab allocation with
@@ -565,9 +595,16 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_list_details.py
+# On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_rating_columns.py
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_mount_controls.py
 THUMBNAIL_NEF=/path/to/sample.NEF PYTHONPATH=. python tests/ui_thumbnails.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_dismiss.py
+# Creates/restores only disposable fixtures in ~/.cache through the desktop Trash:
+TRASH_QA_LIVE=1 PYTHONPATH=. python tests/ui_trash_browser.py
 GDK_BACKEND=wayland G_DEBUG=fatal-warnings PYTHONPATH=. python tests/ui_context_switching.py
 TAB_MOTION_SCREENSHOTS=/tmp/gudfiles-tab-motion PYTHONPATH=. python tests/ui_tab_motion.py
 SEARCH_QA_SCREENSHOTS=/tmp/gudfiles-search PYTHONPATH=. python tests/ui_search_scope.py
@@ -924,6 +961,80 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 19 column-motion/sidebar/toolbar update: 234 unit tests pass.
+  Isolated physical-input checks exercise live header/cell reordering before
+  persistence, shaded slots, the floating drag label, fixed Name by mouse/key,
+  cancellation by Escape/outside release, edge scrolling, keyboard boundaries,
+  saved order and reopened windows in active/light/dark palettes. The drag
+  gesture belongs to the stable viewport so moving headings do not distort
+  pointer coordinates. Reordering retains row widgets, selection and sort.
+  Native metadata alignment and sorting checks pass; toolbar checks cover
+  820/1200 pixels, all controls, search, and preview sensitivity. Simulated
+  mounts with real pointer clicks verify distinct navigation/removal targets,
+  supported-only icons, duplicate/pending states, busy/error/retry, no-force
+  unmount/eject and sidebar refresh. Existing native sidebar action checks pass.
+  No user mount was disconnected during verification. Installed pointer suites
+  also pass for column dragging and mount controls in all three palettes.
+  Picker navigation/long-path checks retain the window size. All 58 installed
+  runtime files match source; seven changed modules have a rollback backup.
+  Existing windows need reopening to load these changes.
+
+- September 19 menu/Trash update: 234 unit tests pass. Right-click menus now
+  use 24-pixel rows, 14-pixel icons, 12-pixel Noto Sans labels, 4-pixel outer
+  spacing, subtle 6-pixel corners and no anchor arrow; file, background,
+  submenu and sidebar menus share these styles. Physical pointer checks cover
+  inside/outside clicks after delayed hover close, sibling switching, Escape
+  and toggling. The previously missed failure reproduced with an outside click
+  450 ms after leaving a child: GTK routed it to the root without autohiding.
+  A root capture gesture now dismisses clicks outside its allocation. Native
+  Wayland checks cover popup ordering; isolated X11 checks cover real input.
+  Desktop clicks and no click-through to Search are separately verified.
+- Trash in the sidebar opens a native, resizable browser with original folders,
+  deletion dates, multi-selection, Refresh and Restore Selected. `trash.py`
+  reads GIO's `trash:///` and restores only current entries to their recorded
+  absolute destinations, with no overwrite. `trash_ui.py` performs reads/moves
+  off the GTK thread, blocks close during restoration, reports partial results,
+  preserves failed rows and cancels/discards closed-browser reads. Existing
+  files are never replaced. Missing original parent folders or unavailable
+  mounted volumes produce a visible failure; no destination is guessed.
+  Native active/light/dark tests use only uniquely named owned fixtures and
+  verify real file/folder bytes, collisions, partial success, unavailable/retry,
+  empty/reopen, close-during-read and sidebar hide/restore. Permanent deletion
+  remains the existing confirmed file action; the new Trash browser is for
+  recovery and does not offer Empty Trash. Installed real-GIO checks also pass;
+  all 58 installed runtime files match source, with rollback backups. Existing
+  windows need reopening to load the new sidebar and visual changes.
+
+- September 19 rating/order/font update: 230 unit tests pass. Native isolated
+  pointer/keyboard checks cover live and persisted ratings, failed saves,
+  clearing labels, rating sort updates, selection preservation, dragging,
+  Escape cancellation, edge scrolling, keyboard focus reveal,
+  saved positions and reopened windows at 820/1200 pixels in active/light/dark
+  palettes. The original update used Omarchy's monospace font; the subsequent
+  Noto Sans change also passes the Pango-family and complete gesture checks. Existing native
+  list metadata/alignment, toolbar, sorting and preview-aspect checks pass.
+  Column moves use an internal GTK drag gesture and reorder existing widgets;
+  the native cross-window DnD path showed a GDK lifecycle warning when test
+  windows changed, so it is not used for this internal-only interaction.
+  The final gesture suite passes with GTK warnings treated as fatal.
+  The same complete suite passes against the installed package. All 56 runtime
+  files match source; eight changed modules and display preferences have a
+  rollback backup. Rating is enabled beside Name in the current user's saved
+  layout. Existing windows need reopening to load the update.
+
+- September 19 preview compacting: 228 unit tests pass. Native Wayland checks
+  cover image/video aspect and stable parent geometry at 820, 1200 and 1400
+  pixels, active/light/dark renderings, opening frames, delayed preparation,
+  cancellation, stale results, Quick Look keys/focus, PDF/text/error fallback,
+  image zoom/pan and five-codec real-time playback/pause/seek/resume/close.
+  One initial-size run crashed in a GStreamer `GstPlay` worker while GTK was
+  releasing objects; the unchanged baseline and a changed-source rerun passed.
+  The intermittent cause remains unconfirmed; no playback-lifecycle code was
+  changed. Physical arrow-navigation QA was unavailable without Xvfb.
+  Updated preview/theme modules are installed with a rollback backup; existing
+  windows need reopening. Installed aspect and Quick Look verification and
+  final runtime parity are recorded with this change.
 
 - September 19 icon/divider refinement: isolated native GTK checks confirm a
   11-pixel icon inset in list/columns, right-edge alignment of the last metadata

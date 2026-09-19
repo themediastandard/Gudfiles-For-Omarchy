@@ -144,7 +144,7 @@ def parse_file_clipboard(text: str, mime: str) -> tuple[list[Path], bool]:
 
 def sort_entries(entries: list[Path], key: str, descending: bool, folders_first: bool,
                  *, metadata=None) -> list[Path]:
-    extra = key in {'created', 'resolution', 'fps', 'duration', 'codec'}
+    extra = key in {'created', 'resolution', 'fps', 'duration', 'codec', 'rating', 'color', 'rejected'}
     def value(path):
         if extra:
             result = (metadata or {}).get(path, {}).get(key)

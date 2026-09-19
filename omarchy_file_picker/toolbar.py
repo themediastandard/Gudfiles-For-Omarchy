@@ -16,12 +16,29 @@ class AdaptiveToolbar(Gtk.Widget):
         if compact:
             self.spacing = 2
         self.navigation = Gtk.Box(spacing=self.spacing)
-        self.actions = Gtk.Box(spacing=self.spacing)
+        self.actions = Gtk.Box(spacing=7)
         for row in (self.navigation, self.actions):
             row.set_parent(self)
         self.add_css_class('toolbar')
         if compact:
             self.add_css_class('compact-toolbar')
+
+    def add_action_group(self, title, controls, *, utility=False):
+        if self.actions.get_first_child():
+            divider = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+            divider.add_css_class('toolbar-group-divider')
+            self.actions.append(divider)
+        group = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER)
+        group.add_css_class('toolbar-action-group')
+        group.update_property([Gtk.AccessibleProperty.LABEL], [title])
+        if utility:
+            group.add_css_class('header-utility')
+        for control in controls:
+            if isinstance(control, (Gtk.Button, Gtk.MenuButton)):
+                control.add_css_class('compact-control')
+            group.append(control)
+        self.actions.append(group)
+        return group
 
     def do_get_request_mode(self):
         return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH

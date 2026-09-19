@@ -15,7 +15,7 @@ from .file_actions import (RemovalError, TrashUnavailable, delete_after_trash_fa
                           parse_file_clipboard, remove_items, rename_item, transfer_items)
 from .transfer_ui import TransferUI
 from .sound_effects import ActionSounds
-from .list_metadata import COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, normalize_columns
+from .list_metadata import ANNOTATION_COLUMNS, COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, normalize_columns
 
 SIDEBAR_MIN_WIDTH = 180
 SIDEBAR_DEFAULT_WIDTH = 220
@@ -68,7 +68,7 @@ class FileManagement(TransferUI):
             defaults['list_columns'].remove('size')
         defaults['show_size'] = 'size' in defaults['list_columns']
         defaults['show_type'] = 'type' in defaults['list_columns']
-        if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'} | EXTRA_SORTS:
+        if defaults['sort_key'] not in {'name', 'modified', 'size', 'type'} | EXTRA_SORTS | ANNOTATION_COLUMNS:
             defaults['sort_key'] = 'name'
         if defaults['transfer_mode'] not in {'queue', 'all'}:
             defaults['transfer_mode'] = 'queue'
@@ -157,7 +157,7 @@ class FileManagement(TransferUI):
         prefs = self.file_preferences
         entries = []
         options = list(SORT_OPTIONS)
-        if prefs['sort_key'] in EXTRA_SORTS:
+        if prefs['sort_key'] in EXTRA_SORTS | ANNOTATION_COLUMNS:
             key = prefs['sort_key']
             options.extend((key, descending, COLUMNS[key][0] + (' descending' if descending else ' ascending'))
                            for descending in (False, True))

@@ -19,6 +19,8 @@ class SidebarMenus:
 
     def _sidebar_target(self, widget):
         while widget and widget is not self.sidebar_scroll:
+            if owner := getattr(widget, '_sidebar_owner', None):
+                return owner
             if isinstance(widget, Gtk.Popover):
                 return None
             if widget in self.location_buttons:
@@ -47,7 +49,7 @@ class SidebarMenus:
                 x = bounds.get_x() + bounds.get_width() / 2
                 y = bounds.get_y() + bounds.get_height() / 2
         popover = Gtk.Popover(autohide=os.environ.get('OMARCHY_FILE_PICKER_AUTOMATION') != 'sidebar-context',
-                              has_arrow=True)
+                              has_arrow=False)
         popover.add_css_class('file-context-menu')
         popover._sidebar_button = button
         popover.set_parent(anchor)
@@ -58,7 +60,7 @@ class SidebarMenus:
         popover.set_pointing_to(rectangle)
         menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         for edge in ('top', 'bottom', 'start', 'end'):
-            getattr(menu, 'set_margin_' + edge)(5)
+            getattr(menu, 'set_margin_' + edge)(4)
         popover.set_child(menu)
         self.context_submenus.clear()
         self.qa_submenu_button = None
@@ -153,6 +155,12 @@ class SidebarMenus:
     def _sidebar_device_busy(self):
         return self.file_job_active or self.transfer_queue.unfinished or bool(self.active_processes)
 
+    def _update_mount_actions(self):
+        for button in self.location_buttons:
+            if remove := getattr(button, '_unmount_button', None):
+                uri = button._sidebar_mount.get_root().get_uri()
+                remove.set_sensitive(uri not in self.sidebar_mount_operations)
+
     def _remove_sidebar_mount(self, mount):
         uri = mount.get_root().get_uri()
         if uri in self.sidebar_mount_operations:
@@ -166,9 +174,11 @@ class SidebarMenus:
         root = mount.get_root().get_path()
         cancel = Gio.Cancellable()
         self.sidebar_mount_operations[uri] = cancel
+        self._update_mount_actions()
         # No force flags or force-unmount prompt: busy devices report an error.
         def complete(source, result):
             self.sidebar_mount_operations.pop(uri, None)
+            self._update_mount_actions()
             try:
                 finish = source.eject_with_operation_finish if eject else source.unmount_with_operation_finish
                 finish(result)
@@ -188,6 +198,7 @@ class SidebarMenus:
             remove(Gio.MountUnmountFlags.NONE, None, cancel, complete)
         except GLib.Error as error:
             self.sidebar_mount_operations.pop(uri, None)
+            self._update_mount_actions()
             self._show_error('Could not disconnect device', error.message)
 
     def _cancel_sidebar_operations(self, *_args):

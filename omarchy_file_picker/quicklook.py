@@ -94,17 +94,18 @@ class QuickLook(Gtk.Widget):
         self.loading_spinner = Gtk.Spinner(width_request=32, height_request=32,
                                            can_target=False, visible=False)
         self.loading_spinner.set_parent(self)
-        self.header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.header.add_css_class('quicklook-bar')
         self.card.append(self.header)
-        bar = self.bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        bar = self.bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self.header.append(bar)
         close = Gtk.Button.new_from_icon_name('window-close-symbolic')
+        close.get_child().set_pixel_size(14)
         close.set_tooltip_text('Close preview (Space / Escape)')
         close.connect('clicked', lambda *_: self.close())
         bar.append(close)
         self.title = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.MIDDLE)
-        self.title.add_css_class('metadata-title')
+        self.title.add_css_class('quicklook-title')
         bar.append(self.title)
         self.rating_box = Gtk.Box()
         bar.append(self.rating_box)
@@ -112,6 +113,7 @@ class QuickLook(Gtk.Widget):
         for icon, step, name in [('go-previous-symbolic', -1, 'Previous file'),
                                   ('go-next-symbolic', 1, 'Next file')]:
             button = Gtk.Button.new_from_icon_name(icon)
+            button.get_child().set_pixel_size(14)
             button.set_tooltip_text(name)
             button.connect('clicked', lambda _b, s=step: self.step(s))
             bar.append(button)
@@ -354,7 +356,8 @@ class QuickLook(Gtk.Widget):
             self.details = f'{file_type(path)}  ·  {format_size(path.stat().st_size)}'
         except OSError:
             self.details = 'Unavailable file'
-        self.caption.set_text(self.details + '  ·  Space to close  ·  ← → Browse')
+        self.caption.set_text(self.details)
+        self.caption.set_tooltip_text('Space / Escape to close · Arrow keys to browse')
         self._message('Loading preview…', loading=True)
         self.kind = 'loading'
         def worker():
@@ -383,7 +386,7 @@ class QuickLook(Gtk.Widget):
             self._set_aspect_ratio(texture.get_intrinsic_aspect_ratio())
             if kind == 'image':
                 picture = ZoomImage(texture)
-                self.caption.set_text(f'{self.details}  ·  Scroll to zoom · Drag to pan · Double-click to fit · Space to close')
+                self.caption.set_tooltip_text('Scroll to zoom · Drag to pan · Double-click to fit · Space / Escape to close · Arrow keys to browse')
             else:
                 picture = Gtk.Picture.new_for_paintable(texture)
                 picture.set_content_fit(Gtk.ContentFit.CONTAIN)
@@ -391,13 +394,13 @@ class QuickLook(Gtk.Widget):
             picture.set_vexpand(True)
             self.content.append(picture)
             if kind == 'pdf':
-                self.caption.set_text(f'{self.details}  ·  Page 1 of {data[1]}  ·  Space to close')
+                self.caption.set_text(f'{self.details}  ·  Page 1 of {data[1]}')
         elif kind == 'text':
             self._set_aspect_ratio(0.0)
             view = Gtk.TextView(editable=False, monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
             view.get_buffer().set_text(data)
             for side in ('top', 'bottom', 'left', 'right'):
-                getattr(view, 'set_' + side + '_margin')(24)
+                getattr(view, 'set_' + side + '_margin')(12)
             scroller = Gtk.ScrolledWindow(vexpand=True)
             scroller.set_child(view)
             self.content.append(scroller)

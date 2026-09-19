@@ -18,6 +18,10 @@ class HoverSubmenus:
         popover.connect('closed', self._reset)
         popover.connect('unmap', self._reset)
         self._keys(popover)
+        outside = Gtk.GestureClick(button=0)
+        outside.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        outside.connect('pressed', self._outside_click)
+        popover.add_controller(outside)
         row = popover.get_child().get_first_child()
         while row:
             if isinstance(row, Gtk.MenuButton):
@@ -32,6 +36,14 @@ class HoverSubmenus:
             elif isinstance(row, Gtk.Button):
                 self._motion(row, self._leave, None)
             row = row.get_next_sibling()
+
+    def _outside_click(self, gesture, _count, x, y):
+        # After a child is closed without cascading, GTK can keep routing
+        # grabbed clicks to the root but no longer autohide it. Coordinates
+        # outside this native popup still mean dismissal, never an action.
+        if not self.popover.contains(x, y):
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            self.popover.popdown()
 
     def _keys(self, widget):
         keys = Gtk.EventControllerKey()

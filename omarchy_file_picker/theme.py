@@ -99,7 +99,7 @@ def build_css(colors: dict[str, str]) -> str:
     swatches = label_colors(colors)
     return f"""
     * {{
-      font-family: 'Adwaita Sans', sans-serif;
+      font-family: 'Noto Sans', sans-serif;
       font-size: 14px;
     }}
     window, .picker-root, headerbar {{
@@ -177,6 +177,8 @@ def build_css(colors: dict[str, str]) -> str:
     .compact-toolbar .path-segment label {{ font-size: 11px; }}
     entry.compact-location {{ min-height: 20px; padding: 1px 5px; margin: 0; font-size: 11px; }}
     .compact-toolbar .view-switcher {{ border-radius: 5px; }}
+    .toolbar-group-divider {{ min-width: 1px; margin: 7px 0;
+      background: alpha({colors['foreground']}, 0.14); }}
     headerbar.compact-header button.compact-control,
     headerbar.compact-header .compact-control > button,
     headerbar.compact-header button.header-utility,
@@ -343,6 +345,13 @@ def build_css(colors: dict[str, str]) -> str:
       box-shadow: none;
     }}
     .location-button:hover {{ background: {colors['lighter_background']}; }}
+    .sidebar-mount-row .location-button {{ padding-right: 4px; }}
+    button.sidebar-unmount {{ min-width: 22px; min-height: 22px; padding: 0; margin: 0 8px 0 2px;
+      background: transparent; background-image: none; border: 0; border-radius: 3px;
+      color: {colors['light_foreground']}; box-shadow: none; }}
+    button.sidebar-unmount image {{ -gtk-icon-size: 12px; }}
+    button.sidebar-unmount:hover {{ background: {colors['lighter_background']}; color: {colors['foreground']}; }}
+    button.sidebar-unmount:disabled {{ opacity: 0.35; }}
     .location-button.active {{
       background: alpha({colors['foreground']}, 0.07);
       color: {colors['foreground']};
@@ -351,17 +360,29 @@ def build_css(colors: dict[str, str]) -> str:
     .quicklook-card {{
       background: {colors['background']};
       color: {colors['foreground']};
-      border-radius: 14px;
+      border-radius: 6px;
       border: 1px solid alpha({colors['foreground']}, 0.15);
-      box-shadow: 0 18px 48px alpha(#000000, 0.26);
+      box-shadow: 0 8px 24px alpha(#000000, 0.20);
     }}
-    .quicklook-bar {{ padding: 10px 14px; border-bottom: 1px solid {colors['darker_background']}; }}
-    .quicklook-bar button {{ background: transparent; border: 0; min-width: 28px; }}
-    .quicklook-content {{ padding: 12px; }}
+    .quicklook-bar {{ padding: 2px 4px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .quicklook-title {{ font-size: 13px; font-weight: 400; }}
+    .quicklook-bar > box > button,
+    .quicklook-bar .rating-controls > button,
+    .quicklook-bar .rating-controls > menubutton > button {{
+      background: transparent; border: 0; border-radius: 0;
+      min-width: 26px; min-height: 26px; padding: 0; margin: 0;
+    }}
+    .quicklook-bar .rating-controls > button,
+    .quicklook-bar .rating-controls > menubutton > button {{ min-width: 22px; }}
+    .quicklook-bar .rating-controls > .rating-star {{ font-size: 15px; }}
+    .quicklook-content {{ padding: 0; }}
     .quicklook-content textview, .quicklook-content text {{
       background: {colors['background']}; color: {colors['foreground']}; font-family: monospace;
     }}
-    .quicklook-caption {{ color: {colors['light_foreground']}; font-size: 12px; padding: 10px 16px; }}
+    .quicklook-caption {{
+      color: {colors['light_foreground']}; font-size: 11px; padding: 4px 8px;
+      border-top: 1px solid {colors['darker_background']};
+    }}
     button {{
       color: {colors['foreground']};
       border-radius: 7px;
@@ -419,6 +440,15 @@ def build_css(colors: dict[str, str]) -> str:
     button.list-heading-button:hover {{ background: transparent; color: {colors['muted']}; }}
     button.list-heading-button.active {{ color: {colors['foreground']}; }}
     button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
+    button.list-heading-button.column-drag-slot,
+    .list-cell.column-drag-slot {{ background: alpha({colors['accent']}, 0.12);
+      box-shadow: inset 1px 0 alpha({colors['accent']}, 0.3), inset -1px 0 alpha({colors['accent']}, 0.3); }}
+    .column-drag-slot label {{ opacity: 0.45; }}
+    .column-drag-ghost {{ background: {colors['background']}; color: {colors['foreground']};
+      border: 1px solid {colors['accent_ink']}; border-radius: 4px; padding: 0 7px;
+      box-shadow: 0 2px 5px alpha(#000000, 0.18); }}
+    .column-drag-ghost label {{ font-size: 11px; font-weight: 600; }}
+    .column-drag-ghost .column-drag-grip {{ color: {colors['accent_ink']}; }}
     .list-cell label {{ font-size: 13px; }}
     .list-sort-status {{ font-size: 11px; padding: 3px 11px; color: {colors['muted']}; }}
     .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
@@ -492,24 +522,27 @@ def build_css(colors: dict[str, str]) -> str:
     popover.file-context-menu > contents {{
       background: {colors['background']};
       border: 1px solid {colors['darker_background']};
-      border-radius: 10px;
+      border-radius: 6px;
       padding: 0;
-      box-shadow: 0 4px 14px alpha(#000000, 0.16);
+      box-shadow: 0 4px 12px alpha(#000000, 0.12);
     }}
     .context-heading {{
       color: {colors['dark_foreground']};
       font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      margin: 5px 9px 4px 9px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin: 4px 7px 3px;
     }}
     button.context-action {{
       background: transparent;
       border: 0;
       box-shadow: none;
-      padding: 4px 9px;
-      min-width: 200px;
-      min-height: 24px;
+      padding: 1px 7px;
+      border-radius: 3px;
+      background-image: none;
+      text-shadow: none;
+      min-width: 180px;
+      min-height: 22px;
     }}
     button.context-action:hover {{ background: {colors['lighter_background']}; }}
     menubutton.context-action {{
@@ -517,25 +550,34 @@ def build_css(colors: dict[str, str]) -> str:
       border: 0;
       box-shadow: none;
       padding: 0;
-      min-width: 200px;
+      min-width: 180px;
       min-height: 0;
     }}
     menubutton.context-action > button {{
       background: transparent;
       border: 0;
       box-shadow: none;
-      padding: 4px 9px;
-      min-height: 24px;
+      padding: 1px 7px;
+      border-radius: 3px;
+      background-image: none;
+      text-shadow: none;
+      min-height: 22px;
     }}
     menubutton.context-action > button:hover {{ background: {colors['lighter_background']}; }}
     menubutton.context-action > button:checked {{ background: {colors['lighter_background']}; }}
-    .context-action:focus-visible {{ outline: 2px solid {colors['accent']}; outline-offset: -2px; }}
+    .context-action:focus-visible {{ outline: 1px solid {colors['accent']}; outline-offset: -1px; }}
     .context-icon {{ color: {colors['light_foreground']}; }}
-    .context-label {{ color: {colors['foreground']}; font-size: 13px; }}
+    .context-label {{ color: {colors['foreground']}; font-size: 12px; }}
     .context-detail {{ color: {colors['light_foreground']}; font-size: 11px; }}
     .context-arrow {{ color: {colors['dark_foreground']}; }}
     .context-action:disabled label, .context-action:disabled image {{ color: {colors['dark_foreground']}; }}
-    .file-context-menu separator {{ margin: 5px 4px; }}
+    .file-context-menu separator {{ margin: 3px 5px; background: {colors['darker_background']}; min-height: 1px; }}
+    .trash-list {{ background: {colors['background']}; color: {colors['foreground']}; }}
+    .trash-list row {{ padding: 7px 8px; border-radius: 3px; }}
+    .trash-list row:hover {{ background: {colors['lighter_background']}; }}
+    .trash-list row:selected {{ background: {colors['selection']}; color: {colors['foreground']}; }}
+    .trash-list row label {{ font-size: 12px; }}
+    .trash-list row .dialog-description {{ font-size: 11px; }}
     .nas-button {{ margin-top: 2px; }}
     .conversion-notice {{
       background: {colors['dark_background']};
@@ -810,16 +852,21 @@ def light_controls_css(c):
     scrollbar slider:hover {{ background: alpha({c['foreground']}, 0.4); }}
     .quicklook-content video controls.osd {{
       background: alpha({c['background']}, 0.96); color: {c['foreground']};
-      border: 1px solid {c['darker_background']}; box-shadow: none;
+      border: 1px solid {c['darker_background']}; border-radius: 0;
+      padding: 2px 4px; box-shadow: none;
     }}
     .quicklook-content video controls.osd button {{
       background: transparent; border-color: transparent; color: {c['foreground']};
+      min-height: 26px; min-width: 26px; padding: 0; border-radius: 0;
     }}
     .quicklook-content video controls.osd button:hover {{ background: {c['lighter_background']}; }}
     .quicklook-content video controls.osd label {{ color: {c['foreground']}; }}
     .quicklook-content video scale trough {{ background: {c['darker_background']}; border-color: transparent; }}
     .quicklook-content video scale highlight {{ background: {c['accent']}; border-color: transparent; }}
     .quicklook-content video scale slider {{ background: {c['accent_ink']}; border-color: {c['background']}; box-shadow: none; }}
+    .quicklook-bar > box > button:hover,
+    .quicklook-bar .rating-controls > button:hover,
+    .quicklook-bar .rating-controls > menubutton > button:hover {{ background: transparent; }}
     .picker-dialog button.suggested-action:hover {{ background: {c['accent']}; }}
     .picker-dialog button.destructive-action:hover {{ background: {c['red']}; }}
     """

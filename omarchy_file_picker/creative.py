@@ -5,6 +5,7 @@ import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gdk, GLib, Gtk, Pango
 from .ratings import COLORS, RatingStore, matches
+from .list_metadata import ANNOTATION_COLUMNS
 
 
 class CreativeTools:
@@ -38,8 +39,10 @@ class CreativeTools:
         for name in COLORS:
             badge.remove_css_class('label-' + name)
         badge.remove_css_class('rejected')
-        text = '×' if rejected else (f'★ {stars}' if stars else '')
-        if color:
+        columns = set(self.list_details.columns()) if self.view_mode == 'list' else set()
+        text = ('×' if 'rejected' not in columns else '') if rejected else (
+            f'★ {stars}' if stars and 'rating' not in columns else '')
+        if color and 'color' not in columns:
             text = ('● ' + text).strip()
             badge.add_css_class('label-' + color)
         if rejected:
@@ -58,6 +61,7 @@ class CreativeTools:
             return
         for path in paths:
             self._update_rating_badge(path)
+        self.list_details.refresh_annotations(paths)
         def update():
             if self.quicklook.get_visible() and self.quicklook.path in paths:
                 self.quicklook.refresh_ratings()
@@ -75,8 +79,11 @@ class CreativeTools:
                         self.quicklook.show_file(target)
                     else:
                         self.quicklook.close()
-            elif self._selected_paths():
-                self._update_metadata(self._selected_paths()[0])
+            else:
+                if self.file_preferences['sort_key'] in ANNOTATION_COLUMNS:
+                    self.list_details.apply_sort()
+                if self._selected_paths():
+                    self._update_metadata(self._selected_paths()[0])
             return False
         GLib.idle_add(update)
 

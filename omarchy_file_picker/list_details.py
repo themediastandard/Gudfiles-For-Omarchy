@@ -1,8 +1,8 @@
 """Aligned list headings, customizable cells, and asynchronous media sorting."""
 from gi.repository import Gdk, GLib, Gtk, Pango
-from .list_metadata import (COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, MEDIA_COLUMNS,
-                            ListMetadataWorker, format_value, normalize_columns)
-from .file_actions import sort_entries
+from .list_metadata import (ANNOTATION_COLUMNS, COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, MEDIA_COLUMNS,
+                            ListMetadataWorker, annotation_values, format_value, normalize_columns)
+from .ratings import COLORS
 
 
 class ListDetails:
@@ -12,6 +12,14 @@ class ListDetails:
         self.busy = False
         self.scope = None
         self.applied = False
+        self.dragged_column = None
+        self.drag_candidate = None
+        self.drag_position = None
+        self.drag_scroll = 0
+        self.drag_timer = 0
+        self.display_columns = []
+        self.drag_valid = False
+        self.drag_offset = 0
         self.worker = ListMetadataWorker(GLib.idle_add)
         self.widget = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.header_scroll = Gtk.ScrolledWindow(hexpand=True)
@@ -22,7 +30,23 @@ class ListDetails:
         self.header.add_css_class('list-heading')
         self.header_scroll.set_child(self.header)
         self.header_scroll.get_child().set_scroll_to_focus(False)
-        self.widget.append(self.header_scroll)
+        self.header_overlay = Gtk.Overlay()
+        self.header_overlay.set_child(self.header_scroll)
+        self.drag_layer = Gtk.Fixed(can_target=False)
+        self.header_overlay.add_overlay(self.drag_layer)
+        self.header_overlay.set_measure_overlay(self.drag_layer, False)
+        self.header_overlay.set_clip_overlay(self.drag_layer, True)
+        self.drag_ghost = Gtk.Box(spacing=6, can_target=False)
+        self.drag_ghost.add_css_class('column-drag-ghost')
+        grip = Gtk.Label(label='⠿')
+        grip.add_css_class('column-drag-grip')
+        self.drag_ghost.append(grip)
+        self.drag_title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END, hexpand=True)
+        self.drag_ghost.append(self.drag_title)
+        self.drag_layer.put(self.drag_ghost, 0, 0)
+        self.drag_ghost.set_visible(False)
+        self.widget.append(self.header_overlay)
+        self._install_column_drag()
         self.status = Gtk.Label(xalign=0)
         self.status.add_css_class('list-sort-status')
         self.widget.append(self.status)
@@ -40,6 +64,7 @@ class ListDetails:
         owner.connect('unrealize', self.close)
 
     def close(self, *_):
+        self._end_column_drag()
         self.worker.close()
         if self.timer:
             GLib.source_remove(self.timer)
@@ -51,6 +76,7 @@ class ListDetails:
         return normalize_columns(self.owner.file_preferences['list_columns'])
 
     def reset(self):
+        self._end_column_drag()
         self.worker.cancel()
         self.busy = self.applied = False
         self.scope = None
@@ -60,6 +86,7 @@ class ListDetails:
         self.configure()
 
     def configure(self):
+        self._end_column_drag()
         self.popover.popdown()
         while child := self.header.get_first_child():
             if child is self.popover:
@@ -69,6 +96,7 @@ class ListDetails:
             self.header.remove(child)
         self.buttons.clear()
         columns = self.columns()
+        self.display_columns = list(columns)
         for key in columns:
             button = Gtk.Button()
             button.add_css_class('list-heading-button')
@@ -80,10 +108,12 @@ class ListDetails:
             text.set_margin_end(0 if key == columns[-1] else 8)
             button.set_child(text)
             button.connect('clicked', lambda _, key=key: self.sort(key))
+            self._column_keys(button, key)
             self.header.append(button)
             self.buttons[key] = button
         listing = self.owner.view_mode == 'list'
         self.header_scroll.set_visible(listing)
+        self.header_overlay.set_visible(listing)
         self.owner.standard_scroller.set_policy(Gtk.PolicyType.AUTOMATIC if listing else Gtk.PolicyType.NEVER,
                                                 Gtk.PolicyType.AUTOMATIC)
         self.owner.standard_flow.set_hexpand(True)
@@ -96,7 +126,8 @@ class ListDetails:
             active = key == prefs['sort_key']
             (button.add_css_class if active else button.remove_css_class)('active')
             button.get_child().set_text(title + (' ↓' if prefs['descending'] else ' ↑') if active else title)
-            button.set_tooltip_text(f'Sort by {title}. Click again to reverse. Right-click to choose columns.')
+            movement = 'Name stays first.' if key == 'name' else 'Drag or Alt+Left/Right to reorder.'
+            button.set_tooltip_text(f'Sort by {title}. Click again to reverse. {movement} Right-click to choose columns.')
             button.update_property([Gtk.AccessibleProperty.LABEL],
                 [title + (', descending' if prefs['descending'] else ', ascending') if active else title])
         pending = prefs['sort_key'] in EXTRA_SORTS and not self.applied and bool(self.owner.entries)
@@ -106,9 +137,220 @@ class ListDetails:
         self.widget.set_visible(self.owner.view_mode == 'list' or pending)
 
     def sort(self, key):
+        if self.dragged_column is not None:
+            return
         prefs = self.owner.file_preferences
-        descending = not prefs['descending'] if prefs['sort_key'] == key else key not in {'name', 'type', 'codec'}
+        descending = not prefs['descending'] if prefs['sort_key'] == key else key not in {'name', 'type', 'codec', 'color'}
         self.owner._set_sort(key, descending)
+
+    def _column_cells(self):
+        for child in self.owner.children_by_path.values():
+            row = child.get_child()
+            cell = row.get_first_child() if row else None
+            while cell:
+                key = getattr(cell, '_list_column', None)
+                if key is not None:
+                    yield key, cell
+                cell = cell.get_next_sibling()
+
+    def _shade_column(self):
+        for key, widget in [*self.buttons.items(), *self._column_cells()]:
+            (widget.add_css_class if key == self.dragged_column else
+             widget.remove_css_class)('column-drag-slot')
+
+    def _end_column_drag(self, *_, commit=False):
+        if self.dragged_column is not None and not commit:
+            self._reorder_widgets(self.columns())
+        self.dragged_column = None
+        self.drag_candidate = None
+        self.drag_position = None
+        self.drag_scroll = 0
+        self.drag_valid = False
+        if self.drag_timer:
+            GLib.source_remove(self.drag_timer)
+            self.drag_timer = 0
+        self.drag_ghost.set_visible(False)
+        self.header_scroll.set_cursor_from_name(None)
+        self._shade_column()
+
+    def _mark_column_target(self, x, y):
+        width, height = self.header_scroll.get_width(), self.header_scroll.get_height()
+        self.drag_valid = 0 <= x <= width and 0 <= y <= height
+        ghost_width = self.drag_ghost.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        self.drag_layer.move(self.drag_ghost, max(0, min(width - ghost_width, x - self.drag_offset)), 0)
+        self.drag_ghost.set_opacity(1 if self.drag_valid else .45)
+        if not self.drag_valid:
+            self.drag_scroll = 0
+            return
+        self.drag_scroll = -1 if x < 28 else 1 if x > width - 28 else 0
+        # Keep Name anchored. The other columns move aside as their midpoint
+        # is crossed. Using their live bounds gives the source slot hysteresis
+        # instead of repeatedly swapping back under a stationary pointer.
+        order = [key for key in self.display_columns if key != self.dragged_column]
+        index = 1
+        for key in order[1:]:
+            valid, bounds = self.buttons[key].compute_bounds(self.header_scroll)
+            if valid and x >= bounds.get_x() + bounds.get_width() / 2:
+                index += 1
+        order.insert(index, self.dragged_column)
+        if order != self.display_columns:
+            self._reorder_widgets(order)
+
+    def _scroll_drag(self):
+        if self.dragged_column is None:
+            self.drag_timer = 0
+            return False
+        adjustment = self.header_scroll.get_hadjustment()
+        maximum = max(0, adjustment.get_upper() - adjustment.get_page_size())
+        adjustment.set_value(max(0, min(maximum, adjustment.get_value() + self.drag_scroll * 16)))
+        if self.drag_position:
+            self._mark_column_target(*self.drag_position)
+        return True
+
+    def _install_column_drag(self):
+        # The viewport stays in place while headings reorder beneath it, so
+        # drag coordinates never jump with the dragged button's allocation.
+        gesture = Gtk.GestureDrag(button=Gdk.BUTTON_PRIMARY)
+        gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        start = [0., 0.]
+        def begin(_gesture, x, y):
+            start[:] = [x, y]
+            self.drag_candidate = None
+            picked = self.header_scroll.pick(x, y, Gtk.PickFlags.DEFAULT)
+            while picked and picked not in self.buttons.values():
+                picked = picked.get_parent()
+            if picked:
+                self.drag_candidate = next(key for key, button in self.buttons.items() if button is picked)
+                valid, bounds = picked.compute_bounds(self.header_scroll)
+                self.drag_offset = x - bounds.get_x() if valid else 0
+        def update(source, dx, dy):
+            key = self.drag_candidate
+            if key is None:
+                return
+            if self.dragged_column is None:
+                if max(abs(dx), abs(dy)) <= self.header_scroll.get_settings().get_property('gtk-dnd-drag-threshold'):
+                    return
+                source.set_state(Gtk.EventSequenceState.CLAIMED)
+                if key == 'name':
+                    self.drag_candidate = None
+                    return
+                self.dragged_column = key
+                self.buttons[key].grab_focus()
+                self.drag_title.set_text(self.buttons[key].get_child().get_text())
+                self.drag_ghost.set_size_request(max(1, self.buttons[key].get_width() - 16),
+                                                 max(1, self.header_scroll.get_height() - 2))
+                self.drag_ghost.set_visible(True)
+                self.header_scroll.set_cursor_from_name('grabbing')
+                self._shade_column()
+                self.drag_timer = GLib.timeout_add(40, self._scroll_drag)
+            self.drag_position = (start[0] + dx, start[1] + dy)
+            self._mark_column_target(*self.drag_position)
+        def end(_gesture, _dx, _dy):
+            key = self.dragged_column
+            commit = key is not None and self.drag_valid
+            order = list(self.display_columns)
+            self._end_column_drag(commit=commit)
+            self.drag_candidate = None
+            if commit:
+                self._save_column_order(order, key)
+        gesture.connect('drag-begin', begin)
+        gesture.connect('drag-update', update)
+        gesture.connect('drag-end', end)
+        def cancel(*_):
+            self.drag_candidate = None
+            self._end_column_drag()
+        gesture.connect('cancel', cancel)
+        self.header_scroll.add_controller(gesture)
+        keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        def key_pressed(_controller, value, *_):
+            if value == Gdk.KEY_Escape and self.dragged_column is not None:
+                cancel()
+                return True
+            return False
+        keys.connect('key-pressed', key_pressed)
+        self.header_scroll.add_controller(keys)
+
+    def _column_keys(self, button, key):
+        keys = Gtk.EventControllerKey()
+        keys.connect('key-pressed', lambda _controller, value, _code, state:
+                     self.column_key(key, value, state))
+        button.add_controller(keys)
+
+    def _reorder_widgets(self, columns):
+        if set(columns) != set(self.buttons):
+            return
+        before = None
+        for key in columns:
+            button = self.buttons[key]
+            self.header.reorder_child_after(button, before)
+            text = button.get_child()
+            text.set_margin_end(0 if key == columns[-1] else 8)
+            text.set_xalign(1 if key == columns[-1] and key != 'name' else 0)
+            before = button
+        for path, child in self.owner.children_by_path.items():
+            row = child.get_child()
+            cells, cell = {}, row.get_first_child() if row else None
+            while cell:
+                cells[getattr(cell, '_list_column', None)] = cell
+                cell = cell.get_next_sibling()
+            if not all(key in cells for key in columns):
+                continue
+            before = None
+            for key in columns:
+                cell = cells[key]
+                row.reorder_child_after(cell, before)
+                cell.get_first_child().set_margin_end(0 if key == columns[-1] else 8)
+                if label := self.rows.get(path, {}).get(key):
+                    label.set_xalign(1 if key == columns[-1] else 0)
+                before = cell
+        self.display_columns = list(columns)
+
+    def _save_column_order(self, columns, key):
+        previous = self.columns()
+        def apply():
+            if (not self.owner.get_realized() or self.owner.view_mode != 'list'
+                    or self.dragged_column is not None or self.columns() != previous):
+                return False
+            if columns != previous:
+                self.owner._set_file_preferences({'list_columns': columns}, reload=False)
+            self._reorder_widgets(columns)
+            self.buttons[key].grab_focus()
+            GLib.timeout_add(40, self._reveal_column, key)
+            return False
+        GLib.idle_add(apply)
+
+    def move_column(self, key, target, after):
+        columns = self.columns()
+        if (key == 'name' or key == target or key not in columns or target not in columns
+                or self.dragged_column is not None):
+            return
+        columns.remove(key)
+        columns.insert(max(1, columns.index(target) + int(after)), key)
+        self._save_column_order(columns, key)
+
+    def _reveal_column(self, key):
+        button = self.buttons.get(key)
+        if button is None or not button.get_mapped():
+            return False
+        valid, bounds = button.compute_bounds(self.header_scroll)
+        if valid:
+            adjustment = self.header_scroll.get_hadjustment()
+            right = bounds.get_x() + bounds.get_width()
+            offset = (bounds.get_x() if bounds.get_x() < 0 else
+                      max(0, right - self.header_scroll.get_width()))
+            maximum = max(0, adjustment.get_upper() - adjustment.get_page_size())
+            adjustment.set_value(max(0, min(maximum, adjustment.get_value() + offset)))
+        return False
+
+    def column_key(self, key, value, state):
+        if not state & Gdk.ModifierType.ALT_MASK or value not in (Gdk.KEY_Left, Gdk.KEY_Right):
+            return False
+        columns = self.columns()
+        index = columns.index(key) + (-1 if value == Gdk.KEY_Left else 1)
+        if key != 'name' and self.dragged_column is None and 1 <= index < len(columns):
+            self.move_column(key, columns[index], value == Gdk.KEY_Right)
+        return True
 
     def choose(self, key, active):
         selected = self.columns()
@@ -139,12 +381,17 @@ class ListDetails:
         heading = Gtk.Label(label='Show columns', xalign=0)
         heading.add_css_class('columns-heading')
         content.append(heading)
-        for key, (title, _) in COLUMNS.items():
+        order = self.columns() + [key for key in COLUMNS if key not in self.columns()]
+        for key in order:
+            title = COLUMNS[key][0]
             check = Gtk.CheckButton(label=title)
             check.set_active(key in self.columns())
             check.set_sensitive(key != 'name')
             check.connect('toggled', lambda button, key=key: self.choose(key, button.get_active()))
             content.append(check)
+        hint = Gtk.Label(label='Drag headers or use Alt+← / →\nName stays first', xalign=0)
+        hint.add_css_class('muted')
+        content.append(hint)
         reset = Gtk.Button(label='Reset columns')
         reset.add_css_class('columns-reset')
         reset.connect('clicked', lambda *_: self.set_columns(DEFAULT_COLUMNS))
@@ -167,6 +414,7 @@ class ListDetails:
             cell = Gtk.Box(width_request=COLUMNS[key][1], hexpand=key == 'name')
             cell.add_css_class('list-cell')
             outer = cell
+            outer._list_column = key
             cell = Gtk.Box(hexpand=True)
             cell.set_margin_start(0 if key == 'name' else 8)
             cell.set_margin_end(0 if key == columns[-1] else 8)
@@ -197,7 +445,29 @@ class ListDetails:
                 cells[key] = value
             row.append(outer)
         self.rows[path] = cells
+        self.refresh_annotations([path])
         return row
+
+    def refresh_annotations(self, paths):
+        for path in paths:
+            values = annotation_values(self.owner.ratings.get(path))
+            for key in ANNOTATION_COLUMNS:
+                label = self.rows.get(path, {}).get(key)
+                if label is None:
+                    continue
+                label.set_text(format_value(key, values))
+                if key == 'rating':
+                    description = f'{values[key]} of 5 stars' if values[key] else 'Unrated'
+                elif key == 'color':
+                    description = values[key].title() if values[key] else 'No color label'
+                    for color in COLORS:
+                        label.remove_css_class('label-' + color)
+                    if values[key]:
+                        label.add_css_class('label-' + values[key])
+                else:
+                    description = 'Rejected' if values[key] else 'Not rejected'
+                label.set_tooltip_text(description)
+                label.update_property([Gtk.AccessibleProperty.LABEL], [description])
 
     def tick(self):
         owner = self.owner
@@ -236,7 +506,7 @@ class ListDetails:
     def ready(self, path, values, last):
         self.data[path] = values
         for key, label in self.rows.get(path, {}).items():
-            if key != 'type':
+            if key != 'type' and key not in ANNOTATION_COLUMNS:
                 text = format_value(key, values, show_time=self.owner.file_preferences['show_time'])
                 label.set_text(text)
                 label.set_tooltip_text('Unavailable or not applicable' if text == '—' else text)
@@ -246,9 +516,7 @@ class ListDetails:
 
     def apply_sort(self):
         owner = self.owner
-        prefs = owner.file_preferences
-        ordered = sort_entries(owner.entries, prefs['sort_key'], prefs['descending'],
-                               prefs['folders_first'], metadata=self.data)
+        ordered = owner._sort_entries(owner.entries, metadata=self.data)
         rank = {path: index for index, path in enumerate(ordered)}
         owner.flow.set_sort_func(lambda a, b: rank.get(a._picker_path, 0) - rank.get(b._picker_path, 0))
         owner.entries = ordered

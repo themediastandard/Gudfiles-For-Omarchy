@@ -7,20 +7,32 @@ import threading
 from .media_details import probe_media, IMAGE_SUFFIXES, MEDIA_SUFFIXES
 
 COLUMNS = {
-    'name': ('Name', 220), 'size': ('Size', 92), 'type': ('Type', 130),
+    'name': ('Name', 220), 'rating': ('Rating', 104),
+    'color': ('Color Label', 112), 'rejected': ('Rejected', 90),
+    'size': ('Size', 92), 'type': ('Type', 130),
     'created': ('Date Created', 156), 'modified': ('Date Modified', 156),
     'resolution': ('Resolution', 120), 'fps': ('FPS', 76),
     'duration': ('Duration', 90), 'codec': ('Codec', 130),
 }
-DEFAULT_COLUMNS = ['name', 'size', 'modified', 'resolution', 'fps']
+DEFAULT_COLUMNS = ['name', 'rating', 'size', 'modified', 'resolution', 'fps']
+ANNOTATION_COLUMNS = {'rating', 'color', 'rejected'}
 MEDIA_COLUMNS = {'resolution', 'fps', 'duration', 'codec'}
 EXTRA_SORTS = MEDIA_COLUMNS | {'created'}
+
+
+def annotation_values(annotation):
+    stars, color, rejected = annotation
+    return dict(rating=stars or None, color=color or None, rejected=rejected)
 
 
 def normalize_columns(columns):
     if not isinstance(columns, list):
         return list(DEFAULT_COLUMNS)
-    return ['name'] + [key for key in COLUMNS if key != 'name' and key in columns]
+    ordered = ['name']
+    for key in columns:
+        if isinstance(key, str) and key in COLUMNS and key not in ordered:
+            ordered.append(key)
+    return ordered
 
 
 def media_values(details):
@@ -72,6 +84,12 @@ def format_value(key, values, *, show_time=True):
     value = values.get(key)
     if value is None:
         return '—'
+    if key == 'rating':
+        return '★' * value
+    if key == 'color':
+        return '● ' + value.title()
+    if key == 'rejected':
+        return 'Yes' if value else '—'
     if key == 'size':
         return format_size(value)
     if key in {'created', 'modified'}:
