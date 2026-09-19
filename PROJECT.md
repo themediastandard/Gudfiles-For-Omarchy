@@ -58,11 +58,17 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   behavior and disabled at `/` and in Recent. Search is a magnifying-glass
   button with a focused popover and Ctrl+F support. Enter applies the query and
   focuses results; Escape closes the popover while retaining the filter, and
-  the search chip clears it. Navigation and actions share one row when space
-  allows; actions wrap below navigation in narrow windows or with a wide
-  sidebar. Controls fit at the existing 820-pixel minimum window width.
-- `tests/ui_toolbar.py` verifies native bounds, wrapping/unwrapping, location
-  entry, sidebar resizing, Up/history, search, filter clearing and tab state in
+  the search chip clears it. Explorer navigation, scrollable/editable path,
+  search, rating/hidden filters, sort and three view buttons now share the compact
+  title bar with Help, Transfers and close. Its controls use 12-pixel icons and
+  24-pixel targets; the bar measures 26 pixels plus its separator. It fits the
+  820-pixel minimum width independently of sidebar width. Open/Save pickers keep
+  their titled header and responsive body toolbar. Quick Look disables the moved
+  browsing controls while its overlay owns navigation and restores them on close;
+  Help, Transfers and native Close remain available.
+- `tests/ui_toolbar.py` verifies native compact bounds, long-path/location
+  entry, sidebar independence, view buttons, Up/history, search, preview guards,
+  filter clearing and tab state in
   active/light palettes. Its windows alone are floated/resized; optional
   `TOOLBAR_QA_SCREENSHOTS` captures the actual GTK surfaces. Keyboard checks use
   native signals, not physical pointer/key injection.
@@ -166,8 +172,15 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   and killed after 2.5 seconds or when muted/its window closes.
 
 - Product name is Gudfiles in the launcher, Help, transfer messages, notifications
-  and installation output. The standalone window uses a single centered GUDFILES
-  heading without a browsing subtitle; Open/Save pickers retain their task headings.
+  and installation output. Tommy requested a very small, minimal top bar with no
+  app name, with small options, the path and view buttons in the top bar
+  (2026-09-19). The standalone browser now uses one compact 26-pixel title bar
+  for these controls; Open/Save pickers retain their task headings.
+  Native active/light checks verify the height, utility actions, transfer badge,
+  820–1200-pixel layouts and picker titles. All 222 unit tests pass. The complete
+  native toolbar suite also passes against the installed package in both themes.
+  All 54 runtime files match source; the update has a rollback backup. Reopen
+  existing windows to load it.
   The existing commands,
   application/portal IDs and storage paths remain stable for compatibility.
 
@@ -181,7 +194,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   file in the current sort order. Closing restores the native cursor to the last
   previewed file, including within a nested column trail. Focused preview text
   and playback sliders retain their own arrow controls.
-- Help and Transfers use matching 32-pixel header icon buttons with quiet idle
+- Help and Transfers use matching compact header icon buttons (24-pixel explorer
+  targets, 32-pixel picker targets) with quiet idle
   styling, hover/focus feedback, tooltips and accessible names. Unfinished transfers
   show a small count badge without changing the button width or header layout.
 - Explorer tabs keep independent folders, history, selection, view, search,
@@ -415,8 +429,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/search.py` / `search_ui.py` — bounded filename scanner,
   process cancellation, one active/latest pending request, native scope controls
   and generation-checked result rendering with parent locations.
-- `omarchy_file_picker/toolbar.py` — native height-for-width layout that keeps
-  navigation together and wraps the action group according to available space.
+- `omarchy_file_picker/toolbar.py` — compact, single-row explorer header controls
+  and the responsive height-for-width toolbar used by Open/Save pickers.
 - `omarchy_file_picker/archives.py` — streamed ZIP validation/extraction, private
   staging, collision naming and atomic publication; `FileManagement._extract_zip`
   owns background work and the shared operation notice.

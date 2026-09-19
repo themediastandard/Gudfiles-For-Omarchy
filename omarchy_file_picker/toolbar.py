@@ -10,16 +10,29 @@ class AdaptiveToolbar(Gtk.Widget):
     __gtype_name__ = 'GudfilesAdaptiveToolbar'
     spacing = 8
 
-    def __init__(self):
+    def __init__(self, *, compact=False):
         super().__init__(hexpand=True)
+        self.compact = compact
+        if compact:
+            self.spacing = 2
         self.navigation = Gtk.Box(spacing=self.spacing)
         self.actions = Gtk.Box(spacing=self.spacing)
         for row in (self.navigation, self.actions):
             row.set_parent(self)
         self.add_css_class('toolbar')
+        if compact:
+            self.add_css_class('compact-toolbar')
 
     def do_get_request_mode(self):
         return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def set_controls_sensitive(self, sensitive):
+        self.navigation.set_sensitive(sensitive)
+        child = self.actions.get_first_child()
+        while child:
+            if not isinstance(child, Gtk.WindowControls) and not child.has_css_class('header-utility'):
+                child.set_sensitive(sensitive)
+            child = child.get_next_sibling()
 
     def _widths(self):
         return [row.measure(Gtk.Orientation.HORIZONTAL, -1)[:2]
@@ -28,8 +41,9 @@ class AdaptiveToolbar(Gtk.Widget):
     def do_measure(self, orientation, for_size):
         nav, actions = self._widths()
         if orientation == Gtk.Orientation.HORIZONTAL:
-            return max(nav[0], actions[0]), nav[1] + self.spacing + actions[1], -1, -1
-        wrapped = 0 <= for_size < nav[0] + self.spacing + actions[1]
+            minimum = nav[0] + self.spacing + actions[1] if self.compact else max(nav[0], actions[0])
+            return minimum, nav[1] + self.spacing + actions[1], -1, -1
+        wrapped = not self.compact and 0 <= for_size < nav[0] + self.spacing + actions[1]
         nav_width = for_size if wrapped or for_size < 0 else for_size - actions[1] - self.spacing
         heights = [self.navigation.measure(orientation, nav_width),
                    self.actions.measure(orientation, actions[1])]
@@ -39,7 +53,7 @@ class AdaptiveToolbar(Gtk.Widget):
     def do_size_allocate(self, width, height, baseline):
         nav, actions = self._widths()
         actions_width = min(width, actions[1])
-        if width < nav[0] + self.spacing + actions[1]:
+        if not self.compact and width < nav[0] + self.spacing + actions[1]:
             nav_height = self.navigation.measure(Gtk.Orientation.VERTICAL, width)[1]
             actions_height = self.actions.measure(Gtk.Orientation.VERTICAL, actions_width)[1]
             self.navigation.allocate(width, nav_height, -1, None)

@@ -179,10 +179,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         header = Gtk.HeaderBar()
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         title_box.set_valign(Gtk.Align.CENTER)
-        title_label = label("GUDFILES" if self.request.explorer else self.request.title,
-                            "metadata-title", xalign=0.5)
-        title_box.append(title_label)
-        if not self.request.explorer:
+        if self.request.explorer:
+            header.add_css_class('compact-header')
+        else:
+            title_box.append(label(self.request.title, "metadata-title", xalign=0.5))
             subtitle_text = "Choose a folder" if self.request.directory else (
                 "Choose where to save" if self.request.mode.startswith("save") else "Choose files to open"
             )
@@ -194,8 +194,12 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.help_button.update_property([Gtk.AccessibleProperty.LABEL], ['Help'])
         self.help_button.set_tooltip_text('Help · Features and shortcuts (F1)')
         self.help_button.connect('clicked', lambda *_: show_help(self))
-        header.pack_end(self.help_button)
-        header.pack_end(self._build_transfer_button())
+        self._build_transfer_button()
+        if self.request.explorer:
+            header.set_show_title_buttons(False)
+        else:
+            header.pack_end(self.help_button)
+            header.pack_end(self.transfer_button)
         self.set_titlebar(header)
 
     def _build_content(self) -> None:
@@ -238,9 +242,16 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.tabs = BrowserTabs(self)
         browser.append(self.tabs)
 
-        self.toolbar = AdaptiveToolbar()
-        browser.append(self.toolbar)
+        self.toolbar = AdaptiveToolbar(compact=self.request.explorer)
         self._build_toolbar()
+        if self.request.explorer:
+            self.toolbar.set_valign(Gtk.Align.CENTER)
+            self.toolbar.actions.append(self.transfer_button)
+            self.toolbar.actions.append(self.help_button)
+            self.toolbar.actions.append(Gtk.WindowControls(side=Gtk.PackType.END))
+            self.get_titlebar().set_title_widget(self.toolbar)
+        else:
+            browser.append(self.toolbar)
         browser.append(self._build_active_filters())
         browser.append(self._build_search_status())
 
@@ -460,6 +471,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.path_scroll.add_controller(self.path_wheel)
         self.path_stack.add_named(self.path_scroll, "crumbs")
         self.path_entry = Gtk.Entry()
+        if self.request.explorer:
+            self.path_entry.add_css_class('compact-location')
         self.path_entry.set_width_chars(1)
         self.path_entry.connect("activate", self._on_path_activate)
         self.path_stack.add_named(self.path_entry, "entry")
@@ -492,6 +505,13 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             views.append(button)
         self.toolbar.actions.append(views)
         self.grid_button.add_css_class('active')
+        if self.request.explorer:
+            for row in (self.toolbar.navigation, self.toolbar.actions, views):
+                child = row.get_first_child()
+                while child:
+                    if isinstance(child, (Gtk.Button, Gtk.MenuButton)):
+                        child.add_css_class('compact-control')
+                    child = child.get_next_sibling()
 
     def _open_search(self):
         self.search_button.popup()

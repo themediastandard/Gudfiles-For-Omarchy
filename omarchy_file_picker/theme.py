@@ -127,6 +127,30 @@ def build_css(colors: dict[str, str]) -> str:
       background: {colors['background']}; color: {colors['accent_ink']};
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
+    headerbar.compact-header {{ min-height: 26px; padding: 0 4px; }}
+    headerbar.compact-header button.header-utility,
+    headerbar.compact-header windowcontrols button {{
+      min-width: 20px; min-height: 20px; padding: 1px; margin: 0;
+      border-radius: 5px;
+    }}
+    headerbar.compact-header button.header-utility image,
+    headerbar.compact-header windowcontrols button image {{ -gtk-icon-size: 12px; }}
+    headerbar.compact-header windowcontrols button image {{
+      min-width: 12px; min-height: 12px; padding: 0; margin: 0;
+    }}
+    headerbar.compact-header windowcontrols {{ padding: 0; margin: 0; }}
+    .toolbar.compact-toolbar {{ padding: 0; border: 0; }}
+    button.compact-control, .compact-control > button {{
+      min-width: 20px; min-height: 20px; padding: 1px; margin: 0;
+      border-radius: 5px;
+    }}
+    menubutton.compact-control {{ margin: 0; padding: 0; }}
+    button.compact-control > image, .compact-control > button image {{ -gtk-icon-size: 12px; }}
+    button.compact-control label, .compact-control > button label {{ font-size: 11px; }}
+    .compact-toolbar .path-segment {{ min-height: 24px; padding: 0; margin: 0; }}
+    .compact-toolbar .path-segment label {{ font-size: 11px; }}
+    entry.compact-location {{ min-height: 20px; padding: 1px 5px; margin: 0; font-size: 11px; }}
+    .compact-toolbar .view-switcher {{ border-radius: 5px; }}
     .files-help .help-heading {{ padding: 20px 22px 16px; }}
     .files-help .help-title {{ font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }}
     .files-help .help-emblem {{

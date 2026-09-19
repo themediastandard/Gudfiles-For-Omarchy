@@ -276,6 +276,7 @@ class QuickLook(Gtk.Widget):
             self._clear_content()
             self._set_aspect_ratio(0.0)
             self.owner.preview_overlay.get_child().set_sensitive(True)
+            self.owner.toolbar.set_controls_sensitive(True)
             if child:
                 focus_file(self.owner, child)
             else:
@@ -294,6 +295,7 @@ class QuickLook(Gtk.Widget):
         self.origin = self._source_rect(path)
         self.owner._close_context_menu()
         self.owner.preview_overlay.get_child().set_sensitive(False)
+        self.owner.toolbar.set_controls_sensitive(False)
         self.set_visible(True)
         self.grab_focus()
         self._load_file(path)

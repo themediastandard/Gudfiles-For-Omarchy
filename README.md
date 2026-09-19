@@ -37,6 +37,8 @@ The guide is maintained in `omarchy_file_picker/help_catalog.py`. Add or update
 its entries whenever a user-facing feature or shortcut changes; navigation,
 search results and feature counts are generated from that catalog.
 
+- Minimal top bar with small navigation/options, the file path, and grid/list/column
+  view controls; no app-name heading
 - Thumbnail-first grid and compact list views
 - Dense list rows with no gaps between files
 - Image, Nikon NEF / camera RAW and video thumbnails, loaded in the background

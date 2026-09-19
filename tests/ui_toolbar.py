@@ -1,4 +1,4 @@
-"""Native responsive toolbar, Up navigation and search popover regression.
+"""Native compact top bar, Up navigation and search popover regression.
 
 PYTHONPATH=. python tests/ui_toolbar.py
 TOOLBAR_QA_SCREENSHOTS=/tmp/gudfiles-toolbar captures native fixture windows.
@@ -89,8 +89,16 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-toolbar-') as temp:
                             child = child.get_next_sibling()
                     _, nav = window.toolbar.navigation.compute_bounds(window.toolbar)
                     _, actions = window.toolbar.actions.compute_bounds(window.toolbar)
-                    if width in (820, 1200):
-                        assert (actions.get_y() > nav.get_y()) == (width == 820), (width, nav, actions)
+                    assert actions.get_y() == nav.get_y(), (width, nav, actions)
+                    header = window.get_titlebar()
+                    assert window.toolbar.is_ancestor(header)
+                    assert header.get_height() <= 28, header.get_height()
+                    contained(window.toolbar, header)
+                    for control in (window.back_button, window.up_button, window.search_button,
+                                    window.hidden_button, window.sort_button, window.grid_button,
+                                    window.list_button, window.columns_button):
+                        contained(control, header)
+                        assert control.get_height() <= 26, (control, control.get_height())
                     window._toggle_path_entry(None)
                     settle()
                     contained(window.path_entry, window.toolbar)
@@ -101,13 +109,16 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-toolbar-') as temp:
                     assert abs(trail.get_value() - (trail.get_upper() - trail.get_page_size())) < 1
                     if width in (820, 1200):
                         capture(window, f'{name}-{width}')
-                # Resizing the sidebar also reduces the toolbar's own allocation.
+                # Header controls now use the full window, independent of the sidebar.
+                toolbar_width = window.toolbar.get_width()
                 window.sidebar_split.set_position(600)
                 settle()
                 contained(window.toolbar.actions, window.toolbar)
+                assert window.toolbar.get_width() == toolbar_width
                 window.sidebar_split.set_position(300)
                 for mode in ('grid', 'list', 'columns'):
-                    window._set_view(mode)
+                    getattr(window, mode + '_button').emit('clicked')
+                    assert window.view_mode == mode
                     window.navigate(folder)
                     settle()
                     window.up_button.emit('clicked')
@@ -138,6 +149,16 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-toolbar-') as temp:
                     settle()
                     assert not window.search.get_text() and len(window.entries) == 2
                     assert not window.search_button.get_first_child().has_css_class('active')
+                window.navigate(folder)
+                window.quicklook.show_file(match)
+                settle()
+                assert not window.toolbar.navigation.is_sensitive()
+                assert not window.grid_button.is_sensitive()
+                assert window.help_button.is_sensitive() and window.transfer_button.is_sensitive()
+                assert window.toolbar.actions.get_last_child().is_sensitive()
+                window.quicklook.close()
+                settle()
+                assert window.toolbar.navigation.is_sensitive() and window.grid_button.is_sensitive()
                 window.navigate(Path('/'))
                 settle()
                 assert not window.up_button.get_sensitive()
@@ -165,7 +186,7 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-toolbar-') as temp:
                 settle()
                 assert window.search.get_text() == 'notes'
                 assert window.search_button.get_first_child().has_css_class('active')
-                print('PASS:', name, '820–1200px wrap/unwrapping, bounds, location, sidebar resize, all-view Up/search, history, root/Recent, tabs', flush=True)
+                print('PASS:', name, '820–1200px compact header, bounds, location, sidebar independence, view buttons, Up/search, history, root/Recent, tabs', flush=True)
             finally:
                 window.destroy()
                 settle()
