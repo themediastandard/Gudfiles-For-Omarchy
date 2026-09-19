@@ -214,7 +214,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
 
         body = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         body.add_css_class('sidebar-split')
-        body.set_wide_handle(True)
+        body.set_wide_handle(False)
         body.set_resize_start_child(False)
         body.set_resize_end_child(True)
         body.set_shrink_start_child(False)

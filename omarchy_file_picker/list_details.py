@@ -73,7 +73,7 @@ class ListDetails:
             button.set_size_request(COLUMNS[key][1], -1)
             button.set_hexpand(key == 'name')
             text = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
-            text.set_margin_start(8)
+            text.set_margin_start(0 if key == 'name' else 8)
             text.set_margin_end(8)
             button.set_child(text)
             button.connect('clicked', lambda _, key=key: self.sort(key))
@@ -160,7 +160,7 @@ class ListDetails:
             cell.add_css_class('list-cell')
             outer = cell
             cell = Gtk.Box(hexpand=True)
-            cell.set_margin_start(8)
+            cell.set_margin_start(0 if key == 'name' else 8)
             cell.set_margin_end(8)
             outer.append(cell)
             if key == 'name':

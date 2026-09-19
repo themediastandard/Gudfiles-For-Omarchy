@@ -308,15 +308,14 @@ def build_css(colors: dict[str, str]) -> str:
     .sidebar {{
       background: {colors['background']};
       color: {colors['foreground']};
-      border-right: 1px solid {colors['darker_background']};
+      border-right: 0;
       padding: 6px 0;
     }}
-    .sidebar-split > separator {{
-      min-width: 5px;
-      background: {colors['background']};
-      border: 0;
+    .sidebar-split > separator, .sidebar-split > separator:hover {{
+      min-width: 1px;
+      background: {colors['darker_background']};
+      background-image: none; border: 0; padding: 0; margin: 0;
     }}
-    .sidebar-split > separator:hover {{ background: alpha({colors['accent']}, 0.35); }}
     .sidebar-heading {{
       color: {colors['dark_foreground']};
       font-size: 10px;
@@ -412,7 +411,7 @@ def build_css(colors: dict[str, str]) -> str:
     }}
     flowboxchild:hover {{ background: {colors['dark_background']}; }}
     flowbox.file-list {{ padding: 6px 0; }}
-    .list-heading {{ padding: 0 7px; background: {colors['background']};
+    .list-heading {{ padding: 0 7px 0 2px; background: {colors['background']};
       border-bottom: 1px solid alpha({colors['foreground']}, 0.08); }}
     button.list-heading-button {{ min-height: 24px; padding: 0; margin: 0;
       border: 0; border-radius: 0; background: transparent; box-shadow: none; }}
@@ -421,7 +420,7 @@ def build_css(colors: dict[str, str]) -> str:
     button.list-heading-button.active {{ color: {colors['foreground']}; }}
     button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
     .list-cell label {{ font-size: 13px; }}
-    .list-sort-status {{ font-size: 11px; padding: 3px 7px; color: {colors['muted']}; }}
+    .list-sort-status {{ font-size: 11px; padding: 3px 7px 3px 2px; color: {colors['muted']}; }}
     .toolbar button.active {{ background: {colors['selection']}; color: {colors['accent_ink']}; }}
     .view-switcher {{ background: {colors['dark_background']}; border-radius: 8px; }}
     .browser-column {{ background: {colors['background']}; border-right: 1px solid {colors['lighter_background']}; }}
@@ -432,7 +431,7 @@ def build_css(colors: dict[str, str]) -> str:
     flowbox.column-files {{ padding: 6px 0; }}
     .column-files .rating-badge {{ padding: 0; }}
     flowbox.file-list > flowboxchild {{
-      padding: 1px 6px;
+      padding: 1px 6px 1px 1px;
       border-radius: 4px;
     }}
     .file-list .filename {{ font-size: 13px; }}
