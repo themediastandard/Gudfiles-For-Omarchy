@@ -296,10 +296,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   picker footer controls and result semantics.
 - List view uses compact 28-pixel rows with a 2-pixel gap (30-pixel pitch).
   Column rows also have a 2-pixel gap; grid spacing is unchanged. Selected
-  files use the soft accent fill without a blue selection border. List and column
+  files use a square soft accent fill without a blue selection border in all views. List and column
   rows fill the content width without left/right outer padding; file icons sit
-  2 pixels inside the selection's left edge, and list headings retain alignment
-  with the cells. Native range and individual selection remain supported.
+  6 pixels inside the selection's left edge, and list headings retain alignment
+  with the cells. The last visible metadata column and its heading align right,
+  2 pixels inside the content edge. Native range and individual selection remain supported.
 - Standalone Open defaults to multi-selection with native Shift-click ranges,
   Ctrl-click toggles and Ctrl+A. `--single` opts out; portal caller constraints
   and single-destination Save behavior remain authoritative.
@@ -921,7 +922,8 @@ gdbus introspect --session \
 ## Known risks and next actions
 
 - September 19 icon/divider refinement: isolated native GTK checks confirm a
-  2-pixel icon inset in list/columns, a 1-pixel sidebar divider with identical
+  6-pixel icon inset in list/columns, right-edge alignment of the last metadata
+  column across column choices, and a 1-pixel sidebar divider with identical
   rendered pixels on hover, and real pointer dragging with persisted width in
   active/light/dark palettes. The native list assertions also pass under isolated
   X11 window resizing (alignment, scrolling, menus, saved settings, sorting and

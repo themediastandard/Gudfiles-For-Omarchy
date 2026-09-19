@@ -67,14 +67,16 @@ class ListDetails:
                     break
             self.header.remove(child)
         self.buttons.clear()
-        for key in self.columns():
+        columns = self.columns()
+        for key in columns:
             button = Gtk.Button()
             button.add_css_class('list-heading-button')
             button.set_size_request(COLUMNS[key][1], -1)
             button.set_hexpand(key == 'name')
-            text = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+            text = Gtk.Label(xalign=1 if key == columns[-1] and key != 'name' else 0,
+                             ellipsize=Pango.EllipsizeMode.END)
             text.set_margin_start(0 if key == 'name' else 8)
-            text.set_margin_end(8)
+            text.set_margin_end(0 if key == columns[-1] else 8)
             button.set_child(text)
             button.connect('clicked', lambda _, key=key: self.sort(key))
             self.header.append(button)
@@ -155,13 +157,14 @@ class ListDetails:
         row = Gtk.Box(height_request=24)
         row.set_hexpand(True)
         cells = {}
-        for key in self.columns():
+        columns = self.columns()
+        for key in columns:
             cell = Gtk.Box(width_request=COLUMNS[key][1], hexpand=key == 'name')
             cell.add_css_class('list-cell')
             outer = cell
             cell = Gtk.Box(hexpand=True)
             cell.set_margin_start(0 if key == 'name' else 8)
-            cell.set_margin_end(8)
+            cell.set_margin_end(0 if key == columns[-1] else 8)
             outer.append(cell)
             if key == 'name':
                 image = Gtk.Image.new_from_gicon(owner._search_result_icon(path))
@@ -182,7 +185,7 @@ class ListDetails:
                 text = path.suffix[1:].upper() if key == 'type' else '…'
                 if key == 'type' and owner._entry_is_dir(path):
                     text = 'Folder'
-                value = Gtk.Label(label=text or 'File', xalign=0, hexpand=True,
+                value = Gtk.Label(label=text or 'File', xalign=1 if key == columns[-1] else 0, hexpand=True,
                                   ellipsize=Pango.EllipsizeMode.END, width_chars=1)
                 value.add_css_class('muted')
                 cell.append(value)
