@@ -7,6 +7,17 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Image, Nikon NEF / camera RAW and video thumbnails load only for visible tiles
+  and the selection strip, through two background workers with no pending decode
+  queue. Scrolling/view/tab/close changes cancel obsolete jobs and release hidden
+  textures. Full images and video/RAW helpers decode in isolated, resource-limited
+  processes with a 20-second deadline; failures retain the ordinary file icon.
+  Versioned, atomically published 360-pixel PNGs live in
+  `~/.cache/omarchy-file-picker/thumbnails-v2`. Cache keys include source identity,
+  size and nanosecond mtime; CRC/dimension checks reject damaged cache files.
+  Grid image dimensions appear asynchronously, without probing every original on
+  the GTK thread. RAW support uses the existing optional `raw-preview` helper.
+
 - File deletion accepts `Super+Backspace` and `Super+Delete` as confirmed
   Move-to-Trash shortcuts alongside `Delete`; adding Shift keeps the existing
   confirmed permanent-delete behavior. Plain Backspace remains untouched for
@@ -424,6 +435,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   shortcut badges, search states and owner-bound lifetime.
 - `omarchy_file_picker/about.py` / `LICENSE` — creator credit, website and the
   free-use license; shared by the About page and installed application.
+- `omarchy_file_picker/thumbnails.py`, `thumbnail_decode.py`, `thumbnail_widgets.py`
+  — source-version cache, isolated bounded decoder and viewport thumbnail lifecycle.
 - `omarchy_file_picker/picker.py` — native chooser UI and result protocol.
 - `omarchy_file_picker/portal.py` — XDG FileChooser D-Bus backend.
 - `omarchy_file_picker/model.py` — request parsing, filters, filesystem helpers.
@@ -480,6 +493,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+THUMBNAIL_NEF=/path/to/sample.NEF PYTHONPATH=. python tests/ui_thumbnails.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
 GDK_BACKEND=wayland G_DEBUG=fatal-warnings PYTHONPATH=. python tests/ui_context_switching.py
@@ -838,6 +852,27 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Thumbnail verification (2026-09-19): the native fixture with 1,000 24-megapixel
+  images switches list→grid in about 0.14 seconds, retains only visible thumbnails
+  (16 in the measured viewport), keeps GTK timers responsive, releases textures
+  when scrolling, cancels delayed workers on view changes and recovers on return.
+  Real Nikon NEF thumbnails in the grid/selection strip pass with unchanged source
+  hashes; corrupt RAW retains an icon and navigation recovers. Unit tests cover
+  real image/video decoding, fresh cache reuse, changed sources, corrupt cache
+  repair, timeouts and descendant cancellation. All 222 unit tests pass, alongside
+  native selection, hover-scrub, file-management, selection-summary and preview-
+  aspect regressions. The full thumbnail suite also passes against the installed
+  runtime. Five modules were installed atomically with a rollback backup while
+  the existing user window stayed open; reopen it to load this revision. All
+  runtime files match source. Prior logs show a Gudfiles session
+  reaching 5.3 GB; no matching core dump or OOM record establishes its exact exit
+  cause. File enumeration/widget construction remains proportional to folder size;
+  disk cache eviction and exceptionally large/network-stalled folders are not
+  covered by the 1,000-file result.
+  Decoder resource limits must allow memory-backed pixel files: Glycin's full
+  decoded image uses `memfd`, so a small `RLIMIT_FSIZE` can hang an otherwise valid
+  large-photo decode. The regression uses real 6000×4000 pixels for this reason.
 
 - Resolve drag compatibility fix (2026-09-18): Gudfiles previously exposed its
   private marker plus the GTK-only `GdkFileList` type, but no explicit

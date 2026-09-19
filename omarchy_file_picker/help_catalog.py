@@ -88,7 +88,7 @@ FEATURES = (
             'Scroll over an image preview to zoom up to 8× its fitted size. Drag to pan and double-click to fit again. Each image starts fitted.',
             keywords='photo picture magnify'),
     Feature('preview', 'Camera RAW photos',
-            'Press Space on a camera RAW photo to preview it with the same zoom, pan and fit controls. Previewing keeps the original unchanged; supported cameras depend on the installed RAW reader.',
+            'Camera RAW photos, including Nikon NEF, show thumbnails in the grid and selection strip. Thumbnails load in the background as you scroll. Press Space for zoom, pan and fit controls. Previewing keeps the original unchanged; supported cameras depend on the installed RAW reader.',
             'Space', 'raw camera cr2 cr3 arw nef nrw raf rw2 dng orf pef x3f'),
     Feature('preview', 'Video & audio playback',
             'Open Quick Look to play, pause and seek with the media controls. Playback needs the appropriate installed codecs; closing the preview stops it.',

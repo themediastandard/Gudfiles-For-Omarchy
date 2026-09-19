@@ -39,7 +39,8 @@ search results and feature counts are generated from that catalog.
 
 - Thumbnail-first grid and compact list views
 - Dense list rows with no gaps between files
-- Image previews and freedesktop video thumbnail cache support
+- Image, Nikon NEF / camera RAW and video thumbnails, loaded in the background
+  for visible tiles and cached without changing originals
 - Silent hover-scrubbing across video thumbnails, with a subtle position indicator
 - Media details: dimensions, frame rate, codec, duration, bit depth, audio and
   camera metadata when available

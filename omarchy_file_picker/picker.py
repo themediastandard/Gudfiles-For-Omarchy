@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import mimetypes
 import os
-import subprocess
 import sys
 import threading
 from urllib.parse import urlsplit
@@ -21,8 +19,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
 from .actions import (
     IMAGE_SIZE_PIXELS,
@@ -55,10 +52,8 @@ from .tabs import BrowserTabs
 from .toolbar import AdaptiveToolbar
 from .search_ui import SearchTools
 from .context_menu import HoverSubmenus
-
-
-IMAGE_TYPES = {".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
-VIDEO_TYPES = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
+from .thumbnails import IMAGE_TYPES, VIDEO_TYPES, thumbnail_file
+from .thumbnail_widgets import Thumbnail
 
 
 def icon_for(path: Path) -> Gio.Icon:
@@ -74,53 +69,13 @@ def icon_for(path: Path) -> Gio.Icon:
     return Gio.ThemedIcon.new("folder-symbolic" if path.is_dir() else "text-x-generic-symbolic")
 
 
-def thumbnail_file(path: Path) -> Path | None:
-    if path.suffix.casefold() in IMAGE_TYPES:
-        return path
-    if path.suffix.casefold() not in VIDEO_TYPES:
-        return None
-    uri = safe_uri(path)
-    digest = hashlib.md5(uri.encode(), usedforsecurity=False).hexdigest()
-    for size in ("xx-large", "x-large", "large", "normal"):
-        candidate = Path.home() / ".cache/thumbnails" / size / f"{digest}.png"
-        if candidate.exists():
-            return candidate
-    cache = Path.home() / ".cache/omarchy-file-picker/thumbnails" / f"{digest}.jpg"
-    if cache.exists() and cache.stat().st_mtime >= path.stat().st_mtime:
-        return cache
-    if not GLib.find_program_in_path("ffmpegthumbnailer"):
-        return None
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        subprocess.run(
-            ["ffmpegthumbnailer", "-i", str(path), "-o", str(cache), "-s", "360", "-q", "8"],
-            check=True,
-            timeout=8,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        return cache
-    except (OSError, subprocess.SubprocessError):
-        return None
-
-
 def picture_for(path: Path, width: int, height: int, *, crop: bool = True) -> Gtk.Widget:
-    source = thumbnail_file(path)
-    if source:
-        try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(source), width, height, True)
-            picture = Gtk.Picture.new_for_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-            picture.set_content_fit(Gtk.ContentFit.COVER if crop else Gtk.ContentFit.CONTAIN)
-            picture.set_size_request(width, height)
-            picture.set_can_shrink(True)
-            return picture
-        except GLib.Error:
-            pass
-    image = Gtk.Image.new_from_gicon(icon_for(path))
-    image.set_pixel_size(min(64, height - 18))
-    image.set_size_request(width, height)
-    image.add_css_class("muted")
-    return image
+    # Guess from the name; synchronous GIO content probes can read entire RAWs.
+    content_type, _ = Gio.content_type_guess(path.name, None)
+    icon = Gio.content_type_get_icon(content_type) if content_type else Gio.ThemedIcon.new('text-x-generic-symbolic')
+    if path.is_dir():
+        icon = Gio.ThemedIcon.new('folder-symbolic')
+    return Thumbnail(path, width, height, icon, thumbnail_file, crop=crop)
 
 
 def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gtk.Label:
@@ -893,9 +848,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         try:
             if path.is_dir():
                 detail = f"{len(list(path.iterdir()))} items"
-            elif path.suffix.casefold() in IMAGE_TYPES:
-                _format, width, height = GdkPixbuf.Pixbuf.get_file_info(str(path))
-                detail = f"{width} × {height}" if width and height else format_size(path.stat().st_size)
             else:
                 detail = format_size(path.stat().st_size)
         except OSError:
@@ -904,6 +856,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         detail_label.set_ellipsize(Pango.EllipsizeMode.END)
         detail_label.set_max_width_chars(18)
         detail_label.set_tooltip_text(detail)
+        if isinstance(poster, Thumbnail) and path.suffix.casefold() in IMAGE_TYPES:
+            def show_dimensions(pixbuf):
+                width, height = (pixbuf.get_option('tEXt::Source' + side) for side in ('Width', 'Height'))
+                if width and height:
+                    dimensions = f'{width} × {height}'
+                    detail_label.set_text(dimensions)
+                    detail_label.set_tooltip_text(dimensions)
+            poster.on_loaded = show_dimensions
         item.append(detail_label)
         return item
 
@@ -1030,7 +990,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.metadata.append(image)
         copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
         copy.append(label("Select a file to preview", "metadata-title"))
-        copy.append(label("Images and cached video thumbnails appear here.", "muted"))
+        copy.append(label("Image, camera RAW and video thumbnails appear here.", "muted"))
         self.metadata.append(copy)
 
     def _update_metadata(self, path: Path) -> None:
