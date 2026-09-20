@@ -935,7 +935,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             child._picker_is_dir = self._entry_is_dir(path)
             child.set_sensitive(not self.request.directory or child._picker_is_dir)
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
-            child.set_tooltip_text(str(path))
+            if self.view_mode != 'grid' or path.suffix.casefold() not in VIDEO_TYPES:
+                child.set_tooltip_text(str(path))
             self.flow.append(child)
             self.children_by_path[path] = child
         self.browser_stack.set_visible_child_name("files" if self.entries else "empty")
@@ -971,6 +972,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         frame.append(thumbnail)
         item.append(frame)
         name = label(path.name, "filename", xalign=0.5)
+        if path.suffix.casefold() in VIDEO_TYPES:
+            name.set_tooltip_text(str(path))
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         name.set_width_chars(18)
         name.set_max_width_chars(18)

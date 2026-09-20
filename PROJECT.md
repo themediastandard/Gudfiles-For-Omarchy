@@ -373,6 +373,21 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   entries mark the total as partial/unavailable instead of silently undercounting.
 - Video grid/metadata thumbnails support silent hover-scrubbing with delayed
   entry, a thin position indicator, background decoding and poster restoration.
+  Completed frames from the current hover stay visible while the pointer moves;
+  the decoder immediately requests the newest position after each completion.
+  The progress line follows the displayed frame. Skim hints remain accessible
+  without a tooltip, and grid video path tooltips live on the filename instead
+  of the tile. Leaving/re-entering rejects prior-hover frames; dragging cancels
+  without starting another hover timer.
+  September 19 verification: all 234 unit tests passed. The expanded
+  `tests/ui_hover_scrub.py` passed against source and the installed package with
+  real FFmpeg frames, deliberately delayed replies, stale-hover cancellation,
+  geometry/selection checks and tooltip ancestry. Isolated X11 pointer sweeps
+  displayed 26 positions while moving in each run and restored the poster on
+  exit. Restoring the old completion method makes the continuous-motion
+  regression fail. The two runtime modules were installed atomically with
+  backups; existing windows need reopening. Physical-input verification used
+  X11, not the live Wayland desktop.
 - Selection details asynchronously show available media resolution, FPS, codec,
   duration, bit depth, audio and camera/EXIF values in a compact information card.
 - Local stars/color/rejected annotations appear as small badges and compact

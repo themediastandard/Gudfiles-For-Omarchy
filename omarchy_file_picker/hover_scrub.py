@@ -136,10 +136,12 @@ class HoverScrub(Gtk.Overlay):
         self.frame = None
         self._generation = 0
         self._busy = False
+        self._ready = False
         self._timer = 0
         self.set_child(thumbnail)
         self.set_overflow(Gtk.Overflow.HIDDEN)
-        self.set_tooltip_text('Move across to skim · Space to watch')
+        self.update_property([Gtk.AccessibleProperty.DESCRIPTION],
+                             ['Move across to skim · Space to watch'])
         self.picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
         self.picture.set_can_target(False)
         self.picture.set_visible(False)
@@ -166,7 +168,8 @@ class HoverScrub(Gtk.Overlay):
         cr.paint()
         color = area.get_color()
         cr.set_source_rgba(color.red, color.green, color.blue, .95)
-        cr.rectangle(0, 0, max(2, width * self.fraction), height)
+        position = (self.displayed_step or 0) / (SCRUB_STEPS - 1)
+        cr.rectangle(0, 0, max(2, width * position), height)
         cr.fill()
 
     def _enter(self, controller, x, y):
@@ -176,7 +179,8 @@ class HoverScrub(Gtk.Overlay):
         self.active = True
         self._generation += 1
         self._motion(controller, x, y)
-        self._timer = GLib.timeout_add(HOVER_DELAY_MS, self._start)
+        if self.active:
+            self._timer = GLib.timeout_add(HOVER_DELAY_MS, self._start)
 
     def _motion(self, controller, x, _y):
         # Do not skim while the user is dragging files or selecting a range.
@@ -186,11 +190,13 @@ class HoverScrub(Gtk.Overlay):
             self._leave(controller)
             return
         self.fraction = max(0, min(1, x / max(1, self.get_width())))
-        self.track.queue_draw()
+        if self.active and self._ready:
+            self._tick()
 
     def _start(self):
         self._timer = 0
         if self.active:
+            self._ready = True
             self._tick()
             self._timer = GLib.timeout_add(POLL_MS, self._tick)
         return False
@@ -223,8 +229,8 @@ class HoverScrub(Gtk.Overlay):
             # One failed extraction per hover, not an endless failed subprocess loop.
             self._leave()
             return
-        if step != scrub_step(self.fraction):
-            return
+        # Motion may outpace decoding. Show each completed frame from this hover
+        # before catching up, otherwise continuous motion starves the preview.
         try:
             texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(frame.data))
         except GLib.Error:
@@ -236,9 +242,12 @@ class HoverScrub(Gtk.Overlay):
         self.picture.set_visible(True)
         self.track.set_visible(True)
         self.track.queue_draw()
+        if step != scrub_step(self.fraction):
+            self._tick()
 
     def _leave(self, *_args):
         self.active = False
+        self._ready = False
         self._generation += 1
         if self._timer:
             GLib.source_remove(self._timer)
