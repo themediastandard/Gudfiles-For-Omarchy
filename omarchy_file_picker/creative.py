@@ -49,7 +49,8 @@ class CreativeTools:
             badge.add_css_class('rejected')
         badge.set_text(text)
         badge.set_visible(bool(text))
-        badge.set_tooltip_text(f'{stars} stars · {color or "No color"}' + (' · Rejected' if rejected else ''))
+        badge.update_property([Gtk.AccessibleProperty.LABEL],
+            [f'{stars} stars · {color or "No color"}' + (' · Rejected' if rejected else '')])
 
     def _apply_annotation(self, paths, **change):
         if not paths:

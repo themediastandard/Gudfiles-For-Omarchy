@@ -128,26 +128,12 @@ def build_css(colors: dict[str, str]) -> str:
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
     headerbar.compact-header {{ min-height: 30px; padding: 0 4px; }}
-    .file-chooser headerbar {{ min-height: 38px; padding: 0 8px; }}
-    .file-chooser headerbar .metadata-title {{ font-size: 13px; }}
-    .file-chooser headerbar .muted {{ font-size: 11px; }}
-    .file-chooser .toolbar {{ padding: 6px 10px; }}
     .file-chooser .footer {{ padding: 8px 10px; }}
     .file-chooser .footer button {{
       min-height: 26px; padding: 1px 6px; border-radius: 4px;
       background-image: none; box-shadow: none; text-shadow: none;
     }}
     .file-chooser .footer entry {{ min-height: 28px; padding: 1px 8px; border-radius: 4px; }}
-    .file-chooser .toolbar .view-switcher {{ background: transparent; }}
-    .file-chooser .toolbar button.compact-control,
-    .file-chooser .toolbar .compact-control > button {{
-      background: transparent; border: 0; border-radius: 0; box-shadow: none; text-shadow: none;
-    }}
-    .file-chooser .toolbar button.compact-control:hover,
-    .file-chooser .toolbar .compact-control > button:hover,
-    .file-chooser .toolbar button.compact-control.active {{ color: {colors['accent_ink']}; }}
-    .file-chooser .toolbar .path-segment {{ min-height: 24px; padding: 0; }}
-    .file-chooser .toolbar .path-segment label {{ font-size: 11px; }}
     headerbar.compact-header button.header-utility,
     headerbar.compact-header windowcontrols button {{
       min-width: 24px; min-height: 24px; padding: 1px; margin: 0;

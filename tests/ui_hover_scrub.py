@@ -189,7 +189,7 @@ with tempfile.TemporaryDirectory(prefix='hover-scrub-qa-') as directory:
                 assert not ancestor.get_has_tooltip(), type(ancestor)
                 ancestor = ancestor.get_parent()
             name = next(w for w in walk(tile) if isinstance(w, Gtk.Label) and w.get_text() == path.name)
-            assert name.get_tooltip_text() == str(path)
+            assert not name.get_has_tooltip()
             if os.environ.get('POINTER_QA_ISOLATED') == '1':
                 # Real pointer motion through the composed grid widget, including
                 # its poster/overlay children, must keep producing video frames.
@@ -221,8 +221,13 @@ with tempfile.TemporaryDirectory(prefix='hover-scrub-qa-') as directory:
                 until(lambda: not video.active and video.frame is None)
                 print(f'PASS: physical grid skimming displayed {len(shown - {None})} positions during motion; leave restored poster')
             browser._set_view('list')
-            assert browser.children_by_path[path].get_tooltip_text() == str(path)
-            print('PASS: grid video and ancestors have no tooltip; filename and list retain path hints')
+            settle(500)  # Include asynchronously populated metadata cells.
+            assert all(not widget.get_has_tooltip() for widget in walk(browser.children_by_path[path]))
+            browser._set_view('columns')
+            for column in browser.columns.columns:
+                for widget in walk(column.flow):
+                    assert not widget.get_has_tooltip(), type(widget)
+            print('PASS: video, filename, list cells and column rows have no hover tooltips')
         finally:
             browser.destroy()
             settle(100)

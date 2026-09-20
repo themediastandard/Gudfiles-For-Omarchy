@@ -89,3 +89,19 @@ in release notes before shipping it.
 
 Reference: [Arch PKGBUILD manual](https://man.archlinux.org/man/PKGBUILD.5.en.html)
 and [GitHub releases API](https://docs.github.com/en/rest/releases/releases).
+
+## Private friend previews
+
+For authorized early testing, use a prerelease in the existing private
+`themediastandard/gudfiles` repository. Build and verify the same allowlisted
+artifacts, attach `docs/TESTING.md` as `TESTING.md`, and use a distinct preview
+tag such as `v0.1.0-preview.1` tied to the source commit. Keep the release marked
+prerelease. Repository access is required; the owner can also send the assets
+directly. Do not change repository visibility or publish to the proposed public
+release repository as part of a private preview.
+
+The app currently uses stable numeric versions, so this preview reports 0.1.0.
+After distributing it, use a new app version for changed runtime contents and
+never replace its assets. Its manual update check intentionally ignores private
+previews; testers install each supplied package with pacman. Include the tester
+guide separately because the runtime archive only includes INSTALL.md.

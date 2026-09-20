@@ -280,6 +280,11 @@ action comparison and intentional differences.
 
 ## Install
 
+To try a package shared by the developer, start with the
+[friend testing guide](docs/TESTING.md). Preview downloads are attached to
+[private GitHub prereleases](https://github.com/themediastandard/gudfiles/releases);
+repository access is required, or the developer can send you the package directly.
+
 Public downloads and updates are being prepared for **Gudfiles 0.1.0**. See the
 [Omarchy installation guide](docs/INSTALL.md) for package installation, normal
 Omarchy updates, optional portal setup and migration from the development copy.

@@ -466,7 +466,6 @@ class ListDetails:
                         label.add_css_class('label-' + values[key])
                 else:
                     description = 'Rejected' if values[key] else 'Not rejected'
-                label.set_tooltip_text(description)
                 label.update_property([Gtk.AccessibleProperty.LABEL], [description])
 
     def tick(self):
@@ -511,7 +510,8 @@ class ListDetails:
             if key != 'type' and key not in ANNOTATION_COLUMNS:
                 text = format_value(key, values, show_time=self.owner.file_preferences['show_time'])
                 label.set_text(text)
-                label.set_tooltip_text('Unavailable or not applicable' if text == '—' else text)
+                label.update_property([Gtk.AccessibleProperty.LABEL],
+                                      ['Unavailable or not applicable' if text == '—' else text])
         if last:
             self.busy = False
         self.update_header()

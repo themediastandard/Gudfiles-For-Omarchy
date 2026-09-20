@@ -52,8 +52,8 @@ class PickerRequest:
     app_id: str = ""
     external: bool = False
     selected_paths: list[Path] = field(default_factory=list)
-    # Destination prompts show surrounding files while accepting folders only.
-    show_files_in_directory: bool = False
+    # Folder selection still shows its contents; file rows are not selectable.
+    show_files_in_directory: bool = True
 
     @property
     def directories_only(self) -> bool:

@@ -7,6 +7,27 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Friend preview packaging is documented in `docs/TESTING.md` and
+  `docs/RELEASING.md`. The private repository is the preview destination;
+  downloads require repository access or direct sharing by the owner. The app
+  reports 0.1.0, with preview tag `v0.1.0-preview.1`; changed runtime contents
+  after this distribution require a new app version. Public/AUR publication
+  remains separate, and a fresh-machine install plus portal login cycle remains
+  the next acceptance check.
+- Folder-selection popups show surrounding files as disabled entries in grid,
+  list, columns and search, while returning folders only. File-type controls are
+  hidden and ignored in folder mode; a files-only folder is no longer called
+  empty. Preserve this visibility: Tommy needs to recognize folder contents
+  before choosing a folder. Open/Save/folder popups use the same compact header,
+  navigation, toolbar groups and styling as the regular Gudfiles browser. Caller
+  titles remain window titles; file prompts, choices, filenames and Open/Save/Cancel
+  remain in the footer. Pickers
+  retain their separate application identity and no browser tabs.
+- File/folder items have no hover tooltips in grid, list, columns or Trash,
+  including filenames, metadata cells and rating badges. The selection strip
+  also omits redundant filename/fact tooltips. Toolbar and action-button hints
+  remain; annotation descriptions stay available through accessibility labels.
+  Preserve this preference when adding file-item content.
 - Visible ordinary folders refresh from debounced GIO change events in grid,
   list and columns, preserving selections, native keyboard cursor, scroll,
   column trails and in-progress location entry. Navigation/tab changes invalidate
@@ -148,7 +169,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Existing files remain visible as disabled entries while browsing destinations,
   including nested columns and whole-computer search. Only folders can be
   destinations; activating a displayed file does not submit the prompt. Ordinary
-  portal folder pickers retain their folder-only listings.
+  portal folder pickers also show disabled files while accepting folders only.
   Cancel/close schedules nothing. The parent owns progress, queue controls,
   refreshes, move annotation receipts and close guards. Copies choose available
   names; moves retain no-overwrite protection and verify copies across drives.
@@ -161,7 +182,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   popover. This folder retains the immediate-folder name filter. Whole computer
   recursively searches accessible files and already-mounted drives, starting
   with Home, without following directory symlinks or scanning virtual system
-  roots. Hidden/type/folder-only constraints apply; each tab keeps its own scope.
+  roots. Hidden/type constraints apply; folder pickers display files as disabled
+  context and accept folders only. Each tab keeps its own scope.
   Results include parent locations in all three views and Visit File in their
   context menu. Background paste/create/drop requires an actual folder; drops
   onto a found folder remain supported. Save searches open the selected result's
@@ -178,8 +200,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   search, rating/hidden filters, sort and three view buttons now share the compact
   title bar with Help, Transfers and close. Its controls use 14-pixel icons and
   26-pixel targets; the bar measures 30 pixels plus its separator. It fits the
-  820-pixel minimum width independently of sidebar width. Open/Save pickers keep
-  their titled header and responsive body toolbar. Quick Look disables the moved
+  820-pixel minimum width independently of sidebar width. Open/Save and folder
+  pickers share this same compact header; caller prompts and selection actions
+  remain in their footer. Quick Look disables the moved
   browsing controls while its overlay owns navigation and restores them on close;
   Help, Transfers and native Close remain available.
 - `tests/ui_toolbar.py` verifies native compact bounds, long-path/location
@@ -416,8 +439,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Completed frames from the current hover stay visible while the pointer moves;
   the decoder immediately requests the newest position after each completion.
   The progress line follows the displayed frame. Skim hints remain accessible
-  without a tooltip, and grid video path tooltips live on the filename instead
-  of the tile. Leaving/re-entering rejects prior-hover frames; dragging cancels
+  without a tooltip; filenames and file rows also have no hover tooltips.
+  Leaving/re-entering rejects prior-hover frames; dragging cancels
   without starting another hover timer.
   September 19 verification: all 234 unit tests passed. The expanded
   `tests/ui_hover_scrub.py` passed against source and the installed package with
@@ -715,6 +738,8 @@ PYTHONPATH=. python tests/ui_selection_summary.py
 PYTHONPATH=. python tests/ui_sidebar_menu.py
 PYTHONPATH=. python tests/ui_sidebar_actions.py
 PYTHONPATH=. python tests/ui_explorer.py
+PYTHONPATH=. python tests/ui_folder_picker.py
+PYTHONPATH=. python tests/ui_picker_chrome.py
 REVEAL_QA_HYPRLAND=1 PYTHONPATH=. python tests/ui_external_reveal.py
 PYTHONPATH=. python tests/ui_drag_selection.py
 PYTHONPATH=. python tests/ui_conversion_notice.py
@@ -1034,6 +1059,26 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 20 friend preview verification: all 285 unit tests pass. Isolated
+  X11 GTK folder-picker, picker-chrome, explorer, Help, transfer-destination and
+  hover-scrub suites pass without callback exceptions. `makepkg` built the
+  0.1.0-1 package; `verify-release.py` verified checksums, metadata, license and
+  user-data boundaries. All 61 packaged runtime files match source; extracted
+  package version/doctor commands pass. The distribution tests also verify
+  deterministic archive bytes and install/remove preservation. These checks
+  do not substitute for a fresh Omarchy install and portal logout/login test.
+- September 20 popup verification: 285 unit tests pass. Native isolated GTK
+  checks verify folder contents, disabled file activation, nested columns,
+  folder-only returned URIs, irrelevant file filters, computer-search acceptance,
+  empty-folder recovery and SaveFiles. Explorer/Open/Save/folder headers measure
+  30 pixels at 820/960/1200 widths in active/light palettes; location editing,
+  preview guards, caller choices and Open/Save result files pass. The Copy/Move
+  destination suite passes across all views and both palettes. Snapshots were
+  reviewed. The installed package was staged from the existing runtime with
+  only model.py, picker.py and theme.py changed, then atomically exchanged with
+  a rollback backup. Installed folder-picker and explorer/Open/Save checks also
+  pass, and all 62 runtime files match the tested stage. Existing windows must
+  reopen to use the new code.
 - September 19 column-motion/sidebar/toolbar update: 234 unit tests pass.
   Isolated physical-input checks exercise live header/cell reordering before
   persistence, shaded slots, the floating drag label, fixed Name by mouse/key,

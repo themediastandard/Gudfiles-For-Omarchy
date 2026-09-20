@@ -91,7 +91,8 @@ def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gt
 class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, request: PickerRequest, result_path: Path | None,
                  *, on_result=None):
-        super().__init__(application=app, title=request.title)
+        title = 'Choose Folder' if request.directory and request.title == 'Open File' else request.title
+        super().__init__(application=app, title=title)
         self.request = request
         self.result_path = result_path
         self.on_result = on_result
@@ -183,17 +184,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
 
     def _build_header(self) -> None:
         header = Gtk.HeaderBar()
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        title_box.set_valign(Gtk.Align.CENTER)
-        if self.request.explorer:
-            header.add_css_class('compact-header')
-        else:
-            title_box.append(label(self.request.title, "metadata-title", xalign=0.5))
-            subtitle_text = "Choose a folder" if self.request.directory else (
-                "Choose where to save" if self.request.mode.startswith("save") else "Choose files to open"
-            )
-            title_box.append(label(subtitle_text, "muted", xalign=0.5))
-        header.set_title_widget(title_box)
+        header.add_css_class('compact-header')
         self.help_button = Gtk.Button.new_from_icon_name('help-browser-symbolic')
         self.help_button.set_valign(Gtk.Align.CENTER)
         self.help_button.add_css_class('header-utility')
@@ -201,11 +192,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.help_button.set_tooltip_text('Help · Features and shortcuts (F1)')
         self.help_button.connect('clicked', lambda *_: show_help(self))
         self._build_transfer_button()
-        if self.request.explorer:
-            header.set_show_title_buttons(False)
-        else:
-            header.pack_end(self.help_button)
-            header.pack_end(self.transfer_button)
+        header.set_show_title_buttons(False)
         self.set_titlebar(header)
 
     def _build_content(self) -> None:
@@ -248,15 +235,12 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.tabs = BrowserTabs(self)
         browser.append(self.tabs)
 
-        self.toolbar = AdaptiveToolbar(compact=self.request.explorer)
+        self.toolbar = AdaptiveToolbar(compact=True)
         self._build_toolbar()
-        if self.request.explorer:
-            self.toolbar.set_valign(Gtk.Align.CENTER)
-            self.toolbar.add_action_group('Tools', (self.transfer_button, self.help_button), utility=True)
-            self.toolbar.add_action_group('Window', (Gtk.WindowControls(side=Gtk.PackType.END),), utility=True)
-            self.get_titlebar().set_title_widget(self.toolbar)
-        else:
-            browser.append(self.toolbar)
+        self.toolbar.set_valign(Gtk.Align.CENTER)
+        self.toolbar.add_action_group('Tools', (self.transfer_button, self.help_button), utility=True)
+        self.toolbar.add_action_group('Window', (Gtk.WindowControls(side=Gtk.PackType.END),), utility=True)
+        self.get_titlebar().set_title_widget(self.toolbar)
         browser.append(self._build_active_filters())
         browser.append(self._build_search_status())
 
@@ -545,8 +529,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.path_scroll.add_controller(self.path_wheel)
         self.path_stack.add_named(self.path_scroll, "crumbs")
         self.path_entry = Gtk.Entry()
-        if self.request.explorer:
-            self.path_entry.add_css_class('compact-location')
+        self.path_entry.add_css_class('compact-location')
         self.path_entry.set_width_chars(1)
         self.path_entry.connect("activate", self._on_path_activate)
         self.path_stack.add_named(self.path_entry, "entry")
@@ -598,6 +581,11 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.flow.child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _build_footer(self) -> None:
+        prompt = 'Choose a folder · Files shown for reference' if self.request.directory else self.request.title
+        self.chooser_prompt = label(prompt, 'muted')
+        self.chooser_prompt.set_ellipsize(Pango.EllipsizeMode.END)
+        self.chooser_prompt.set_max_width_chars(60)
+        self.footer.append(self.chooser_prompt)
         if self.request.choices:
             choices_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
             for choice in self.request.choices:
@@ -635,6 +623,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.filter_combo.set_active(requested)
         self.filter_combo.connect("changed", lambda _combo: self._refresh_files())
         self.filter_combo.set_size_request(210, -1)
+        self.filter_combo.set_visible(not self.request.directory)
         row.append(self.filter_combo)
 
         if self.request.mode == "save":
@@ -645,7 +634,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.filename_entry.connect("activate", lambda _entry: self._accept())
             row.append(self.filename_entry)
         else:
-            self.selection_label = label("No file selected", "muted")
+            selection_text = f"Current folder: {self.current_dir.name or '/'}" if self.request.directory else "No file selected"
+            self.selection_label = label(selection_text, "muted")
             self.selection_label.set_hexpand(True)
             self.selection_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             self.selection_label.set_max_width_chars(36)
@@ -654,7 +644,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         hints.append(label("Ctrl+F Search", "key-hint"))
         hints.append(label("Ctrl+H Hidden", "key-hint"))
-        hints.append(label("Space Preview", "key-hint"))
+        if not self.request.directory:
+            hints.append(label("Space Preview", "key-hint"))
         hints.append(label("Enter Open", "key-hint"))
         row.append(hints)
 
@@ -848,6 +839,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             keyval == Gdk.KEY_BackSpace and bool(state & Gdk.ModifierType.SUPER_MASK))
 
     def _active_filter(self):
+        if self.request.directory:
+            return None
         index = self.filter_combo.get_active() - 1
         if 0 <= index < len(self.request.filters):
             return self.request.filters[index]
@@ -950,8 +943,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             child._picker_is_dir = self._entry_is_dir(path)
             child.set_sensitive(not self.request.directory or child._picker_is_dir)
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
-            if self.view_mode != 'grid' or path.suffix.casefold() not in VIDEO_TYPES:
-                child.set_tooltip_text(str(path))
             self.flow.append(child)
             self.children_by_path[path] = child
         self.browser_stack.set_visible_child_name("files" if self.entries else "empty")
@@ -987,8 +978,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         frame.append(thumbnail)
         item.append(frame)
         name = label(path.name, "filename", xalign=0.5)
-        if path.suffix.casefold() in VIDEO_TYPES:
-            name.set_tooltip_text(str(path))
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         name.set_width_chars(18)
         name.set_max_width_chars(18)
@@ -1007,14 +996,12 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         detail_label = label(detail, "muted", xalign=0.5)
         detail_label.set_ellipsize(Pango.EllipsizeMode.END)
         detail_label.set_max_width_chars(18)
-        detail_label.set_tooltip_text(detail)
         if isinstance(poster, Thumbnail) and path.suffix.casefold() in IMAGE_TYPES:
             def show_dimensions(pixbuf):
                 width, height = (pixbuf.get_option('tEXt::Source' + side) for side in ('Width', 'Height'))
                 if width and height:
                     dimensions = f'{width} × {height}'
                     detail_label.set_text(dimensions)
-                    detail_label.set_tooltip_text(dimensions)
             poster.on_loaded = show_dimensions
         item.append(detail_label)
         return item
@@ -1106,8 +1093,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         image.set_pixel_size(32)
         self.metadata.append(image)
         copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
-        copy.append(label("Select a file to preview", "metadata-title"))
-        copy.append(label("Image, camera RAW and video thumbnails appear here.", "muted"))
+        copy.append(label("Select a folder" if self.request.directory else "Select a file to preview", "metadata-title"))
+        copy.append(label("Files remain visible to help you choose." if self.request.directory else
+                          "Image, camera RAW and video thumbnails appear here.", "muted"))
         self.metadata.append(copy)
 
     def _update_metadata(self, path: Path) -> None:
@@ -1126,7 +1114,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         title = label(path.name, "metadata-title")
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         title.set_max_width_chars(32)
-        title.set_tooltip_text(path.name)
         primary.append(title)
         for detail in (f'{file_type(path)} · {path.parent}',):
             detail_label = label(detail, "muted")
@@ -1147,7 +1134,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             fact = label(text, 'muted')
             fact.set_ellipsize(Pango.EllipsizeMode.END)
             fact.set_max_width_chars(28)
-            fact.set_tooltip_text(text)
             facts.append(fact)
         append_fact(f"Size    {size}")
         append_fact(f"Modified    {modified}")
@@ -1639,7 +1625,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.conversion_notice_spinner.set_spinning(working)
         self.conversion_notice_headline.set_text(headline)
         self.conversion_notice_filename.set_text(output.name)
-        self.conversion_notice_filename.set_tooltip_text(str(output))
         self.conversion_notice.set_reveal_child(True)
         def expire():
             self.conversion_notice_timer = 0

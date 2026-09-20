@@ -191,5 +191,4 @@ class SearchTools:
         location = Gtk.Label(label=str(path.parent), xalign=0,
                              ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
         location.add_css_class('muted')
-        location.set_tooltip_text(str(path.parent))
         return location

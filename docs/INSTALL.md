@@ -10,6 +10,12 @@ Release preparation is in progress. Public GitHub releases and the AUR entry
 must be published before the online commands below work. The intended AUR
 package name is `gudfiles`; no AUR listing is claimed by this guide.
 
+## Friend preview builds
+
+For a directly shared package or a private GitHub prerelease, follow
+the separately supplied `TESTING.md` guide. These builds install locally with pacman
+and receive updates by downloading another package; no AUR entry is required.
+
 ## Install and update
 
 Once the official AUR entry is available, install with:
