@@ -3,6 +3,11 @@
 A visual, keyboard-friendly file manager and file picker that follows the active
 Omarchy theme and serves as an XDG desktop portal backend.
 
+![Gudfiles grid view showing video and photo thumbnails, project bookmarks, and demo storage devices](docs/screenshots/gudfiles-demo.png)
+
+*Captured from the Gudfiles demo using a sample project and simulated storage
+devices. [Screenshot and sample-media credits](docs/screenshots/README.md).*
+
 Source: [themediastandard/gudfiles](https://github.com/themediastandard/gudfiles).
 
 Designed and built by [The Media Standard](https://themediastandard.com) for
@@ -282,8 +287,8 @@ action comparison and intentional differences.
 
 To try a package shared by the developer, start with the
 [friend testing guide](docs/TESTING.md). Preview downloads are attached to
-[private GitHub prereleases](https://github.com/themediastandard/gudfiles/releases);
-repository access is required, or the developer can send you the package directly.
+[GitHub prereleases](https://github.com/themediastandard/gudfiles/releases);
+downloads are public, or the developer can send you the package directly.
 
 Public downloads and updates are being prepared for **Gudfiles 0.1.0**. See the
 [Omarchy installation guide](docs/INSTALL.md) for package installation, normal

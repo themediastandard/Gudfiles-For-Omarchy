@@ -7,9 +7,12 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- The public README features `docs/screenshots/gudfiles-demo.png`, the
+  unmodified full-app grid capture from demo v3. Its adjacent README owns
+  sample-media attribution and identifies the simulated sidebar devices.
 - Friend preview packaging is documented in `docs/TESTING.md` and
-  `docs/RELEASING.md`. The private repository is the preview destination;
-  downloads require repository access or direct sharing by the owner. The app
+  `docs/RELEASING.md`. The repository and preview downloads are public
+  following the owner's September 20 visibility change. The app
   reports 0.1.0, with preview tag `v0.1.0-preview.1`; changed runtime contents
   after this distribution require a new app version. Public/AUR publication
   remains separate, and a fresh-machine install plus portal login cycle remains
