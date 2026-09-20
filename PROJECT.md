@@ -7,6 +7,46 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Visible ordinary folders refresh from debounced GIO change events in grid,
+  list and columns, preserving selections, native keyboard cursor, scroll,
+  column trails and in-progress location entry. Navigation/tab changes invalidate
+  late work. Refresh defers during interactions/file jobs; unavailable watched
+  locations re-arm when restored. Recent, Trash and computer-search keep their
+  own refresh behavior; remote backends without events retain manual F5.
+- Ctrl+Z and file/background menu Undo reverse successful renames, batch renames
+  and same-drive moves within the current window. Inverses use identity/version
+  checks and no-overwrite renames, carry annotations, retain failed work for
+  retry and preserve partial-success receipts. Text editors and Quick Look keep
+  their existing keys. History retains 20 actions, with a 10,000-entry snapshot
+  limit per item; cross-drive moves and deletion are not recorded for Undo.
+- Transfers save private, atomic recovery records under the user's state
+  directory, claimed by a single window/process. Save queue & close waits for
+  stopped workers; relaunch/crash recovery holds jobs for explicit continuation.
+  Publication, cancellation, restart, source removal and retention intents are
+  saved before their filesystem changes. Corrupt/unsafe records are reported
+  without acting on their paths. Completed move annotations use idempotent
+  SQLite receipts so recovery cannot apply a move twice.
+- Cut/Paste and Move to support cross-drive moves: copy, verify, publish without
+  overwrite, validate originals, then remove only unchanged original entries.
+  Source cleanup uses a private held name and a durable removal ledger; failures
+  retain the verified copy and remaining originals. Keep remaining originals
+  safely resolves a stopped move, restoring any held data to an available name.
+  Same-drive moves remain atomic. Cross-drive drag-and-drop still copies.
+- September 19 integration verification: 285 unit tests pass, including actual
+  subprocess crashes during copy/publication/source unlink/cancellation and
+  annotation commits. Native checks cover Undo/collisions, paused recovery,
+  Save queue & close, Keep remaining originals, Retry labels, real GIO refresh,
+  tab/column/selection continuity, typed-path preservation and hover deferral.
+  Queue/All/visibility checks and H.264, HEVC, ProRes, VP9 and AV1 playback pass.
+  A real 4K/60fps H.264 clip passed physical hover and Quick Look checks with its
+  hash unchanged; both existing SMB shares passed read-only browsing. A
+  1,000-image fixture switched to grid in 0.22 seconds with 16 resident thumbnails.
+  Cross-drive writes/deletion and crash tests use owned disposable local/tmpfs
+  fixtures; this pass does not certify NAS transfer/reconnect or RAW footage.
+  Native physical input uses isolated X11 displays, not live Wayland injection.
+  New runtime installation uses an atomic whole-package exchange with a rollback
+  backup and preserves existing windows; reopening loads the new code.
+
 - September 19 compact visual pass: tabs are 24-pixel rectangular segments with
   square corners, quiet dividers and flat close buttons; the complete strip is
   25 pixels including its separator. The first tab and rightmost + control sit
@@ -111,7 +151,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   portal folder pickers retain their folder-only listings.
   Cancel/close schedules nothing. The parent owns progress, queue controls,
   refreshes, move annotation receipts and close guards. Copies choose available
-  names; moves retain the existing no-overwrite and same-filesystem constraints.
+  names; moves retain no-overwrite protection and verify copies across drives.
   The folder prompt closes with its owner and never quits the parent app or
   writes an Open/Save result. Existing paused/failed queues remain held until
   resumed in Transfers.
@@ -438,13 +478,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Copy resume checks every retained byte against an unchanged source and verifies
   the completed data before publication. Changed sources/corrupt partials refuse
   resume and require an explicit restart of unfinished items. Same-volume moves
-  use atomic no-overwrite renames; cross-volume moves stop without copying or
-  deleting their sources, explaining how to use Copy instead.
-- Queues belong to the open Gudfiles session. Closing the transfer panel hides it;
-  closing Gudfiles/finishing a picker pauses scheduling and asks whether to keep the
-  session or cancel unfinished work. It waits for active I/O/cleanup to stop.
-  Failed cleanup offers an explicit leave-partials exit. No automatic reconnect,
-  credentials, persisted queue, background service or restart recovery is added.
+  use atomic no-overwrite renames; cross-volume moves verify a published copy
+  before removing unchanged originals, with recoverable source-cleanup receipts.
+- Closing the transfer panel hides it. Closing Gudfiles/finishing a picker pauses
+  scheduling and offers saving unfinished work or cancelling it, waiting for
+  active I/O/cleanup to stop. Recovery records preserve completed output mappings
+  and held work across relaunch. No background transfer daemon or automatic
+  network reconnection is used; recovered jobs require explicit continuation.
 - SMB/NFS NAS connection dialog backed by Gio/GVfs with native credential
   prompts; mounted shares are refreshed into the Network sidebar section.
 - Reads the active Omarchy `colors.toml` on every launch.
@@ -566,8 +606,16 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - `omarchy_file_picker/file_actions.py` — filesystem operations and sorting.
 - `omarchy_file_picker/file_management.py` — file dialogs, clipboard, shared
   GTK bookmarks and persisted display preferences.
+- `omarchy_file_picker/folder_watch.py` — visible-directory event monitors,
+  deferred state-preserving refresh and cancellable unavailable-root recovery.
+- `omarchy_file_picker/undo.py` — bounded session receipts and identity-checked
+  inverse renames, including partial completion and retry.
 - `omarchy_file_picker/transfers.py` — bounded Queue/All scheduling, resumable
   copies, checked staging ownership, atomic publication and cancellation cleanup.
+- `omarchy_file_picker/transfer_journal.py` — private durable checkpoints,
+  strict manifest validation, atomic writes and single-owner recovery locks.
+- `omarchy_file_picker/move_cleanup.py` — verified cross-drive source removal
+  and non-destructive retention of originals after an interrupted move.
 - `omarchy_file_picker/transfer_ui.py` — native transfer window, progress/actions,
   ordered move receipts, clipboard ownership and Gudfiles/picker close guard.
 - `omarchy_file_picker/theme.py` — active Omarchy palette to GTK CSS.
@@ -635,6 +683,10 @@ SOUND_QA_SCREENSHOT=/tmp/gudfiles-sounds.png PYTHONPATH=. python tests/ui_action
 HELP_QA_SCREENSHOTS=/tmp/files-help PYTHONPATH=. python tests/ui_help.py
 PYTHONPATH=. python tests/ui_dialogs.py
 PYTHONPATH=. python tests/ui_transfers.py
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_folder_watch.py
+PYTHONPATH=. python tests/ui_undo.py
+PYTHONPATH=. python tests/ui_transfer_recovery.py
+PYTHONPATH=. python tests/ui_move_retention.py
 PYTHONPATH=. python tests/ui_transfer_destination.py
 PYTHONPATH=. python tests/ui_transfer_modes.py
 PYTHONPATH=. python tests/ui_transfer_visibility.py
@@ -1484,12 +1536,12 @@ gdbus introspect --session \
   transfer-mode, transfer, columns, file-management, explorer/picker-mode and
   selection-summary QA passed against that installed package. Installed
   modules match the source, including the concurrent selection-summary updates.
-- Transfer queues and recovery metadata are in memory. An app crash/forced exit
-  can leave hidden partial folders and does not restore the queue on relaunch.
-  Normal close guards against losing it. Cross-volume copy works when the mounted
-  filesystem supports the required safe publication; cross-volume move is an
-  explicit limitation of this first version. A later milestone can add a durable
-  journal and separately verified copy-and-delete moves.
+- Transfer recovery requires its private state directory to remain readable and
+  writable. Unsupported safe publication or changed mount/file identities stop
+  work visibly. A stopped cross-drive move may retain a held source folder;
+  Resume or Keep remaining originals resolves it without guessing or overwriting.
+  Journal records are limited to 100 jobs and 64 MiB per job. These safeguards
+  do not make every remote filesystem support verified publication.
 - Apps that bypass XDG portals keep their toolkit-native chooser.
 - A NAS must be reachable and provide valid credentials for a live mount test;
   live passive discovery is verified, while authenticated share browsing and

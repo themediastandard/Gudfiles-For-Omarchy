@@ -41,6 +41,7 @@ from .network_ui import NetworkBrowser
 from .network import NetworkLocation, safe_network_uri, mounted_local_path, mount_display_name
 from .creative import CreativeTools
 from .hover_scrub import HoverScrub
+from .folder_watch import FolderWatch
 from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
@@ -139,6 +140,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         else:
             self._set_view(self.file_preferences['view_mode'], persist=False)
         self.tabs.initialize()
+        self.folder_watch = FolderWatch(self)
         if request.explorer and request.selected_paths:
             from .reveal import reveal_initial_selection
             reveal_initial_selection(self)
@@ -747,6 +749,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return Gdk.EVENT_STOP
         if self.context_popover:
             return Gdk.EVENT_PROPAGATE
+        if not editing and control and not shift and keyval in (Gdk.KEY_z, Gdk.KEY_Z):
+            self._undo_file_action()
+            return Gdk.EVENT_STOP
         if self.special_mode == 'trash' and not editing:
             if keyval == Gdk.KEY_F5:
                 self.trash_page.refresh()
@@ -867,6 +872,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
     def _load(self) -> None:
         if getattr(self, "_restoring_tab", False):
             return
+        watcher = getattr(self, 'folder_watch', None)
+        if watcher:
+            watcher.suspend()
         self._last_search = self.search.get_text()
         self._update_active_filters()
         trash = self.special_mode == 'trash'
@@ -881,12 +889,16 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._update_search_scope()
         if trash:
             self._show_trash()
+            if watcher:
+                watcher.sync()
             return
         if hasattr(self, 'trash_page'):
             self.trash_page.deactivate()
         query = self.search.get_text() if hasattr(self, "search") else ""
         if self._computer_search_active():
             self._load_computer_search()
+            if watcher:
+                watcher.sync()
             return
         self._cancel_computer_search()
         if self.special_mode == "recent":
@@ -913,6 +925,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._rebuild_pathbar()
         self._update_nav_state()
         self._update_active_location()
+
+        if watcher:
+            watcher.sync()
 
     def _rebuild_files(self) -> None:
         self.list_details.reset()
@@ -1049,12 +1064,15 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         return self.current_dir
 
     def _rebuild_pathbar(self) -> None:
+        editing_location = (getattr(self, '_refreshing_folder', False) and
+                            self.path_stack.get_visible_child_name() == 'entry')
         while child := self.path_box.get_first_child():
             self.path_box.remove(child)
         if self.special_mode in {'recent', 'trash'}:
             button = BreadcrumbButton(self.special_mode.title(), self.colors, first=True, current=True)
             self.path_box.append(button)
-            self.path_entry.set_text(self.special_mode + ':///')
+            if not editing_location:
+                self.path_entry.set_text(self.special_mode + ':///')
             self._reveal_current_breadcrumb()
             return
         path = self._breadcrumb_directory().resolve()
@@ -1076,7 +1094,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             button = BreadcrumbButton(part, self.colors, current=current == path)
             button.connect("clicked", lambda _b, p=current: self.navigate(p))
             self.path_box.append(button)
-        self.path_entry.set_text(str(path))
+        if not editing_location:
+            self.path_entry.set_text(str(path))
         self._reveal_current_breadcrumb()
 
     def _clear_metadata(self) -> None:

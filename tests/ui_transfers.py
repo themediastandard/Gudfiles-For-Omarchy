@@ -275,7 +275,8 @@ with tempfile.TemporaryDirectory(prefix='picker-transfer-qa-') as temp, \
         window.transfer_leave.emit('clicked')
         until(lambda: len(closed) == 3)
         assert stage.is_dir() and cleanup_source.read_text() == 'cleanup fixture'
-        assert not queue.unfinished and queue.active is None
+        assert queue.unfinished and queue.active is None
+        assert damaged.state == 'paused'
         assert not errors, errors
         print('PASS: native stage/start/pause/resume/restart/cancel; verified partial bytes; sequential queue; '
               'three-view browsing; clipboard ownership; partial move ratings; bounded geometry; close guard and cleanup')

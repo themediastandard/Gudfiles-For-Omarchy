@@ -366,12 +366,18 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(len(job.completed), 2)
         self.assertEqual((self.dest / other.name).read_text(), 'second')
 
-    def test_cross_volume_move_never_copies_or_deletes_source(self):
-        with patch('omarchy_file_picker.transfers.rename_noreplace', side_effect=OSError(errno.EXDEV, 'cross device')):
-            with self.assertRaisesRegex(ValueError, 'Moving between volumes'):
-                self.engine.run(self.job(cut=True))
-        self.assertEqual(self.file.read_bytes(), self.data)
-        self.assertEqual(list(self.dest.iterdir()), [])
+    def test_exdev_falls_back_to_verified_move(self):
+        first = True
+        def cross_device(*args):
+            nonlocal first
+            if first:
+                first = False
+                raise OSError(errno.EXDEV, 'cross device')
+            return rename_noreplace(*args)
+        with patch('omarchy_file_picker.transfers.rename_noreplace', side_effect=cross_device):
+            self.engine.run(self.job(cut=True))
+        self.assertFalse(self.file.exists())
+        self.assertEqual((self.dest / self.file.name).read_bytes(), self.data)
 
     @unittest.skipUnless(Path('/dev/shm').is_dir(), 'A second disposable filesystem is unavailable')
     def test_real_cross_volume_copy_and_move_boundary(self):
@@ -383,10 +389,10 @@ class TransferTests(unittest.TestCase):
             target = destination / self.file.name
             self.assertEqual(target.read_bytes(), self.data)
             target.unlink()
-            with self.assertRaisesRegex(ValueError, 'Moving between volumes'):
-                self.engine.run(TransferJob([self.file], destination, cut=True))
-            self.assertEqual(self.file.read_bytes(), self.data)
-            self.assertEqual(list(destination.iterdir()), [])
+            self.engine.run(TransferJob([self.file], destination, cut=True))
+            self.assertFalse(self.file.exists())
+            self.assertEqual(target.read_bytes(), self.data)
+            self.assertEqual(list(destination.iterdir()), [target])
 
     def test_restart_keeps_completed_files_and_continues_remaining(self):
         other = self.source / 'second'

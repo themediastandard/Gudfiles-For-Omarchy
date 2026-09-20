@@ -105,6 +105,7 @@ with tempfile.TemporaryDirectory(prefix='dialog-qa-') as directory:
             assert entry(dialog).get_selection_bounds() == (0, len(source.stem))
             entry(dialog).set_text(collision.name)
             dialog.response(Gtk.ResponseType.ACCEPT)
+            settle(.3)
             assert source.exists() and collision.read_text() == 'Keep this original'
             assert dialog.error_label.get_visible() and dialog.get_visible()
             capture(dialog, palette, 'rename-error')

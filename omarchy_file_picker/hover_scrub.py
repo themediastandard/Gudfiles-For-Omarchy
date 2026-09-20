@@ -120,11 +120,16 @@ class ScrubWorker:
 
 
 _WORKER = ScrubWorker()
+_ACTIVE = weakref.WeakSet()
 
 
 class HoverScrub(Gtk.Overlay):
     """Wrap a pre-sized thumbnail; motion never consumes click/selection gestures."""
     __gtype_name__ = 'OmarchyHoverScrub'
+
+    @staticmethod
+    def active_for(owner):
+        return any(widget.get_root() is owner for widget in _ACTIVE)
 
     def __init__(self, path: Path, thumbnail: Gtk.Widget, *, worker=None):
         super().__init__()
@@ -180,6 +185,7 @@ class HoverScrub(Gtk.Overlay):
         self._generation += 1
         self._motion(controller, x, y)
         if self.active:
+            _ACTIVE.add(self)
             self._timer = GLib.timeout_add(HOVER_DELAY_MS, self._start)
 
     def _motion(self, controller, x, _y):
@@ -246,6 +252,7 @@ class HoverScrub(Gtk.Overlay):
             self._tick()
 
     def _leave(self, *_args):
+        _ACTIVE.discard(self)
         self.active = False
         self._ready = False
         self._generation += 1

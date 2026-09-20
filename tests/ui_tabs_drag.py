@@ -58,7 +58,9 @@ with tempfile.TemporaryDirectory(prefix='tabs-drag-') as temporary, \
     window = PickerWindow(app, request, None)
     window.present()
     settle()
-    for client in json.loads(subprocess.check_output(['hyprctl', 'clients', '-j'])):
+    clients = (json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
+               if os.environ.get('GDK_BACKEND') != 'x11' else [])
+    for client in clients:
         if client['pid'] == os.getpid() and not client['floating']:
             subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' +
                             json.dumps('address:' + client['address']) + '})'], check=True, stdout=subprocess.DEVNULL)

@@ -1,8 +1,8 @@
-"""Session-scoped transfer scheduling and verified, resumable copies.
+"""Transfer scheduling and verified, resumable copies and moves.
 
 Only the worker touches the filesystem. Copies live in a private destination
 staging directory until verified, then renameat2 publishes without overwriting.
-Moves are atomic renames only: never fall back to copy-and-delete across mounts.
+Cross-volume moves verify a published copy before removing an unchanged source.
 """
 from __future__ import annotations
 
@@ -111,8 +111,22 @@ class Item:
     parent_id: tuple
     entries: list[Entry]
     completed: bool = False
+    completed_at: int = 0
     publishing: bool = False
     target_name: str = ''
+    cross_device: bool = False
+    copied: bool = False
+    published_id: tuple | None = None
+    quarantine_name: str = ''
+    quarantining: bool = False
+    quarantine_id: tuple | None = None
+    removed: list[Path] = field(default_factory=list)
+    removing: Path | None = None
+    abandoned: bool = False
+    restore_name: str = ''
+    restoring: bool = False
+    retained_source: Path | None = None
+    undo_receipt: object = None
 
 
 @dataclass(eq=False)
@@ -139,10 +153,18 @@ class TransferJob:
     stage_name: str = ''
     stage_id: tuple | None = None
     owned: dict[Path, tuple] = field(default_factory=dict)
+    cleanup_removing: Path | None = None
     completed: dict[Path, Path] = field(default_factory=dict)
+    completion_times: dict[Path, int] = field(default_factory=dict)
     on_completed: object = None
+    on_checkpoint: object = None
     stop: threading.Event = field(default_factory=threading.Event)
     cancel_requested: bool = False
+    recovery_operation: str = 'run'
+
+    def persist(self):
+        if self.on_checkpoint:
+            self.on_checkpoint(self)
 
     def checkpoint(self):
         if self.stop.is_set():
@@ -232,7 +254,9 @@ class TransferEngine:
         for source in sources:
             job.checkpoint()
             with directory_fd(source.parent.resolve(strict=True)) as fd:
-                if job.cut:
+                source_info = entry_stat(fd, source.name)
+                cross_device = job.cut and source_info.st_dev != os.fstat(dest_fd).st_dev
+                if job.cut and not cross_device:
                     entries = [Entry(Path(source.name), signature(entry_stat(fd, source.name)))]
                 else:
                     entries = self._scan(job, fd, source.name)
@@ -242,17 +266,28 @@ class TransferEngine:
                 target = (self._copy_name(job, dest_fd, source, stat.S_ISDIR(entries[0].stamp[2]), reserved)
                           if job.duplicate else source.name)
                 reserved.add(target)
-                items.append(Item(source, identity(os.fstat(fd)), entries, target_name=target))
+                items.append(Item(source, identity(os.fstat(fd)), entries, target_name=target,
+                                  cross_device=cross_device))
         job.sources = sources
         job.items = items
         job.total_bytes = sum(entry.size for item in items for entry in item.entries)
+        job.persist()
 
     def _stage(self, job, dest_fd):
+        if job.stage_name and not job.owned:
+            try:
+                entry_stat(dest_fd, job.stage_name)
+            except FileNotFoundError:
+                # The empty stage can have been removed immediately before a
+                # crash, with its cleared receipt not yet written.
+                job.stage_name, job.stage_id = '', None
+                job.persist()
         if not job.stage_name:
             name = '.omarchy-transfer-' + job.id
             os.mkdir(name, 0o700, dir_fd=dest_fd)
             job.stage_name = name
             job.stage_id = identity(entry_stat(dest_fd, name))
+            job.persist()
         fd = os.open(job.stage_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dest_fd)
         if identity(os.fstat(fd)) != job.stage_id:
             os.close(fd)
@@ -281,6 +316,7 @@ class TransferEngine:
                 else:
                     dst = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
                     job.owned[relative] = identity(os.fstat(dst))
+                    job.persist()
             try:
                 info = os.fstat(dst)
                 if identity(info) != job.owned[relative] or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
@@ -318,6 +354,7 @@ class TransferEngine:
                 # Retain owner write access while resumable; restore basic file
                 # mode/timestamps only after verification, immediately before publish.
                 entry.digest = digest.digest()
+                job.persist()
             finally:
                 os.close(dst)
         finally:
@@ -396,6 +433,7 @@ class TransferEngine:
                         else:
                             os.mkdir(name, 0o700, dir_fd=parent)
                         job.owned[relative] = identity(entry_stat(parent, name))
+                        job.persist()
             self._verify(job, stage_fd, item, index)
             current = self._scan(job, source_fd, item.source.name)
             if [(e.relative, e.stamp, e.link) for e in current] != [(e.relative, e.stamp, e.link) for e in item.entries]:
@@ -429,6 +467,7 @@ class TransferEngine:
                         except OSError as error:
                             if error.errno not in {errno.ENOTSUP, errno.EOPNOTSUPP}:
                                 raise
+                    self._sync_directory(fd) if stat.S_ISDIR(entry.stamp[2]) else os.fsync(fd)
                 finally:
                     os.close(fd)
         job.checkpoint()
@@ -437,6 +476,15 @@ class TransferEngine:
         for relative in list(job.owned):
             if relative.parts[0] == str(index):
                 del job.owned[relative]
+        job.persist()
+
+    @staticmethod
+    def _sync_directory(fd):
+        try:
+            os.fsync(fd)
+        except OSError as error:
+            if error.errno not in {errno.EINVAL, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                raise
 
     @staticmethod
     def _check_destination(job):
@@ -460,6 +508,7 @@ class TransferEngine:
 
     def _publish_named(self, job, dest_fd, source_fd, name, item, expected_id):
         item.publishing = True
+        job.persist()
         try:
             rename_noreplace(source_fd, name, dest_fd, item.target_name)
         except OSError:
@@ -484,14 +533,35 @@ class TransferEngine:
             except OSError:
                 raise RestartRequired(f'The item changed during publication. Inspect {job.destination / item.target_name}; nothing was deleted.')
             raise RestartRequired('The item changed during publication. Its replacement was restored; nothing was deleted.')
-        self._record_completed(job, item)
+        self._sync_directory(dest_fd)
+        self._sync_directory(source_fd)
+        self._record_published(job, item, expected_id)
+
+    def _record_published(self, job, item, expected_id):
+        item.published_id = expected_id
+        if item.cross_device:
+            item.copied, item.publishing = True, False
+            item.published_id = expected_id
+            job.persist()
+        else:
+            self._record_completed(job, item)
 
     @staticmethod
     def _record_completed(job, item):
         item.completed, item.publishing = True, False
+        item.completed_at = time.time_ns()
         job.completed[item.source] = job.destination / item.target_name
+        job.completion_times[item.source] = item.completed_at
+        if job.cut and not item.cross_device:
+            from .undo import capture_receipt
+            item.undo_receipt = capture_receipt({item.source: job.destination / item.target_name},
+                label='Move', expected_identity=item.entries[0].identity)
+        # Publication has committed. Deliver that fact even if saving the final
+        # receipt fails; the durable publication intent reconciles after a crash.
+        # A retry skips this completed item, so the live event must not be lost.
         if job.on_completed:
             job.on_completed(item.source, job.destination / item.target_name)
+        job.persist()
 
     def _reconcile(self, job, dest_fd, old_fd, name, item, expected_id):
         if not item.publishing:
@@ -505,30 +575,37 @@ class TransferEngine:
         except FileNotFoundError:
             target_id = None
         if old_id != expected_id and target_id == expected_id:
-            self._record_completed(job, item)
+            self._sync_directory(dest_fd)
+            self._record_published(job, item, expected_id)
             return True
         if old_id != expected_id:
             raise RestartRequired(f'Completion could not be confirmed. Inspect {job.destination / item.target_name}; nothing else was changed.')
         item.publishing = False
+        job.persist()
         return False
 
     def run(self, job):
         job.error = ''
         job.restart_required = False
-        job.done_bytes = sum(e.size for item in job.items if item.completed for e in item.entries)
+        job.done_bytes = sum(e.size for item in job.items if item.completed or item.copied for e in item.entries)
         job.written_bytes = job.verified_bytes = 0
         job.started = time.monotonic()
         job.destination = job.destination.resolve(strict=True)
         with directory_fd(job.destination, job.destination_id) as dest_fd:
             job.destination_id = identity(os.fstat(dest_fd))
             self._prepare(job, dest_fd)
-            stage_fd = self._stage(job, dest_fd) if not job.cut else None
+            stage_fd = self._stage(job, dest_fd) if not job.cut or any(item.cross_device for item in job.items) else None
             try:
                 for index, item in enumerate(job.items):
-                    if item.completed:
+                    if item.completed or item.copied:
+                        for relative in list(job.owned):
+                            if relative.parts[0] == str(index):
+                                del job.owned[relative]
+                        job.persist()
+                    if item.completed or item.abandoned:
                         continue
                     job.checkpoint()
-                    if job.cut:
+                    if job.cut and not item.cross_device:
                         job.phase, job.current_name = 'Moving item', item.source.name
                         self._check_destination(job)
                         with directory_fd(item.source.parent.resolve(strict=True), item.parent_id) as fd:
@@ -542,17 +619,38 @@ class TransferEngine:
                                 self._publish(job, dest_fd, fd, item.source.name, item, item.entries[0].identity)
                             except OSError as error:
                                 if error.errno == errno.EXDEV:
-                                    raise ValueError('Moving between volumes is not supported. Use Copy, verify the result, then remove the original yourself.') from error
-                                raise
-                        job.done_bytes += item.entries[0].size
-                    else:
+                                    # Some mounted backends report one device id
+                                    # for separate volumes. EXDEV is authoritative.
+                                    item.publishing = False
+                                    item.entries = self._scan(job, fd, item.source.name)
+                                    item.cross_device = True
+                                    job.total_bytes = sum(e.size for i in job.items for e in i.entries)
+                                    job.persist()
+                                else:
+                                    raise
+                        if not item.cross_device:
+                            job.done_bytes += item.entries[0].size
+                            continue
+                    if not job.cut or item.cross_device:
+                        if stage_fd is None:
+                            stage_fd = self._stage(job, dest_fd)
                         if item.publishing and self._reconcile(job, dest_fd, stage_fd, str(index), item, job.owned[Path(str(index))]):
                             job.done_bytes += sum(e.size for e in item.entries)
                             for relative in list(job.owned):
                                 if relative.parts[0] == str(index):
                                     del job.owned[relative]
-                            continue
-                        self._copy_item(job, dest_fd, stage_fd, item, index)
+                            job.persist()
+                        elif not item.copied:
+                            self._copy_item(job, dest_fd, stage_fd, item, index)
+                        if item.cross_device and item.copied:
+                            from .move_cleanup import finish_move
+                            try:
+                                finish_move(self, job, dest_fd, item, index)
+                            except (OSError, ValueError) as error:
+                                if item.quarantine_id and item.entries[0].relative not in item.removed:
+                                    raise type(error)(f'{error} Remaining original: {item.source.parent / item.quarantine_name}') from error
+                                raise
+                            self._record_completed(job, item)
             finally:
                 if stage_fd is not None:
                     os.close(stage_fd)
@@ -560,10 +658,11 @@ class TransferEngine:
 
     def cleanup(self, job):
         """Remove only our private, identity-checked partials; never final outputs."""
-        if job.cut and any(item.publishing for item in job.items):
+        self._guard_pending_moves(job)
+        if job.cut and any(item.publishing and not item.cross_device for item in job.items):
             with directory_fd(job.destination, job.destination_id) as dest_fd:
                 for item in job.items:
-                    if item.publishing:
+                    if item.publishing and not item.cross_device:
                         with directory_fd(item.source.parent.resolve(strict=True), item.parent_id) as source_fd:
                             self._reconcile(job, dest_fd, source_fd, item.source.name, item, item.entries[0].identity)
         if not job.stage_name:
@@ -571,11 +670,21 @@ class TransferEngine:
         with directory_fd(job.destination, job.destination_id) as dest_fd:
             fd = self._stage(job, dest_fd)
             try:
+                if job.cleanup_removing is not None:
+                    relative = job.cleanup_removing
+                    try:
+                        with relative_parent(fd, relative, job.owned) as (parent, name):
+                            entry_stat(parent, name)
+                    except FileNotFoundError:
+                        job.owned.pop(relative, None)
+                    job.cleanup_removing = None
+                    job.persist()
                 for index, item in enumerate(job.items):
                     if item.publishing and self._reconcile(job, dest_fd, fd, str(index), item, job.owned[Path(str(index))]):
                         for relative in list(job.owned):
                             if relative.parts[0] == str(index):
                                 del job.owned[relative]
+                self._guard_pending_moves(job)
                 # Validate the entire tree before deleting any of it.
                 expected_top = {p.name for p in job.owned if len(p.parts) == 1}
                 if set(os.listdir(fd)) != expected_top:
@@ -588,15 +697,43 @@ class TransferEngine:
                                 raise RestartRequired('The partial folder contains unexpected entries; cleanup left it untouched.')
                 for relative in sorted(job.owned, key=lambda p: len(p.parts), reverse=True):
                     info = self._check_owned(job, fd, relative)
+                    job.cleanup_removing = relative
+                    job.persist()
                     with relative_parent(fd, relative, job.owned) as (parent, name):
+                        if identity(entry_stat(parent, name)) != job.owned[relative]:
+                            raise RestartRequired('A partial file was replaced before cleanup. It was left untouched.')
                         (os.rmdir if stat.S_ISDIR(info.st_mode) else os.unlink)(name, dir_fd=parent)
+                        self._sync_directory(parent)
                     del job.owned[relative]
+                    job.cleanup_removing = None
+                    job.persist()
                 if identity(entry_stat(dest_fd, job.stage_name)) != job.stage_id:
                     raise RestartRequired('The partial folder was replaced; cleanup left it untouched.')
                 os.rmdir(job.stage_name, dir_fd=dest_fd)
                 job.stage_name, job.stage_id = '', None
+                job.persist()
             finally:
                 os.close(fd)
+
+    @staticmethod
+    def _guard_pending_moves(job):
+        if any(item.cross_device and item.copied and not item.completed and not item.abandoned for item in job.items):
+            raise ValueError('A cross-drive copy is already published. Resume this move or choose Keep remaining originals; its recovery record must be kept.')
+
+    def keep_copies(self, job):
+        """Resolve a stopped cross-drive move without deleting remaining originals."""
+        job.error = ''
+        job.restart_required = False
+        from .move_cleanup import retain_original
+        for index, item in enumerate(job.items):
+            if item.cross_device and item.copied and not item.completed and not item.abandoned:
+                retain_original(self, job, item, index)
+            if item.copied:
+                for relative in list(job.owned):
+                    if relative.parts[0] == str(index):
+                        del job.owned[relative]
+                job.persist()
+        self.cleanup(job)
 
     def restart(self, job):
         self.cleanup(job)
@@ -614,7 +751,7 @@ class TransferQueue:
     """Queue runs one job; All runs up to three independent jobs per window."""
     ALL_LIMIT = 3
 
-    def __init__(self, engine=None, *, mode='queue'):
+    def __init__(self, engine=None, *, mode='queue', journal_dir=None):
         self.engine = engine or TransferEngine()
         self.jobs = []
         self.pending = []
@@ -626,6 +763,71 @@ class TransferQueue:
         self.events = SimpleQueue()
         self.mode = mode if mode in {'queue', 'all'} else 'queue'
         self.footprints = {}
+        self.journal = None
+        self.recovery_errors = []
+        self.save_errors = {}
+        self.annotation_failures = {}
+        self.closing = False
+        self.persistence_required = journal_dir is not None
+        if journal_dir is not None:
+            from .transfer_journal import TransferJournal
+            try:
+                self.journal = TransferJournal(journal_dir)
+                self.jobs = self.journal.recover()
+                self.recovery_errors = self.journal.errors
+                recovered_events = []
+                for job in self.jobs:
+                    self._bind(job)
+                    if job.cut:
+                        for source, target in job.completed.items():
+                            completed_at = job.completion_times.get(source, next((getattr(item, 'completed_at', 0)
+                                for item in job.items if item.source == source), 0))
+                            recovered_events.append((completed_at, job, source, target))
+                    if job.state not in TERMINAL:
+                        job.state = 'paused'
+                        job.phase = ('Interrupted cancellation · Finish cancelling to remove partials'
+                                     if job.cancel_requested else 'Recovered after closing · Resume to continue')
+                        job.recovered = True
+                        job.active_since = 0
+                        job.started = 0
+                        self.held = True
+                for _, job, source, target in sorted(recovered_events, key=lambda event: event[0]):
+                    self.events.put((job, source, target))
+            except OSError as error:
+                self.recovery_errors.append(f'Transfer recovery is unavailable: {error}')
+
+    def _bind(self, job):
+        self.footprints[job] = self._footprint(job)
+        job.on_completed = lambda source, target: self.events.put((job, source, target))
+        if self.journal:
+            job.on_checkpoint = self._checkpoint
+
+    def _checkpoint(self, job):
+        try:
+            self.journal.save(job)
+            self.save_errors.pop(job.id, None)
+        except Exception as error:
+            self.save_errors[job.id] = str(error)
+            raise
+
+    def _save(self, job):
+        if self.persistence_required and not self.journal:
+            raise OSError('Transfer recovery is unavailable. Reopen Gudfiles after fixing its state folder.')
+        job.persist()
+
+    @property
+    def busy(self):
+        with self.lock:
+            return bool(self.active_jobs)
+
+    def close(self):
+        """Release claims only after every stopped worker has saved its receipt."""
+        with self.lock:
+            self.closing = True
+            self.pause()
+            if not self.active_jobs and self.journal:
+                self.journal.close()
+
 
     @property
     def active(self):
@@ -678,9 +880,11 @@ class TransferQueue:
                               duplicate=duplicate)
             if not job.sources:
                 raise ValueError('Select at least one item.')
+            if self.closing:
+                raise OSError('The transfer queue is closing.')
+            self._bind(job)
+            self._save(job)
             self.jobs.append(job)
-            self.footprints[job] = self._footprint(job)
-            job.on_completed = lambda source, target: self.events.put((job, source, target))
             if start:
                 self.pending.append(job)
                 job.state, job.phase = 'waiting', 'Waiting for its turn'
@@ -697,10 +901,21 @@ class TransferQueue:
 
     def start(self, job=None):
         with self.lock:
+            if job is not None and getattr(job, 'recovery_operation', 'run') == 'keep' and job.state not in TERMINAL:
+                self.keep_copies(job)
+                return
+            if job is not None and getattr(job, 'recovery_operation', 'run') == 'restart' and job.state in {'paused', 'failed'}:
+                self.restart(job)
+                return
+            if job is not None and job.cancel_requested and job.state not in TERMINAL:
+                self.cancel(job)
+                return
             if job is not None and (job.state not in {'queued', 'waiting', 'paused', 'failed'} or job.restart_required):
                 return
             selected = [job] if job else [j for j in self.jobs if j.state in {'queued', 'waiting'}]
             if not selected:
+                return
+            if self.closing:
                 return
             self.held = False
             if job is not None and not self.active_jobs:
@@ -714,6 +929,8 @@ class TransferQueue:
             self._pump()
 
     def _pump(self):
+        if self.closing:
+            return
         # Requested cleanup can proceed while scheduling is held, but occupies
         # the same bounded worker slots as a normal transfer.
         while self.pending_cleanup and len(self.active_jobs) < self.limit:
@@ -740,18 +957,23 @@ class TransferQueue:
         job.active_since = time.monotonic()
         job.stop.clear()
         job.cancel_requested = operation == 'cancel'
+        job.recovery_operation = operation
         job.state = 'cancelling' if operation == 'cancel' else 'running'
 
         def worker():
             try:
+                self._save(job)
                 if operation == 'cancel':
                     self.engine.cleanup(job)
+                elif operation == 'keep':
+                    self.engine.keep_copies(job)
                 else:
                     if operation == 'restart':
                         self.engine.restart(job)
                     self.engine.run(job)
-                job.state = 'cancelled' if operation == 'cancel' else 'completed'
-                job.phase = 'Cancelled · completed items kept' if operation == 'cancel' else 'Complete'
+                job.state = 'cancelled' if operation in {'cancel', 'keep'} else 'completed'
+                job.phase = ('Stopped · copies and remaining originals kept' if operation == 'keep' else
+                             'Cancelled · completed items kept' if operation == 'cancel' else 'Complete')
             except Interrupted:
                 if job.cancel_requested:
                     try:
@@ -763,12 +985,20 @@ class TransferQueue:
                     job.state, job.phase = 'paused', 'Paused · saved bytes retained'
             except Exception as error:
                 job.state, job.error = 'failed', str(error)
-                job.restart_required = isinstance(error, RestartRequired)
+                job.restart_required = (isinstance(error, RestartRequired) and not any(
+                    item.cross_device and item.copied and not item.completed for item in job.items))
             finally:
                 with self.lock:
                     job.elapsed_seconds += time.monotonic() - job.active_since
                     job.active_since = 0
+                    try:
+                        self._save(job)
+                    except Exception as error:
+                        job.state = 'failed'
+                        job.error = f'Transfer recovery could not be saved: {error}'
                     self.active_jobs.remove(job)
+                    if self.closing and not self.active_jobs and self.journal:
+                        self.journal.close()
                     if job.state == 'failed' and self.mode == 'queue':
                         self.held = True
                     self._pump()
@@ -796,8 +1026,9 @@ class TransferQueue:
                 job.state = 'cancelling'
                 job.stop.set()
             elif job.state not in TERMINAL and job not in self.pending_cleanup:
-                if not job.stage_name and not any(item.publishing for item in job.items):
+                if not job.stage_name and not any(item.publishing or (item.copied and not item.completed) for item in job.items):
                     job.state, job.phase = 'cancelled', 'Cancelled · completed items kept'
+                    self._save(job)
                 else:
                     job.state, job.phase = 'cancelling', 'Waiting to remove partial copies'
                     self.pending_cleanup.append(job)
@@ -816,9 +1047,25 @@ class TransferQueue:
             self.held = False
             self._pump()
 
+    def keep_copies(self, job):
+        with self.lock:
+            if job in self.active_jobs or job.state not in {'failed', 'paused'}:
+                return
+            if job in self.pending:
+                self.pending.remove(job)
+            self.pending.insert(0, job)
+            self.operations[job] = 'keep'
+            job.state, job.phase = 'waiting', 'Waiting to keep copies and remaining originals'
+            self.held = False
+            self._pump()
+
     def clear_finished(self):
         with self.lock:
-            self.jobs[:] = [job for job in self.jobs if job.state not in TERMINAL or job in self.active_jobs]
+            if self.journal:
+                for job in self.jobs:
+                    if job.state in TERMINAL and job not in self.active_jobs and job.id not in self.annotation_failures:
+                        self.journal.remove(job.id)
+            self.jobs[:] = [job for job in self.jobs if job.state not in TERMINAL or job in self.active_jobs or job.id in self.annotation_failures]
             self.footprints = {job: paths for job, paths in self.footprints.items() if job in self.jobs}
 
     @property

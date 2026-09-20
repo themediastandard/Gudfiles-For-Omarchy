@@ -66,6 +66,11 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             GLib.source_remove(self.pending)
             self.pending = 0
 
+    def _sync_watch(self):
+        watcher = getattr(self.owner, 'folder_watch', None)
+        if watcher:
+            watcher.sync()
+
     def reset(self):
         self.cancel_pending()
         self.cancel_reveal()
@@ -76,6 +81,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         self.columns.clear()
         self.active = None
         self.busy = False
+        self._sync_watch()
 
     def rebuild(self):
         owner = self.owner
@@ -118,6 +124,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         if restore_focus:
             self.focus_column(column)
         self.busy = False
+        self._sync_watch()
 
     def focus_column(self, column, path=None):
         # Newly constructed flows are not mapped yet. GTK otherwise restores
@@ -197,6 +204,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         self.columns.append(column)
         self.box.append(panel)
         self.reveal_column(column)
+        self._sync_watch()
         return column
 
     def _populate(self, column):
@@ -231,22 +239,37 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             column.flow.append(child)
             column.children[item] = child
         column.empty.set_visible(not column.entries)
+        if not column.entries:
+            column.empty.set_text('Folder unavailable' if not column.path.is_dir() else
+                'No matching files' if owner.search.get_text() or owner.creative_filter != ('all', 0, '')
+                else 'Empty folder')
 
     def refresh_paths(self, paths):
-        """Refresh completed transfers in any visible column, preserving its trail."""
+        """Refresh changed columns, preserving selection, cursor and scroll."""
         owner = self.owner
         if owner._computer_search_active():
             owner._refresh_files()
             return
         self.cancel_pending()
+        self.cancel_reveal()
+        horizontal = self.get_hadjustment().get_value()
+        positions = {column.path: column.scroller.get_vadjustment().get_value()
+                     for column in self.columns}
+        focus = owner.get_focus()
+        focused_column = next((column for column in self.columns
+                               if focus is column.flow or
+                               (focus and focus.is_ancestor(column.flow))), None)
+        focused_row = focused_column.flow.get_focus_child() if focused_column else None
+        focused_path = getattr(focused_row, '_picker_path', None)
+        focused_index = focused_row.get_index() if focused_row else 0
+        owner.list_details.reset()
         self.busy = True
         try:
             for column in self.columns:
                 if column.path not in paths:
                     continue
                 selected = {c._picker_path for c in column.flow.get_selected_children()}
-                focus = owner.get_focus()
-                focused_path = getattr(focus, '_picker_path', None) if focus and focus.is_ancestor(column.flow) else None
+                column.flow.set_sort_func(None)
                 for path in column.children:
                     owner.rating_badges.pop(path, None)
                 cache = dict(owner.ratings.cache)
@@ -259,13 +282,60 @@ class ColumnBrowser(Gtk.ScrolledWindow):
                 for path in selected:
                     if path in column.children:
                         column.flow.select_child(column.children[path])
-                if focused_path:
-                    self.focus_column(column, focused_path)
+            # If an open folder disappeared, retain the surviving ancestors.
+            # Permission/disconnection failures alone do not destroy the trail.
+            for index, column in enumerate(self.columns[1:], 1):
+                try:
+                    column.path.stat()
+                except FileNotFoundError:
+                    if self.active in self.columns[index:]:
+                        self.active = self.columns[index - 1]
+                    for removed in self.columns[index:]:
+                        self.box.remove(removed.panel)
+                        for path in removed.children:
+                            owner.rating_badges.pop(path, None)
+                    del self.columns[index:]
+                    if focused_column not in self.columns and focused_column is not None:
+                        focused_column = self.active
+                        focused_path = None
+                    break
+                except OSError:
+                    pass
             if self.active:
                 self.activate(self.active, record=False)
                 owner._on_selection_changed(self.active.flow)
         finally:
             self.busy = False
+        self._sync_watch()
+        owner._rebuild_pathbar()
+        owner._update_nav_state()
+        snapshot = tuple(self.columns)
+        active = self.active
+        after_focus = owner.get_focus()
+        frames = 0
+
+        def restore(_widget, _clock):
+            nonlocal frames
+            if (tuple(self.columns) != snapshot or owner.view_mode != 'columns'
+                    or self.active is not active):
+                return False
+            frames += 1
+            if (frames == 1 and focused_column in self.columns
+                    and owner.get_focus() is after_focus):
+                child = focused_column.children.get(focused_path)
+                if child is None and focused_column.entries:
+                    child = focused_column.children[focused_column.entries[
+                        min(focused_index, len(focused_column.entries) - 1)]]
+                if child:
+                    focus_file(owner, child)
+                else:
+                    owner.set_focus(focused_column.flow)
+            self.get_hadjustment().set_value(horizontal)
+            for column in self.columns:
+                column.scroller.get_vadjustment().set_value(positions.get(column.path, 0))
+            return frames < 3
+
+        self.add_tick_callback(restore)
 
     def activate_focused(self):
         focus = self.owner.get_focus()
@@ -355,6 +425,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             self.busy = False
         if target:
             self.append(target)
+        self._sync_watch()
         owner._rebuild_pathbar()
         owner._update_nav_state()
         return False

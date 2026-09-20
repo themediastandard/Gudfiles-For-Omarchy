@@ -58,6 +58,10 @@ search results and feature counts are generated from that catalog.
 - Background right-click works in blank areas and empty folders
 - Mouse context menus anchor at the click; keyboard menus anchor at the selected file
 - Rename, Cut/Copy/Paste, Copy Location, Properties, and confirmed Trash/Delete
+- Automatic refresh of visible folders, preserving selection and scroll position
+- Ctrl+Z / Undo for renames, batch renames and same-drive moves in the current window
+- Saved transfer queues with paused recovery after closing or a crash
+- Verified cross-drive moves through Cut/Paste and Move to
 - Consistent, theme-aware dialogs with file summaries, labeled fields and inline
   validation; readable Properties cards with permissions and combined file sizes
 - GTK-shared bookmarks, hidden files, configurable list details, and sorting
@@ -145,9 +149,15 @@ active transfers finish before starting more. Use `Ctrl+Shift+V` to stage a
 clipboard batch without starting it, then **Start queue** or **Start all** when
 ready. A mode change does not start staged batches or resume paused transfers.
 Each transfer has its own pause/resume/cancel controls, and All includes
-**Pause all**. Queues last for the current Gudfiles session; closing Gudfiles asks
-before cancelling unfinished work. Moves are limited to the same filesystem;
-verified copies can cross volumes when the destination supports safe publication.
+**Pause all**. Closing Gudfiles offers **Save queue & close** for unfinished work.
+Recovered transfers wait for Resume after reopening; retained bytes and file
+identities are checked again. A saved job is claimed by only one window at a time.
+Copies and moves can cross volumes when the destination supports safe publication.
+Cross-drive moves verify copied data before removing unchanged originals. If
+cleanup stops, Resume continues safely; **Keep remaining originals** preserves
+the copy and any remaining source data without overwriting existing files.
+Same-drive moves retain their atomic rename behavior. Dragging across drives
+still copies by default.
 Automatically opened transfer panels close when quick transfers finish. Once a
 transfer reaches five minutes of running time, its panel stays open afterward.
 Manually opened panels, pauses and errors stay visible. Tiny
@@ -167,7 +177,15 @@ off the UI thread for visible rows; sorting by media reads the folder's entries
 in bounded batches and shows progress before applying the order. Missing values
 show a dash and sort last within the optional folders-first groups. Date Created
 uses filesystem birth time only; unavailable birth time is never replaced by
-Linux metadata-change time. Refresh with `F5` after changing files elsewhere.
+Linux metadata-change time. Visible folders refresh automatically after external
+changes. `F5` remains available, including on remote backends without change events.
+
+Use `Ctrl+Z` or right-click → Undo to reverse a rename, batch rename or same-drive
+move from the current window. Undo refuses changed entries or destination
+collisions and preserves completed portions if an operation only partially
+succeeds. History is limited to 20 actions and is cleared when the window closes;
+folders over 10,000 entries are not recorded. Text fields keep native Undo.
+Cross-drive moves and permanent deletion are excluded; Trash has its own Restore.
 
 Right-click a sidebar location for **Open**, **Open in New Window**, **Copy
 Location**, and **Properties**. Local folders also offer **Show in Enclosing

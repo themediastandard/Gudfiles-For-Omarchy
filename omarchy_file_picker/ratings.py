@@ -67,12 +67,22 @@ class RatingStore:
                 changes[key] = value
         self.cache.update(changes)
 
-    def move(self, mapping):
-        if not mapping or not self.database.exists():
+    def move(self, mapping, *, receipt=None):
+        if not mapping or (receipt is None and not self.database.exists()):
             return
         changes = {}
         removed = set()
         with self._connect() as db:
+            if receipt is not None:
+                # Commit the remap and its recovery acknowledgment in the same
+                # SQLite transaction. Replaying after a crash must not erase
+                # target annotations when the old source rows are already gone.
+                db.execute('CREATE TABLE IF NOT EXISTS transfer_receipts '
+                           '(receipt TEXT NOT NULL, source TEXT NOT NULL, '
+                           'PRIMARY KEY(receipt, source))')
+                mapping = {source: target for source, target in mapping.items()
+                           if not db.execute('SELECT 1 FROM transfer_receipts WHERE receipt=? AND source=?',
+                                             (receipt, self.key(source))).fetchone()}
             expanded = {self.key(a): self.key(b) for a, b in mapping.items() if a != b}
             roots = sorted(expanded.items(), key=lambda pair: len(pair[0]), reverse=True)
             # Directory renames carry annotations for their descendants too.
@@ -94,6 +104,9 @@ class RatingStore:
                 if value:
                     db.execute('INSERT INTO ratings VALUES (?, ?, ?, ?)', (target, *value))
                     changes[target] = (value[0], value[1], bool(value[2]))
+            if receipt is not None:
+                db.executemany('INSERT INTO transfer_receipts VALUES (?, ?)',
+                               [(receipt, self.key(source)) for source in mapping])
         # An I/O, constraint or commit failure must leave the visible cache in
         # the same state as the rolled-back database.
         for path in removed:

@@ -34,6 +34,7 @@ class RenameResult:
     completed: dict[Path, Path] = field(default_factory=dict)
     error: str | None = None
     cancelled: bool = False
+    undo_receipt: object = None
 
 
 def _identity(path):
@@ -311,12 +312,18 @@ def _dialog_class():
             plan = list(self.plan)
             def worker():
                 result = execute_rename(plan, self.cancelled)
+                from .undo import capture_receipt
+                expected = {item.source: item.identity for item in plan}
+                result.undo_receipt = capture_receipt(result.completed, 'Batch Rename', expected)
                 GLib.idle_add(self._completed, result)
             threading.Thread(target=worker, daemon=True).start()
 
         def _completed(self, result):
             self.active = self.owner.file_job_active = False
             if result.completed:
+                record = getattr(self.owner, '_record_undo', None)
+                if record:
+                    record(result.undo_receipt)
                 migrate = getattr(self.owner, '_creative_paths_renamed', None)
                 if migrate:
                     migrate(result.completed)

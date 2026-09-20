@@ -87,11 +87,16 @@ class CreativeTools:
             return False
         GLib.idle_add(update)
 
-    def _creative_paths_renamed(self, mapping):
+    def _creative_transfer_paths_renamed(self, mapping, receipt):
+        return self._creative_paths_renamed(mapping, receipt=receipt)
+
+    def _creative_paths_renamed(self, mapping, *, receipt=None):
         try:
-            self.ratings.move(mapping)
+            self.ratings.move(mapping, receipt=receipt)
+            return True
         except (OSError, sqlite3.Error) as error:
             self._show_error('Files renamed; labels could not follow', str(error))
+            return False
 
     def _rating_controls(self, paths):
         row = Gtk.Box(spacing=2, halign=Gtk.Align.START)

@@ -12,6 +12,7 @@ from gi.repository import GLib
 from omarchy_file_picker.file_actions import transfer_items
 from omarchy_file_picker.file_management import FileManagement
 from omarchy_file_picker.ratings import RatingStore, EMPTY
+from omarchy_file_picker.undo import UndoHistory
 
 
 class MoveAnnotationsTests(unittest.TestCase):
@@ -29,6 +30,7 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.store = RatingStore(self.root / 'ratings.sqlite3')
         self.store.set_many(self.paths, stars=4, color='blue')
         self.owner = FileManagement()
+        self.owner.undo_history = UndoHistory()
         self.owner.action_sounds = Mock()
         self.calls = []
         def migrate(mapping):
@@ -93,7 +95,8 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.assertTrue(all(self.store.get(path) == (4, 'blue', False) for path in self.paths))
 
     def test_queue_migrates_in_actual_commit_order_when_jobs_start_out_of_order(self):
-        self.owner._init_transfers()
+        with patch('omarchy_file_picker.transfer_ui.default_directory', return_value=self.root / 'journal'):
+            self.owner._init_transfers()
         self.owner.current_dir = self.root
         self.owner._refresh_files = lambda: None
         queue = self.owner.transfer_queue
@@ -117,6 +120,52 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.store.refresh([source, middle / source.name, self.destination / source.name])
         self.assertEqual(self.store.get(self.destination / source.name), (4, 'blue', False))
         self.assertEqual(self.store.get(middle / source.name), EMPTY)
+
+
+
+    def test_failed_labels_hold_chained_receipts_until_explicit_retry(self):
+        with patch('omarchy_file_picker.transfer_ui.default_directory', return_value=self.root/'journal'):
+            self.owner._init_transfers()
+        self.owner.current_dir = self.root
+        self.owner._refresh_files = lambda: None
+        queue = self.owner.transfer_queue
+        self.addCleanup(queue.close)
+        middle = self.root/'middle'
+        middle.mkdir()
+        source = self.paths[0]
+        first = queue.add([source], middle, cut=True)
+        second = queue.add([middle/source.name], self.destination, cut=True)
+        for job in [first, second]:
+            queue.start(job)
+            deadline = time.monotonic() + 5
+            while queue.active_jobs and time.monotonic() < deadline:
+                time.sleep(.005)
+            self.assertEqual(job.state, 'completed', job.error)
+        attempted = []
+        def save_labels(mapping, receipt):
+            attempted.append(receipt)
+            if len(attempted) == 1:
+                return False
+            self.store.move(mapping, receipt=receipt)
+            return True
+        self.owner._creative_transfer_paths_renamed = save_labels
+        self.owner._poll_transfers()
+        self.assertEqual(attempted, [first.id])
+        self.assertEqual(set(queue.annotation_failures), {first.id, second.id})
+        self.assertTrue(all(job.state == 'completed' and not job.error for job in [first, second]))
+        queue.clear_finished()
+        self.assertEqual(len(queue.jobs), 2)
+        self.assertEqual(len(list((self.root/'journal').glob('*.json'))), 2)
+        self.owner._retry_transfer_annotations()
+        self.assertEqual(attempted, [first.id, first.id, second.id])
+        self.assertFalse(queue.annotation_failures)
+        self.store.refresh([source, middle/source.name, self.destination/source.name])
+        self.assertEqual(self.store.get(source), EMPTY)
+        self.assertEqual(self.store.get(middle/source.name), EMPTY)
+        self.assertEqual(self.store.get(self.destination/source.name), (4, 'blue', False))
+        queue.clear_finished()
+        self.assertEqual(queue.jobs, [])
+        self.assertEqual(list((self.root/'journal').glob('*.json')), [])
 
 
 if __name__ == '__main__':

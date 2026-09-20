@@ -8,6 +8,7 @@ from gi.repository import GLib, Gtk, Pango
 
 from .model import format_size
 from .transfers import BUSY, TERMINAL, TransferQueue
+from .transfer_journal import default_directory
 
 KEEP_OPEN_SECONDS = 5 * 60
 
@@ -61,12 +62,20 @@ class TransferRow(Gtk.Box):
         self.error.set_lines(3)
         self.error.set_selectable(True)
         self.append(self.error)
+        self.retained = Gtk.Label(xalign=0, wrap=True, selectable=True, css_classes=['transfer-subtitle'])
+        self.retained.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.append(self.retained)
         controls = Gtk.Box(spacing=6)
         self.stats = text_label('', 'transfer-subtitle')
         controls.append(self.stats)
         self.restart = button('Restart unfinished', self._restart)
         self.restart.set_tooltip_text('Discard this batch’s partial copies and copy unfinished sources from the beginning. Completed items stay.')
         controls.append(self.restart)
+        self.keep_originals = button('Keep remaining originals', self._keep_originals)
+        self.keep_originals.set_tooltip_text('Stop removing originals. Keep verified copies and restore any remaining original files to a visible name without overwriting anything.')
+        controls.append(self.keep_originals)
+        self.retry_labels = button('Retry labels', owner._retry_transfer_annotations)
+        controls.append(self.retry_labels)
         self.primary = button('Start', self._primary, 'transfer-action')
         controls.append(self.primary)
         self.cancel = button('Cancel', lambda: owner.transfer_queue.cancel(job))
@@ -85,6 +94,11 @@ class TransferRow(Gtk.Box):
     def _restart(self):
         self.owner.transfer_auto_close = False
         self.owner.transfer_queue.restart(self.job)
+        self.owner._poll_transfers()
+
+    def _keep_originals(self):
+        self.owner.transfer_auto_close = False
+        self.owner.transfer_queue.keep_copies(self.job)
         self.owner._poll_transfers()
 
     def update(self):
@@ -113,9 +127,15 @@ class TransferRow(Gtk.Box):
         else:
             detail = job.phase + (f' · {job.current_name}' if state == 'running' and job.current_name else '')
         self.detail.set_text(detail)
-        self.error.set_text(job.error)
-        self.error.set_tooltip_text(job.error or None)
-        self.error.set_visible(bool(job.error))
+        annotation_error = queue.annotation_failures.get(job.id, '')
+        error = '\n'.join(message for message in (job.error, annotation_error) if message)
+        self.error.set_text(error)
+        self.error.set_tooltip_text(error or None)
+        self.error.set_visible(bool(error))
+        self.retry_labels.set_visible(bool(annotation_error))
+        retained = [str(item.retained_source) for item in job.items if item.abandoned and item.retained_source is not None]
+        self.retained.set_text('\n'.join('Originals kept at ' + path for path in retained))
+        self.retained.set_visible(bool(retained))
         if job.total_bytes:
             stats = f'{format_size(min(job.done_bytes, job.total_bytes))} / {format_size(job.total_bytes)}'
             elapsed = time.monotonic() - job.started if job.started else 0
@@ -126,34 +146,44 @@ class TransferRow(Gtk.Box):
             stats = f'{len(job.completed)} complete' if job.completed else ''
         self.stats.set_text(stats)
         self.primary.set_label('Pause' if state == 'running' else
-                               ('Resume' if job.stage_name and state in {'paused', 'failed'} else
+                               'Finish keeping originals' if getattr(job, 'recovery_operation', 'run') == 'keep' else
+                               'Finish cancelling' if job.cancel_requested else
+                               ('Resume' if (job.stage_name or getattr(job, 'recovered', False)) and state in {'paused', 'failed'} else
                                 'Continue' if state == 'paused' else 'Retry' if state == 'failed' else 'Start'))
         self.primary.set_visible(state in {'queued', 'waiting', 'running', 'paused', 'failed'} and
                                  (state != 'waiting' or queue.held) and not job.restart_required)
         self.primary.set_sensitive(state == 'running' or job not in queue.active_jobs)
         self.primary.set_tooltip_text('Retained bytes are compared with the unchanged source before continuing.'
                                      if job.stage_name else None)
-        self.restart.set_visible(state in {'failed', 'paused'} and bool(job.items or job.stage_name))
+        self.restart.set_visible(state in {'failed', 'paused'} and bool(job.items or job.stage_name) and
+                                 not job.cancel_requested and not any(item.copied and not item.completed and not item.abandoned for item in job.items))
         self.restart.set_sensitive(job not in queue.active_jobs)
+        self.keep_originals.set_visible(state in {'failed', 'paused'} and
+                                       any(item.copied and not item.completed and not item.abandoned for item in job.items))
+        self.keep_originals.set_sensitive(job not in queue.active_jobs)
         self.cancel.set_visible(state not in TERMINAL)
         self.cancel.set_sensitive(state != 'cancelling')
         if self.owner.transfer_cancel_close:
             self.primary.set_sensitive(False)
             self.restart.set_sensitive(False)
+            self.keep_originals.set_sensitive(False)
             self.cancel.set_sensitive(False)
 
 
 class TransferUI:
     def _init_transfers(self):
-        self.transfer_queue = TransferQueue()
+        self.transfer_queue = TransferQueue(journal_dir=default_directory())
         self.transfer_window = None
         self.transfer_rows = {}
         self.transfer_callbacks = {}
+        self.transfer_annotation_backlog = []
         self.transfer_seen_states = {}
+        self.transfer_historical_jobs = {job.id for job in self.transfer_queue.jobs if job.state in TERMINAL}
         self.transfer_sounds = {}
         self.transfer_changed_dirs = {}
         self.transfer_closing = None
         self.transfer_cancel_close = False
+        self.transfer_save_close = False
         self.transfer_cleanup_blocked = False
         self.transfer_timer = 0
         self.transfer_auto_close = False
@@ -177,6 +207,8 @@ class TransferUI:
         self.transfer_button.connect('clicked', lambda *_: self._show_transfers())
         self.transfer_timer = GLib.timeout_add(120, self._poll_transfers)
         self.connect('unrealize', self._dispose_transfers)
+        if self.transfer_queue.unfinished or self.transfer_queue.recovery_errors:
+            GLib.idle_add(lambda: self._show_transfers() and False)
         return self.transfer_button
 
     def _show_transfers(self, *, automatic_job=None):
@@ -234,6 +266,13 @@ class TransferUI:
             self.transfer_pause = button('Pause', self._pause_transfers)
             toolbar.append(self.transfer_pause)
             root.append(toolbar)
+            recovery_error = Gtk.Label(label='\n'.join(self.transfer_queue.recovery_errors),
+                                       xalign=0, wrap=True, selectable=True,
+                                       visible=bool(self.transfer_queue.recovery_errors),
+                                       css_classes=['error'])
+            recovery_error.set_margin_start(10)
+            recovery_error.set_margin_end(10)
+            root.append(recovery_error)
             scroll = Gtk.ScrolledWindow(vexpand=True)
             scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
             self.transfer_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -256,6 +295,8 @@ class TransferUI:
             close_controls = Gtk.Box(spacing=8, halign=Gtk.Align.END)
             self.transfer_keep = button('Keep Gudfiles open', self._keep_transfers)
             close_controls.append(self.transfer_keep)
+            self.transfer_save = button('Save queue & close', self._save_transfers_and_close, 'transfer-action')
+            close_controls.append(self.transfer_save)
             self.transfer_close_confirm = button('Cancel unfinished & close', self._cancel_transfers_and_close, 'transfer-action')
             close_controls.append(self.transfer_close_confirm)
             self.transfer_leave = button('Leave partials & close', self._leave_partials_and_close)
@@ -265,7 +306,7 @@ class TransferUI:
             root.append(self.transfer_close_box)
             footer = Gtk.Box(spacing=12)
             footer.add_css_class('transfer-footer')
-            note = text_label('Queue stays in this Gudfiles session. Closing this panel keeps transfers running.', 'transfer-subtitle')
+            note = text_label('Unfinished transfers are saved. After reopening Gudfiles, choose Resume to continue.', 'transfer-subtitle')
             note.set_wrap(True)
             note.set_ellipsize(Pango.EllipsizeMode.NONE)
             note.set_lines(2)
@@ -298,9 +339,13 @@ class TransferUI:
             if keep_open:
                 self.transfer_auto_close = False
         self.transfer_note.set_text(
+            'Transfer recovery is unavailable. Resolve the reported storage error before adding transfers.'
+            if self.transfer_queue.journal is None and self.transfer_queue.persistence_required else
+            'Some transfer changes could not be saved. Keep Gudfiles open and retry after fixing storage.'
+            if self.transfer_queue.save_errors else
             'Closes when quick transfers finish. Transfers lasting 5 minutes stay open.'
             if self.transfer_auto_close else
-            'Queue stays in this Gudfiles session. Closing this panel keeps transfers running.')
+            'Unfinished transfers are saved. After reopening Gudfiles, choose Resume to continue.')
         if self._can_auto_hide_transfers():
             self.transfer_window.set_visible(False)
 
@@ -321,6 +366,34 @@ class TransferUI:
         self._set_file_preference('transfer_mode', mode, reload=False)
         self._poll_transfers()
 
+    def _retry_transfer_annotations(self):
+        self.transfer_queue.annotation_failures.clear()
+        self._process_transfer_annotations()
+        self._poll_transfers()
+
+    def _process_transfer_annotations(self):
+        queue = self.transfer_queue
+        while self.transfer_annotation_backlog and not queue.annotation_failures:
+            job = self.transfer_annotation_backlog[0][0]
+            batch = []
+            for event in self.transfer_annotation_backlog:
+                if event[0] is not job:
+                    break
+                batch.append(event)
+            mapping = {source: target for _, source, target in batch}
+            durable_callback = getattr(self, '_creative_transfer_paths_renamed', None)
+            callback = getattr(self, '_creative_paths_renamed', None)
+            success = (durable_callback(mapping, job.id) if durable_callback else
+                       callback(mapping) if callback else True)
+            if success is False:
+                queue.annotation_failures[job.id] = 'Files moved, but labels could not be saved. Retry labels; the recovery record is kept.'
+                break
+            del self.transfer_annotation_backlog[:len(batch)]
+        # Later remaps may depend on earlier ones (A → B → C). Hold the entire
+        # remaining receipt stream in commit order until the first failure clears.
+        for job, _, _ in self.transfer_annotation_backlog:
+            queue.annotation_failures.setdefault(job.id, 'Labels are waiting for an earlier update. Retry labels; recovery records are kept.')
+
     def _poll_transfers(self):
         queue = self.transfer_queue
         with queue.lock:
@@ -339,12 +412,17 @@ class TransferUI:
             if job.cut:
                 changed.update(source.parent for source in mapping)
             if job.cut:
-                callback = getattr(self, '_creative_paths_renamed', None)
-                if callback:
-                    callback(mapping)
+                record_undo = getattr(self, '_record_undo', None)
+                if record_undo:
+                    for item in job.items:
+                        if item.source in mapping and item.undo_receipt is not None:
+                            record_undo(item.undo_receipt)
+                            item.undo_receipt = None
                 clipboard = self.transfer_callbacks.get(job.id)
                 if clipboard:
                     clipboard(dict(job.completed))
+        self.transfer_annotation_backlog.extend(event for event in completed_events if event[0].cut)
+        self._process_transfer_annotations()
         completed_sound = None
         for job in jobs:
             previous = self.transfer_seen_states.get(job.id)
@@ -353,6 +431,9 @@ class TransferUI:
                 # A browsing user may have navigated away: don't select outputs
                 # from a different directory or steal their current selection.
                 changed = self.transfer_changed_dirs.pop(job.id, set())
+                if state == 'cancelled' and any(item.abandoned for item in job.items):
+                    changed.add(job.destination)
+                    changed.update(item.source.parent for item in job.items if item.abandoned)
                 if (getattr(self, 'view_mode', None) == 'columns' and
                         any(column.path in changed for column in self.columns.columns)):
                     self.columns.refresh_paths(changed)
@@ -361,7 +442,7 @@ class TransferUI:
                 if state in TERMINAL:
                     self.transfer_callbacks.pop(job.id, None)
                     cue = self.transfer_sounds.pop(job.id, 'complete')
-                    if state == 'completed' and job.completed:
+                    if state == 'completed' and job.completed and job.id not in self.transfer_historical_jobs:
                         completed_sound = cue
             self.transfer_seen_states[job.id] = state
         if completed_sound:
@@ -412,15 +493,30 @@ class TransferUI:
             self.transfer_pause.set_sensitive(any(job.state == 'running' for job in active))
             self.transfer_close_box.set_visible(self.transfer_closing is not None)
             self.transfer_close_label.set_text(
+                'Saving transfers before closing. Waiting for the current filesystem operation…'
+                if self.transfer_save_close else
                 'Stopping transfers before closing. Waiting for the current filesystem operation and cleanup…'
                 if self.transfer_cancel_close else
+                'The queue could not be saved. Keep Gudfiles open and retry after fixing the storage error.'
+                if queue.save_errors else
                 'Cleanup could not finish. Keep Gudfiles open to retry, or leave the hidden partial folders and close this session. Sources and completed items stay.'
                 if self.transfer_cleanup_blocked else
-                'Gudfiles has unfinished transfers. Keep this session open to preserve the queue and saved bytes, or cancel unfinished work to close. Completed items stay.')
-            self.transfer_close_confirm.set_sensitive(not self.transfer_cancel_close)
-            self.transfer_keep.set_sensitive(not self.transfer_cancel_close)
+                'Gudfiles has unfinished transfers. Save the queue to resume after reopening, keep working, or cancel unfinished work. Completed items stay.')
+            self.transfer_close_confirm.set_sensitive(not self.transfer_cancel_close and not self.transfer_save_close)
+            self.transfer_keep.set_sensitive(not self.transfer_cancel_close and not self.transfer_save_close)
+            self.transfer_save.set_sensitive(not self.transfer_cancel_close and not self.transfer_save_close and self.transfer_queue.journal is not None)
             self.transfer_leave.set_visible(self.transfer_cleanup_blocked)
             self._update_transfer_visibility()
+        if self.transfer_save_close and not active_at_snapshot and not queue.active_jobs:
+            self.transfer_save_close = False
+            if queue.save_errors:
+                self.transfer_cleanup_blocked = True
+                self.transfer_close_label.set_text('The queue could not be saved. Keep Gudfiles open, resolve the storage error shown on the transfer, and retry.')
+                return True
+            callback = self.transfer_closing
+            self.transfer_closing = None
+            if callback:
+                GLib.idle_add(lambda: callback() or False)
         if self.transfer_cancel_close and not active_at_snapshot and not queue.active_jobs:
             next_job = next((job for job in jobs if job.state not in TERMINAL), None)
             if next_job is not None:
@@ -458,6 +554,20 @@ class TransferUI:
         self.transfer_seen_states = {k: v for k, v in self.transfer_seen_states.items() if not k.startswith('cleanup:')}
         self._poll_transfers()
 
+    def _save_transfers_and_close(self):
+        if self.transfer_queue.journal is None:
+            return
+        self.transfer_save_close = True
+        self.transfer_queue.pause()
+        for job in self.transfer_queue.jobs:
+            if job not in self.transfer_queue.active_jobs:
+                try:
+                    self.transfer_queue._save(job)
+                except Exception as error:
+                    job.state = 'failed'
+                    job.error = f'The queue could not be saved: {error}'
+        self._poll_transfers()
+
     def _cancel_transfers_and_close(self):
         self.transfer_cleanup_blocked = False
         self.transfer_seen_states = {k: v for k, v in self.transfer_seen_states.items() if not k.startswith('cleanup:')}
@@ -477,7 +587,7 @@ class TransferUI:
         self.transfer_queue.operations.clear()
         for job in self.transfer_queue.jobs:
             if job.state not in TERMINAL:
-                job.state = 'cancelled'
+                job.state = 'paused'
         callback = self.transfer_closing
         self.transfer_closing = None
         self.transfer_cancel_close = False
@@ -491,6 +601,5 @@ class TransferUI:
         if self.transfer_window:
             self.transfer_window.destroy()
             self.transfer_window = None
-        # Normal application close is guarded above. Direct widget destruction
-        # (e.g. a host teardown) still stops the worker at its next checkpoint.
-        self.transfer_queue.pause()
+        # Release journal claims only once stopped workers have saved their state.
+        self.transfer_queue.close()

@@ -14,6 +14,7 @@ from .dialogs import PickerDialog, confirmation, detail_card, entry_field, file_
 from .file_actions import (RemovalError, TrashUnavailable, delete_after_trash_failure,
                           parse_file_clipboard, remove_items, rename_item, transfer_items)
 from .transfer_ui import TransferUI
+from .undo import UndoHistory, capture_receipt
 from .sound_effects import ActionSounds
 from .list_metadata import ANNOTATION_COLUMNS, COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, normalize_columns
 
@@ -46,6 +47,7 @@ class FileManagement(TransferUI):
 
     def _init_file_management(self):
         self.file_job_active = False
+        self.undo_history = UndoHistory()
         self._init_transfers()
         self.preferences_path = Path.home() / '.config/omarchy-file-picker/preferences.json'
         self.bookmarks_path = Path.home() / '.config/gtk-3.0/bookmarks'
@@ -260,6 +262,46 @@ class FileManagement(TransferUI):
             return False
         threading.Thread(target=worker, daemon=True).start()
 
+    def _record_undo(self, receipt):
+        self.undo_history.record(receipt)
+
+    def _can_undo(self):
+        return (not self.file_job_active and not self.transfer_queue.unfinished and
+                self.undo_history.peek() is not None)
+
+    def _undo_label(self):
+        receipt = self.undo_history.peek() if not self.file_job_active else None
+        return 'Undo ' + receipt.label if receipt else 'Undo'
+
+    def _undo_file_action(self):
+        if not self._can_undo():
+            return
+        result = []
+
+        def work():
+            result.append(self.undo_history.undo())
+            return list(result[0].completed.values())
+
+        def refresh(_paths):
+            if not result:
+                return
+            outcome = result[0]
+            mapping = outcome.completed
+            if mapping:
+                migrate = getattr(self, '_creative_paths_renamed', None)
+                if migrate:
+                    migrate(mapping)
+                changed = {path.parent for pair in mapping.items() for path in pair}
+                if self.view_mode == 'columns':
+                    self.columns.refresh_paths(changed)
+                elif self.current_dir in changed or self._computer_search_active():
+                    self._refresh_files()
+            if outcome.error:
+                self._show_error('Could not finish Undo', outcome.error +
+                                 (f'\n{len(mapping)} item(s) restored; remaining items were not changed.' if mapping else ''))
+
+        self._run_file_job(self._undo_label(), work, refresh=refresh)
+
     def _extract_zip(self, path):
         from .archives import extract_zip
         if self.file_job_active:
@@ -303,25 +345,28 @@ class FileManagement(TransferUI):
             if child: self.flow.select_child(child)
 
     def _show_rename_dialog(self, path):
+        if self.file_job_active:
+            return
         dialog = PickerDialog(self, 'Rename', subtitle='Choose a new name for this item.')
         dialog.body.append(file_summary(path))
         entry = Gtk.Entry(text=path.name, activates_default=True)
         hint = f'Keep {path.suffix} to preserve the file type.' if path.is_file() and path.suffix else ''
         dialog.body.append(entry_field('New name', entry, hint))
-        dialog.add_action('Cancel', Gtk.ResponseType.CANCEL)
+        cancel = dialog.add_action('Cancel', Gtk.ResponseType.CANCEL)
         rename = dialog.add_action('Rename', Gtk.ResponseType.ACCEPT, role='suggested-action', default=True)
         rename.set_sensitive(False)
         def changed(*_):
             dialog.clear_error()
             rename.set_sensitive(bool(entry.get_text().strip()) and entry.get_text().strip() != path.name)
         entry.connect('changed', changed)
-        def response(_dialog, code):
-            if code != Gtk.ResponseType.ACCEPT:
-                self._dismiss_dialog(dialog)
-                return
-            try:
-                target = rename_item(path, entry.get_text())
-            except (ValueError, OSError, GLib.Error) as error:
+        busy = [False]
+
+        def complete(target, receipt, error):
+            busy[0] = self.file_job_active = False
+            entry.set_sensitive(True)
+            cancel.set_sensitive(True)
+            rename.set_sensitive(True)
+            if error:
                 message = str(error)
                 if isinstance(error, GLib.Error):
                     message = error.message
@@ -332,12 +377,42 @@ class FileManagement(TransferUI):
                     elif error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_FOUND):
                         message = 'This item is no longer in this folder.'
                 dialog.set_error(message, entry)
-                return
+                entry.grab_focus()
+                return False
+            self._record_undo(receipt)
             self._dismiss_dialog(dialog)
             migrate = getattr(self, '_creative_paths_renamed', None)
             if migrate and target != path:
                 migrate({path: target})
             self._refresh_files([target])
+            return False
+
+        def response(_dialog, code):
+            if busy[0]:
+                return
+            if code != Gtk.ResponseType.ACCEPT:
+                self._dismiss_dialog(dialog)
+                return
+            if self.file_job_active:
+                dialog.set_error('Wait for the current file operation to finish.', entry)
+                return
+            busy[0] = self.file_job_active = True
+            dialog.set_focus(None)
+            entry.set_sensitive(False)
+            cancel.set_sensitive(False)
+            rename.set_sensitive(False)
+            name = entry.get_text()
+
+            def worker():
+                try:
+                    info = path.lstat()
+                    target = rename_item(path, name)
+                    receipt = capture_receipt({path: target}, 'Rename',
+                                              (info.st_dev, info.st_ino, stat_module.S_IFMT(info.st_mode)))
+                    GLib.idle_add(complete, target, receipt, None)
+                except Exception as error:
+                    GLib.idle_add(complete, None, None, error)
+            threading.Thread(target=worker, daemon=True).start()
         dialog.connect('response', response)
         dialog.present()
         entry.grab_focus()
@@ -630,6 +705,8 @@ class FileManagement(TransferUI):
                  'bookmark-new-symbolic', lambda: self._toggle_bookmark(folder)),
                 ('Properties', '', 'dialog-information-symbolic', lambda: self._show_properties([folder])),
             ])
+        separator()
+        action(self._undo_label(), self._undo_file_action, 'edit-undo-symbolic', self._can_undo(), 'Ctrl+Z')
         separator()
         prefs = self.file_preferences
         options = [

@@ -144,7 +144,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                 (folder / 'nested.txt').write_text('nested bytes')
                 (folder / 'Empty').mkdir()
                 (destination / first.name).write_text('keep existing')
-                with patch('omarchy_file_picker.picker.load_colors', return_value=colors):
+                with patch('omarchy_file_picker.picker.load_colors', return_value=colors), \
+                        patch.dict(os.environ, {'XDG_STATE_HOME': str(source.parent / 'state')}):
                     window = PickerWindow(app, PickerRequest(current_folder=source, explorer=True,
                                                             multiple=True), None)
                     window.set_default_size(820, 650)
@@ -259,7 +260,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                         assert job.completed[first] != first
                         assert job.completed[first].read_text() == first.read_text() == 'keep source'
 
-                        # The new action retains the engine's cross-volume move refusal.
+                        # Cross-volume moves verify the published bytes before
+                        # removing the source through the same destination UI.
                         with tempfile.TemporaryDirectory(prefix='gudfiles-move-', dir='/dev/shm') as other:
                             assert Path(other).stat().st_dev != source.stat().st_dev
                             chooser = open_destination(window, [first], cut=True)
@@ -267,12 +269,16 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                             chooser.accept_button.emit('clicked')
                             settle()
                             job = window.transfer_queue.jobs[-1]
-                            wait_for(lambda: job.state == 'failed')
-                            assert 'Moving between volumes is not supported' in job.error
-                            assert first.read_text() == 'keep source'
-                            assert not list(Path(other).iterdir())
-                            window.transfer_queue.cancel(job)
-                            wait_for(lambda: job.state == 'cancelled')
+                            wait_for(lambda: job.state in {'completed', 'failed'})
+                            assert job.state == 'completed', job.error
+                            moved = Path(other) / first.name
+                            assert moved.read_text() == 'keep source'
+                            assert not first.exists()
+                            assert job.completed[first] == moved
+                            # Recreate only this disposable source for the next
+                            # independent queue-rejection scenario.
+                            first.write_bytes(moved.read_bytes())
+                            wait_for(lambda: first in window.children_by_path)
 
                         count = len(window.transfer_queue.jobs)
                         chooser = open_destination(window, [first])

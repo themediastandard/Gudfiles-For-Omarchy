@@ -1,5 +1,6 @@
 from pathlib import Path
 import tempfile
+import time
 import traceback
 import gi
 gi.require_version('Gtk', '4.0')
@@ -55,6 +56,12 @@ def entry_in(widget):
 class Gesture:
     def set_state(self,state): assert state == Gtk.EventSequenceState.CLAIMED
 
+def settle_rename():
+    deadline = time.monotonic() + 3
+    while w.file_job_active and time.monotonic() < deadline:
+        GLib.MainContext.default().iteration(True)
+    assert not w.file_job_active, 'rename did not finish'
+
 def start():
     # Hit-test unoccupied space below the file tiles, not just the FlowBox.
     w._on_context_pressed(Gesture(),1,w.browser_stack.get_width()-30,w.browser_stack.get_height()-30)
@@ -72,9 +79,11 @@ def start():
     assert (source/'created').is_dir()
     w._show_rename_dialog(source/'a.txt')
     d=dialog('Rename'); entry_in(d).set_text('b.txt'); d.response(Gtk.ResponseType.ACCEPT)
+    settle_rename()
     assert (source/'a.txt').read_text()=='original'
     assert (source/'b.txt').read_text()=='collision'
     entry_in(d).set_text('renamed.txt'); d.response(Gtk.ResponseType.ACCEPT)
+    settle_rename()
     assert (source/'renamed.txt').read_text()=='original'
     w._toggle_bookmark(source)
     assert w._bookmarks()==[(source,'source')]
