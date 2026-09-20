@@ -132,7 +132,7 @@ FEATURES = (
             'Press Delete, Super + Backspace or Super + Delete to move selected items to Trash after confirmation. If a location such as a NAS does not support Trash, Gudfiles explains this and offers a separate permanent-delete confirmation for those items. Cancel keeps them in place. Shift + Delete permanently deletes after confirmation. All destructive dialogs start on Cancel.',
             'Del / Super+Backspace'),
     Feature('organize', 'Restore from Trash',
-            'Choose Trash in the sidebar to browse deleted items and their original folders. Select items, then Restore Selected. Existing files are never replaced; failed items stay in Trash. Refresh reloads the desktop Trash.',
+            'Choose Trash in the sidebar to browse deleted items and their original folders in the main window. Use Back and Forward or open Trash in a tab. Search filters deleted names and original locations. Select items, then Restore Selected. Existing files are never replaced; failed items stay in Trash. Refresh reloads the desktop Trash.',
             keywords='recover deleted restore trash bin'),
     Feature('organize', 'Right-click actions',
             'Right-click a file, blank folder space or a sidebar location for its actions. Hover over a row with an arrow to open its submenu. Shift + F10 opens the menu for the focused item.',

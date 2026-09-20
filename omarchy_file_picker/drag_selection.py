@@ -28,6 +28,9 @@ class BackgroundSelection(Gtk.DrawingArea):
 
     def _begin(self, gesture, x, y):
         self.cancel()
+        if self.owner.special_mode == 'trash':
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
+            return
         widget = self.owner.browser_stack.pick(x, y, Gtk.PickFlags.DEFAULT)
         while widget and widget is not self.owner.browser_stack:
             if isinstance(widget, (Gtk.FlowBoxChild, Gtk.Scrollbar, Gtk.Popover)):

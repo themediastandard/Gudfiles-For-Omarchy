@@ -52,6 +52,12 @@ class PickerRequest:
     app_id: str = ""
     external: bool = False
     selected_paths: list[Path] = field(default_factory=list)
+    # Destination prompts show surrounding files while accepting folders only.
+    show_files_in_directory: bool = False
+
+    @property
+    def directories_only(self) -> bool:
+        return self.directory and not self.show_files_in_directory
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PickerRequest":

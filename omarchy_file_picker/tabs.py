@@ -109,6 +109,7 @@ class BrowserTabs(Gtk.Box):
             columns=[(c.path, [r._picker_path for r in c.flow.get_selected_children()],
                       c.scroller.get_vadjustment().get_value()) for c in owner.columns.columns],
             horizontal=owner.columns.get_hadjustment().get_value(),
+            trash=owner.trash_page.capture() if owner.special_mode == 'trash' else {},
         )
 
     def update(self):
@@ -117,17 +118,21 @@ class BrowserTabs(Gtk.Box):
         self.current.path = self.owner.current_dir
         self.current.state['special_mode'] = self.owner.special_mode
         for tab in self.items:
-            name = 'Recent' if tab.state.get('special_mode') else tab.path.name or '/'
+            mode = tab.state.get('special_mode')
+            name = mode.title() if mode else tab.path.name or '/'
             tab.label.set_text(name)
-            tab.button.set_tooltip_text(str(tab.path) if name != 'Recent' else name)
+            tab.button.set_tooltip_text(name if mode else str(tab.path))
             (tab.widget.add_css_class if tab is self.current else tab.widget.remove_css_class)('active')
 
-    def new(self, path=None, *, background=False):
+    def new(self, path=None, *, background=False, special_mode=None):
         if not self.owner.request.explorer:
             return None
         self.capture()
+        if path is None and self.owner.special_mode == 'trash' and special_mode is None:
+            special_mode = 'trash'
         tab = self._add(Path(path) if path is not None else self.owner.current_dir)
-        tab.state = dict(view=self.owner.view_mode, history=[tab.path], history_index=0)
+        tab.state = dict(view=self.owner.view_mode, special_mode=special_mode,
+                         history=[(special_mode, tab.path) if special_mode else tab.path], history_index=0)
         if not background:
             self.select(tab)
         self.update()
@@ -152,6 +157,7 @@ class BrowserTabs(Gtk.Box):
         try:
             owner.current_dir = tab.path
             owner.special_mode = state.get('special_mode')
+            owner._trash_restore_state = state.get('trash', {})
             owner.history = list(state.get('history', [tab.path]))
             owner.history_index = state.get('history_index', len(owner.history) - 1)
             owner.show_hidden = state.get('hidden', False)
@@ -173,6 +179,8 @@ class BrowserTabs(Gtk.Box):
         def restore(_widget, _clock):
             nonlocal frames
             if generation != self.generation:
+                return False
+            if owner.special_mode == 'trash':
                 return False
             frames += 1
             # GTK allocates rows and adjustment ranges on the next frame.
@@ -309,6 +317,10 @@ class BrowserTabs(Gtk.Box):
 
     def _middle_sidebar(self, gesture, _n, x, y):
         button = self.owner._sidebar_target(self.owner.sidebar_scroll.pick(x, y, Gtk.PickFlags.DEFAULT))
+        if self.items and getattr(button, '_sidebar_key', None) == 'trash':
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            self.new(background=True, special_mode='trash')
+            return
         path = getattr(button, '_picker_path', None)
         if self.items and path:
             gesture.set_state(Gtk.EventSequenceState.CLAIMED)

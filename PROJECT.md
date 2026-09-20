@@ -105,6 +105,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 - Right-clicking a file or selection offers **Copy to…** and **Move to…**.
   A modal Gudfiles folder picker chooses the destination with Copy here/Move
   here; it captures the source selection and leaves the clipboard unchanged.
+  Existing files remain visible as disabled entries while browsing destinations,
+  including nested columns and whole-computer search. Only folders can be
+  destinations; activating a displayed file does not submit the prompt. Ordinary
+  portal folder pickers retain their folder-only listings.
   Cancel/close schedules nothing. The parent owns progress, queue controls,
   refreshes, move annotation receipts and close guards. Copies choose available
   names; moves retain the existing no-overwrite and same-filesystem constraints.
@@ -509,7 +513,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 ## Architecture
 
 - `omarchy_file_picker/trash.py` / `trash_ui.py` — desktop Trash enumeration,
-  safe original-location restoration and the native sidebar-launched browser.
+  safe original-location restoration and the inline Trash browser location.
 - `omarchy_file_picker/context_menu.py` — shared hover navigation, delayed
   submenu handoff, native keyboard/pointer transitions and menu-bound cleanup.
 - `omarchy_file_picker/tab_strip.py` — equal-width native tab allocation with
@@ -599,6 +603,7 @@ PYTHONPATH=. python tests/ui_list_details.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_rating_columns.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_mount_controls.py
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_trash_inline.py
 THUMBNAIL_NEF=/path/to/sample.NEF PYTHONPATH=. python tests/ui_thumbnails.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
@@ -990,17 +995,26 @@ gdbus introspect --session \
   A root capture gesture now dismisses clicks outside its allocation. Native
   Wayland checks cover popup ordering; isolated X11 checks cover real input.
   Desktop clicks and no click-through to Search are separately verified.
-- Trash in the sidebar opens a native, resizable browser with original folders,
-  deletion dates, multi-selection, Refresh and Restore Selected. `trash.py`
+- Trash in the sidebar opens in the main browser, with original folders,
+  deletion dates, multi-selection, Refresh and Restore Selected. It has its own
+  breadcrumb, sidebar highlight and tab title, participates in Back/Forward,
+  and supports independent tab selections and search of names/original paths.
+  File-only toolbar controls and picker acceptance are disabled in Trash;
+  hidden ordinary-folder selections cannot receive file actions. `trash.py`
   reads GIO's `trash:///` and restores only current entries to their recorded
   absolute destinations, with no overwrite. `trash_ui.py` performs reads/moves
-  off the GTK thread, blocks close during restoration, reports partial results,
-  preserves failed rows and cancels/discards closed-browser reads. Existing
+  off the GTK thread, reports partial results inline, preserves failed rows,
+  and cancels/discards reads after leaving the location. Restoration continues
+  through navigation without pulling the user back; its receipt survives
+  refresh or return. Window close is guarded during file operations. Existing
   files are never replaced. Missing original parent folders or unavailable
   mounted volumes produce a visible failure; no destination is guessed.
   Native active/light/dark tests use only uniquely named owned fixtures and
   verify real file/folder bytes, collisions, partial success, unavailable/retry,
-  empty/reopen, close-during-read and sidebar hide/restore. Permanent deletion
+  empty/reopen, leave-during-read and sidebar hide/restore. Isolated physical
+  pointer/keyboard checks cover row selection, context dismissal, tabs/history,
+  asynchronous search focus, restore during navigation, and Save/folder safety.
+  Permanent deletion
   remains the existing confirmed file action; the new Trash browser is for
   recovery and does not offer Empty Trash. Installed real-GIO checks also pass;
   all 58 installed runtime files match source, with rollback backups. Existing
@@ -1176,6 +1190,17 @@ gdbus introspect --session \
   installed package. Extended physical-pointer tests pass on isolated X11 at
   820/1200 pixels in both themes; all 216 unit tests pass. Installed with the
   guarded installer and a backup; all 51 installed runtime files match source.
+
+- Destination file visibility (2026-09-19): reproduced hidden existing files in
+  the native destination test before the fix. All 234 unit tests pass; expanded
+  `tests/ui_transfer_destination.py` verifies visible, disabled file rows,
+  nested columns, whole-computer results and rejected file activation in all
+  three views and active/light palettes, alongside real copy/move outcomes.
+  Native search and explorer/Open/Save regressions pass. An isolated runtime
+  staged from the installed package plus only this fix passes the same destination
+  suite. The five-file fix was installed with the guarded installer and a rollback
+  backup, without deploying the concurrent Trash changes. All 58 installed runtime
+  files match that tested stage, and its installed destination suite passes.
 
 - Destination-transfer verification (2026-09-18): all 216 unit tests pass.
   `tests/ui_transfer_destination.py` checks native context hit testing, single/

@@ -81,6 +81,8 @@ class SidebarMenus:
             kind = button._sidebar_kind
             action('Connect to NAS…' if kind == 'connect' else 'Open',
                    lambda: button.emit('clicked'), 'network-server-symbolic' if kind == 'connect' else 'folder-open-symbolic')
+            if button._sidebar_key == 'trash' and self.request.explorer:
+                action('Open in New Tab', lambda: self.tabs.new(special_mode='trash'), 'tab-new-symbolic')
             if path:
                 if self.request.explorer:
                     action('Open in New Tab', lambda: self.tabs.new(path), 'tab-new-symbolic')

@@ -75,13 +75,14 @@ class SearchTools:
         self.search_scope_buttons[self.search_scope].set_active(True)
         for scope, button in self.search_scope_buttons.items():
             (button.add_css_class if scope == self.search_scope else button.remove_css_class)('active')
-        computer = self.search_scope == 'computer'
-        self.search.set_property('placeholder-text', 'Search whole computer' if computer else 'Search this folder')
-        self.search_hint.set_text('Search accessible files and mounted drives by name.' if computer
+        trash = self.special_mode == 'trash'
+        computer = self.search_scope == 'computer' and not trash
+        self.search.set_property('placeholder-text', 'Search Trash' if trash else 'Search whole computer' if computer else 'Search this folder')
+        self.search_hint.set_text('Search deleted names and original locations.' if trash else 'Search accessible files and mounted drives by name.' if computer
                                   else 'Search names in this folder, without subfolders.')
 
     def _computer_search_active(self):
-        return self.search_scope == 'computer' and bool(self.search.get_text().strip())
+        return self.special_mode != 'trash' and self.search_scope == 'computer' and bool(self.search.get_text().strip())
 
     def _cancel_computer_search(self):
         self.search_generation += 1
@@ -112,7 +113,7 @@ class SearchTools:
     def _load_computer_search(self):
         active_filter = self._active_filter()
         options = dict(query=self.search.get_text(), roots=self._computer_search_roots(),
-                       hidden=self.show_hidden, directories_only=self.request.directory,
+                       hidden=self.show_hidden, directories_only=self.request.directories_only,
                        filter=[active_filter.name, active_filter.rules] if active_filter else None)
         key = (str(self.current_dir), repr(options))
         if key == self.search_key:

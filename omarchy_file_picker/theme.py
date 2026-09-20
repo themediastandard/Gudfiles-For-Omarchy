@@ -572,6 +572,17 @@ def build_css(colors: dict[str, str]) -> str:
     .context-arrow {{ color: {colors['dark_foreground']}; }}
     .context-action:disabled label, .context-action:disabled image {{ color: {colors['dark_foreground']}; }}
     .file-context-menu separator {{ margin: 3px 5px; background: {colors['darker_background']}; min-height: 1px; }}
+    .trash-page {{ background: {colors['background']}; color: {colors['foreground']}; }}
+    .trash-actions {{ padding: 6px 12px; border-bottom: 1px solid {colors['darker_background']}; }}
+    .trash-actions label {{ font-size: 12px; }}
+    .trash-actions button {{ min-height: 26px; padding: 0 8px; border-radius: 4px;
+      background: {colors['dark_background']}; color: {colors['foreground']};
+      border: 1px solid {colors['darker_background']};
+      background-image: none; box-shadow: none; text-shadow: none; font-size: 12px; }}
+    .trash-actions button:hover {{ background: {colors['lighter_background']}; }}
+    .trash-actions button:disabled {{ color: {colors['muted']}; opacity: 0.5; }}
+    .trash-actions button image {{ -gtk-icon-size: 14px; }}
+    .trash-error {{ color: {colors['error_ink']}; padding: 6px 12px; font-size: 12px; }}
     .trash-list {{ background: {colors['background']}; color: {colors['foreground']}; }}
     .trash-list row {{ padding: 7px 8px; border-radius: 3px; }}
     .trash-list row:hover {{ background: {colors['lighter_background']}; }}

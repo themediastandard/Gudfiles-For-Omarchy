@@ -134,7 +134,7 @@ class ListDetails:
         self.status.set_visible(pending)
         if pending:
             self.status.set_text(f'Reading {COLUMNS[prefs["sort_key"]][0]} for sorting… {len(self.data)}/{len(self.owner.entries)}')
-        self.widget.set_visible(self.owner.view_mode == 'list' or pending)
+        self.widget.set_visible(self.owner.special_mode != 'trash' and (self.owner.view_mode == 'list' or pending))
 
     def sort(self, key):
         if self.dragged_column is not None:
@@ -471,6 +471,8 @@ class ListDetails:
 
     def tick(self):
         owner = self.owner
+        if owner.special_mode == 'trash':
+            return True
         scope = (id(owner.flow), frozenset(owner.entries), owner.view_mode)
         if scope != self.scope:
             self.worker.cancel()

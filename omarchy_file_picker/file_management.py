@@ -437,7 +437,7 @@ class FileManagement(TransferUI):
             except ValueError as error:
                 self._show_error(f'Could not {verb.lower()}', str(error))
 
-        request = PickerRequest(current_folder=start, directory=True,
+        request = PickerRequest(current_folder=start, directory=True, show_files_in_directory=True,
                                 title=f'{verb} {len(sources)} item{"s" if len(sources) != 1 else ""} to…',
                                 accept_label=f'{verb} here')
         chooser = PickerWindow(self.get_application(), request, None, on_result=chosen)

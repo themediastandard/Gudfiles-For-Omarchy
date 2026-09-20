@@ -93,6 +93,19 @@ def open_destination(window, paths, cut=False):
     return chooser
 
 
+def assert_visible_files(chooser, directory, files):
+    chooser.navigate(directory)
+    settle()
+    for path in files:
+        assert path in chooser.entries, f'Existing file hidden: {path}'
+        child = chooser.children_by_path[path]
+        assert child.get_mapped(), f'Existing file not rendered: {path}'
+        assert not child.get_sensitive(), 'Files must not be destination choices'
+        chooser.flow.emit('child-activated', child)
+        assert not chooser.finished, 'Activating a file submitted the destination'
+    assert chooser.accept_button.get_sensitive()
+
+
 def capture(window, name):
     target = os.environ.get('TRANSFER_DESTINATION_SCREENSHOTS')
     if not target:
@@ -146,11 +159,28 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                     # Cancelling and titlebar-close cannot write or end the host app.
                     chooser = open_destination(window, [first])
                     assert not window.transfer_queue.jobs
+                    assert_visible_files(chooser, source, [first])
+                    assert_visible_files(chooser, folder, [folder / 'nested.txt'])
+                    with patch.object(chooser, '_computer_search_roots', return_value=[str(source)]):
+                        chooser.search.set_text('nested')
+                        chooser.search_scope_buttons['computer'].set_active(True)
+                        chooser.search.emit('activate')
+                        wait_for(lambda: chooser.search_result is not None and not chooser.search_pending)
+                        assert folder / 'nested.txt' in chooser.entries
+                        assert not chooser.children_by_path[folder / 'nested.txt'].get_sensitive()
+                        assert not chooser.accept_button.get_sensitive()
+                        chooser._accept()
+                        assert not chooser.finished and not window.transfer_queue.jobs
+                        chooser.search.set_text('')
+                        chooser.search_scope_buttons['folder'].set_active(True)
+                        chooser.search.emit('activate')
+                        settle()
                     chooser._on_key_pressed(None, 0xff1b, 0, 0)  # Escape
                     settle()
                     assert window.destination_picker is None and first.exists()
                     assert not window.transfer_queue.jobs
                     chooser = open_destination(window, [first], cut=True)
+                    assert_visible_files(chooser, destination, [destination / first.name])
                     chooser.close()
                     settle()
                     assert window.destination_picker is None and first.exists()
@@ -159,8 +189,13 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                     assert window._choose_transfer_destination([first]) is chooser
                     # Selection changes while the prompt is open cannot change its sources.
                     window.flow.unselect_all()
+                    assert_visible_files(chooser, destination, [destination / first.name])
                     chooser.navigate(destination.parent)
                     select(chooser, [destination])
+                    if view == 'columns':
+                        column = next(c for c in chooser.columns.columns if c.path == destination)
+                        assert destination / first.name in column.children
+                        assert not column.children[destination / first.name].get_sensitive()
                     capture(chooser, f'{palette}-{view}-copy')
                     chooser.accept_button.emit('clicked')
                     settle()
@@ -199,7 +234,7 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                     first.write_text('keep source')
                     window._refresh_files()
                     chooser = open_destination(window, [first], cut=True)
-                    chooser.navigate(moved)
+                    assert_visible_files(chooser, moved, [moved / first.name])
                     chooser.accept_button.emit('clicked')
                     settle()
                     job = window.transfer_queue.jobs[-1]

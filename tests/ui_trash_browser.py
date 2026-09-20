@@ -43,18 +43,19 @@ def until(predicate):
     settle()
 
 
-def rows(dialog):
+def rows(page):
     result = []
-    row = dialog.rows.get_first_child()
+    row = page.rows.get_first_child()
     while row:
-        result.append(row)
+        if isinstance(row, Gtk.ListBoxRow):
+            result.append(row)
         row = row.get_next_sibling()
     return result
 
 
-def select(dialog, name):
-    dialog.rows.unselect_all()
-    dialog.rows.select_row(next(row for row in rows(dialog) if row.item.name == name))
+def select(page, name):
+    page.rows.unselect_all()
+    page.rows.select_row(next(row for row in rows(page) if row.item.name == name))
 
 
 with tempfile.TemporaryDirectory(prefix='gudfiles-trash-qa-', dir=Path.home() / '.cache') as temp:
@@ -93,82 +94,100 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-trash-qa-', dir=Path.home() / 
                 try:
                     button = next(b for b in window.location_buttons if b._sidebar_key == 'trash')
                     button.emit('clicked')
-                    dialog = window.trash_dialog
-                    until(lambda: not dialog.busy)
-                    assert len(rows(dialog)) == 2
+                    page = window.trash_page
+                    until(lambda: not page.busy)
+                    assert len(rows(page)) == 2
                     if directory := os.environ.get('TRASH_QA_SCREENSHOTS'):
                         target = Path(directory)
                         target.mkdir(parents=True, exist_ok=True)
-                        dialog.queue_draw()
+                        window.queue_draw()
                         settle()
                         snapshot = Gtk.Snapshot.new()
-                        Gtk.WidgetPaintable.new(dialog).snapshot(snapshot, dialog.get_width(), dialog.get_height())
+                        Gtk.WidgetPaintable.new(window).snapshot(snapshot, window.get_width(), window.get_height())
                         node = snapshot.to_node()
                         assert node is not None
-                        dialog.get_renderer().render_texture(node, None).save_to_png(str(target / (theme + '.png')))
+                        window.get_renderer().render_texture(node, None).save_to_png(str(target / (theme + '.png')))
 
-                    assert not dialog.restore_button.get_sensitive()
+                    assert not page.restore_button.get_sensitive()
                     window._open_trash()
-                    assert window.trash_dialog is dialog, 'Duplicate browser'
+                    assert window.trash_page is page, 'Duplicate browser'
+                    until(lambda: not page.busy)
                     # A replacement must survive; the original stays in Trash.
                     document.write_text('Replacement bytes')
-                    select(dialog, document.name)
-                    dialog.restore_button.emit('clicked')
-                    until(lambda: not dialog.busy)
-                    assert dialog.error_label.get_visible()
-                    assert 'already exists' in dialog.error_label.get_text()
+                    select(page, document.name)
+                    page.restore_button.emit('clicked')
+                    until(lambda: not page.busy)
+                    assert page.error_label.get_visible()
+                    assert 'already exists' in page.error_label.get_text()
                     assert document.read_text() == 'Replacement bytes'
                     assert len(fixtures()) == 2
                     # Mixed success keeps failures selected and reports both.
-                    dialog.rows.select_all()
-                    dialog.restore_button.emit('clicked')
-                    until(lambda: not dialog.busy)
-                    assert dialog.status.get_text() == 'Restored 1 of 2 items.'
+                    page.rows.select_all()
+                    page.restore_button.emit('clicked')
+                    until(lambda: not page.busy)
+                    assert page.status.get_text() == 'Restored 1 of 2 items.'
                     assert (folder / 'clip.txt').read_text() == 'nested bytes'
-                    assert len(rows(dialog)) == 1
+                    assert len(rows(page)) == 1
                     document.unlink()
-                    dialog.restore_button.emit('clicked')
-                    until(lambda: not dialog.busy)
+                    page.restore_button.emit('clicked')
+                    until(lambda: not page.busy)
                     assert document.read_text() == 'Original bytes: café'
-                    assert not dialog.error_label.get_visible()
-                    assert not rows(dialog)
+                    assert not page.error_label.get_visible()
+                    assert not rows(page)
                     assert not window.file_job_active
                     # Unavailable is not rendered as an empty successful read.
                     with patch('omarchy_file_picker.trash_ui.list_trash', side_effect=OSError('Trash service unavailable')):
-                        dialog.refresh_button.emit('clicked')
-                        until(lambda: not dialog.busy)
-                        assert dialog.error_label.get_visible()
-                        assert 'could not' in dialog.status.get_text()
-                    dialog.refresh_button.emit('clicked')
-                    until(lambda: not dialog.busy)
-                    assert dialog.status.get_text() == 'Trash is empty.'
-                    assert not dialog.error_label.get_visible()
-                    dialog.done_button.emit('clicked')
-                    until(lambda: window.trash_dialog is None)
-                    button.emit('clicked')
-                    dialog = window.trash_dialog
-                    until(lambda: not dialog.busy)
-                    assert not rows(dialog)
-                    dialog.done_button.emit('clicked')
-                    until(lambda: window.trash_dialog is None)
-                    # Closing a pending read must not affect a newer browser.
+                        page.refresh_button.emit('clicked')
+                        until(lambda: not page.busy)
+                        assert page.error_label.get_visible()
+                        assert 'could not' in page.status.get_text()
+                    page.refresh_button.emit('clicked')
+                    until(lambda: not page.busy)
+                    assert page.status.get_text().endswith('Trash is empty.')
+                    assert not page.error_label.get_visible()
+                    # Trash is a location in the same window and navigation history.
+                    assert window.browser_stack.get_visible_child_name() == 'trash'
+                    assert window.tabs.current.label.get_text() == 'Trash'
+                    assert button.has_css_class('active')
+                    assert not window._selected_paths()
+                    assert not window.list_details.widget.get_visible()
+                    assert not window.metadata_viewport.get_visible()
+                    window._go_back(None)
+                    assert window.special_mode is None and window.current_dir == root
+                    assert window.browser_stack.get_visible_child_name() != 'trash'
+                    window._go_forward(None)
+                    until(lambda: not page.busy)
+                    assert window.special_mode == 'trash'
+                    assert window.browser_stack.get_visible_child() is page
+                    # Switching tabs preserves each location.
+                    trash_tab = window.tabs.current
+                    normal_tab = window.tabs.new(root)
+                    settle()
+                    assert window.special_mode is None
+                    window.tabs.select(trash_tab)
+                    until(lambda: not page.busy)
+                    assert window.special_mode == 'trash'
+                    assert window.tabs.current.label.get_text() == 'Trash'
+                    window.tabs.close(normal_tab)
+                    # Leaving a pending read must not affect a later read.
                     release = threading.Event()
+                    started = threading.Event()
                     def pending(_cancel):
-                        release.wait(2)
-                        return []
+                        started.set()
+                        release.wait(5)
+                        raise OSError('stale error must not be shown')
                     with patch('omarchy_file_picker.trash_ui.list_trash', side_effect=pending):
-                        button.emit('clicked')
-                        old = window.trash_dialog
-                        assert old.busy
-                        old.done_button.emit('clicked')
-                        until(lambda: window.trash_dialog is None)
+                        page.refresh()
+                        until(started.is_set)
+                        assert page.busy
+                        window.navigate(root)
+                        assert not page.active and not page.busy
                     button.emit('clicked')
-                    new = window.trash_dialog
+                    until(lambda: not page.busy)
                     release.set()
-                    until(lambda: not old.busy and not new.busy)
-                    assert window.trash_dialog is new
-                    new.done_button.emit('clicked')
-                    until(lambda: window.trash_dialog is None)
+                    settle()
+                    assert not page.error_label.get_visible()
+                    assert window.browser_stack.get_visible_child() is page
                     # Shortcut visibility follows the existing sidebar controls.
                     window._remove_sidebar_item(button)
                     assert not any(b._sidebar_key == 'trash' for b in window.location_buttons)

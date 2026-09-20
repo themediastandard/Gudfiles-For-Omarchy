@@ -205,6 +205,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             child = Gtk.FlowBoxChild()
             child._picker_path = item
             child._picker_is_dir = owner._entry_is_dir(item)
+            child.set_sensitive(not owner.request.directory or child._picker_is_dir)
             child.set_tooltip_text(str(item))
             row = Gtk.Box(spacing=8, height_request=28)
             row.append(Gtk.Image.new_from_gicon(Gio.content_type_get_icon('inode/directory') if child._picker_is_dir

@@ -472,10 +472,31 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.sidebar.append(row)
 
     def _open_trash(self) -> None:
-        from .trash_ui import TrashDialog
-        if getattr(self, 'trash_dialog', None) is None:
-            self.trash_dialog = TrashDialog(self)
-        self.trash_dialog.present()
+        self._open_special('trash')
+
+    def _show_trash(self):
+        from .trash_ui import TrashPage
+        if not hasattr(self, 'trash_page'):
+            self.trash_page = TrashPage(self)
+            self.browser_stack.add_named(self.trash_page, 'trash')
+        self._cancel_computer_search()
+        if self.quicklook.get_visible():
+            self.quicklook.close()
+        self.drag_selection.cancel()
+        self.columns.cancel_pending()
+        self._close_context_menu()
+        self.entries = []
+        self.list_details.reset()
+        self.list_details.widget.set_visible(False)
+        self._clear_metadata()
+        self.browser_stack.set_visible_child_name('trash')
+        state = getattr(self, '_trash_restore_state', None)
+        self._trash_restore_state = None
+        self.trash_page.activate(state)
+        self._rebuild_pathbar()
+        self._update_nav_state()
+        self._update_active_location()
+        self._update_accept_state()
 
     def _refresh_sidebar(self) -> None:
         if not hasattr(self, "sidebar"):
@@ -542,6 +563,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._build_search_controls()
         self.search_popover.connect('map', lambda *_: self.search.grab_focus())
         filters = self._creative_filter_button()
+        self.rating_filter_button = filters
 
         self.hidden_button = self._icon_button("view-conceal-symbolic", "Show hidden files (Ctrl+H)", self._toggle_hidden)
         self.hidden_button.add_css_class('hidden-toggle')
@@ -568,7 +590,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         # Apply immediately if Return beats SearchEntry's debounce timer.
         self._search_changed(self.search)
         self.search_button.popdown()
-        self.flow.child_focus(Gtk.DirectionType.TAB_FORWARD)
+        if self.special_mode == 'trash':
+            self.trash_page.rows.grab_focus()
+        else:
+            self.flow.child_focus(Gtk.DirectionType.TAB_FORWARD)
 
     def _build_footer(self) -> None:
         if self.request.choices:
@@ -667,6 +692,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return Gdk.EVENT_STOP
         if not self.quicklook.get_visible() and self.tabs.shortcut(keyval, state):
             return Gdk.EVENT_STOP
+        if self.special_mode == 'trash':
+            return Gdk.EVENT_PROPAGATE
         if self.view_mode == 'columns' and not self.quicklook.get_visible():
             self.columns.activate_focused()
         if self.drag_selection.active:
@@ -720,7 +747,20 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return Gdk.EVENT_STOP
         if self.context_popover:
             return Gdk.EVENT_PROPAGATE
-        if not editing:
+        if self.special_mode == 'trash' and not editing:
+            if keyval == Gdk.KEY_F5:
+                self.trash_page.refresh()
+                return Gdk.EVENT_STOP
+            if control and keyval in (Gdk.KEY_a, Gdk.KEY_A):
+                self.trash_page.rows.select_all()
+                return Gdk.EVENT_STOP
+            if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
+                if button := self._sidebar_target(focus):
+                    self._show_sidebar_context_menu(0, 0, button, keyboard=True)
+                else:
+                    self.trash_page.show_menu(24, 42)
+                return Gdk.EVENT_STOP
+        if not editing and self.special_mode != 'trash':
             selected = self._selected_paths()
             if keyval == Gdk.KEY_Menu or (shift and keyval == Gdk.KEY_F10):
                 button = self._sidebar_target(focus)
@@ -772,6 +812,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 self._toggle_path_entry(None)
             elif self.search.get_text():
                 self.search.set_text("")
+            elif self.special_mode == 'trash':
+                self.trash_page.rows.unselect_all()
             elif self.request.explorer:
                 self.flow.unselect_all()
             else:
@@ -784,7 +826,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self._open_search()
             return Gdk.EVENT_STOP
         if control and keyval in (Gdk.KEY_h, Gdk.KEY_H):
-            self._toggle_hidden(None)
+            if self.special_mode != 'trash':
+                self._toggle_hidden(None)
             return Gdk.EVENT_STOP
         if alt and keyval == Gdk.KEY_Left:
             self._go_back(None)
@@ -818,7 +861,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
     def _directory_entries(self, path):
         entries = list_directory(path, show_hidden=self.show_hidden,
             active_filter=self._active_filter(), query=self.search.get_text(),
-            directories_only=self.request.directory)
+            directories_only=self.request.directories_only)
         return self._sort_entries(self._creative_entries(entries))
 
     def _load(self) -> None:
@@ -826,6 +869,21 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return
         self._last_search = self.search.get_text()
         self._update_active_filters()
+        trash = self.special_mode == 'trash'
+        self.metadata_viewport.set_visible(not trash)
+        if trash:
+            self.active_filters.set_visible(False)
+            self.search_scope = 'folder'
+        for control in (self.sort_button, self.hidden_button, self.rating_filter_button,
+                        self.grid_button, self.list_button, self.columns_button, self.filter_combo):
+            control.set_sensitive(not trash)
+        self.search_scope_buttons['computer'].set_sensitive(not trash)
+        self._update_search_scope()
+        if trash:
+            self._show_trash()
+            return
+        if hasattr(self, 'trash_page'):
+            self.trash_page.deactivate()
         query = self.search.get_text() if hasattr(self, "search") else ""
         if self._computer_search_active():
             self._load_computer_search()
@@ -838,7 +896,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             active_filter = self._active_filter() if hasattr(self, "filter_combo") else None
             if active_filter:
                 entries = [item for item in entries if active_filter.matches(item)]
-            if self.request.directory:
+            if self.request.directories_only:
                 entries = [item for item in entries if item.is_dir()]
             self.entries = entries
         else:
@@ -847,7 +905,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 show_hidden=self.show_hidden,
                 active_filter=self._active_filter() if hasattr(self, "filter_combo") else None,
                 query=query,
-                directories_only=self.request.directory,
+                directories_only=self.request.directories_only,
             )
         self.entries = self._creative_entries(self.entries)
         self.entries = self._sort_entries(self.entries)
@@ -875,6 +933,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             child = Gtk.FlowBoxChild()
             child._picker_path = path  # type: ignore[attr-defined]
             child._picker_is_dir = self._entry_is_dir(path)
+            child.set_sensitive(not self.request.directory or child._picker_is_dir)
             child.set_child(self._grid_item(path) if self.view_mode == "grid" else self._list_item(path))
             child.set_tooltip_text(str(path))
             self.flow.append(child)
@@ -989,9 +1048,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
     def _rebuild_pathbar(self) -> None:
         while child := self.path_box.get_first_child():
             self.path_box.remove(child)
-        if self.special_mode == "recent":
-            button = BreadcrumbButton('Recent', self.colors, first=True, current=True)
+        if self.special_mode in {'recent', 'trash'}:
+            button = BreadcrumbButton(self.special_mode.title(), self.colors, first=True, current=True)
             self.path_box.append(button)
+            self.path_entry.set_text(self.special_mode + ':///')
             self._reveal_current_breadcrumb()
             return
         path = self._breadcrumb_directory().resolve()
@@ -1109,12 +1169,29 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 self.columns.enter_folder(column, path)
             else:
                 self.navigate(path)
+        elif self.request.directory:
+            return
         elif self.request.explorer and path.suffix.casefold() == '.zip':
             self._extract_zip(path)
         else:
             self._accept()
 
     def _on_context_pressed(self, _gesture: Gtk.GestureClick, _presses: int, x: float, y: float) -> None:
+        if self.special_mode == 'trash':
+            picked = self.browser_stack.pick(x, y, Gtk.PickFlags.DEFAULT)
+            while picked and picked is not self.trash_page and not isinstance(picked, Gtk.ListBoxRow):
+                if isinstance(picked, Gtk.Popover):
+                    return
+                picked = picked.get_parent()
+            if isinstance(picked, Gtk.ListBoxRow):
+                if not picked.is_selected():
+                    self.trash_page.rows.unselect_all()
+                    self.trash_page.rows.select_row(picked)
+            else:
+                self.trash_page.rows.unselect_all()
+            _gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            self.trash_page.show_menu(x, y)
+            return
         if self.view_mode == 'columns':
             self.columns.activate_at(self.browser_stack, x, y)
             self.columns.cancel_pending()
@@ -1697,10 +1774,15 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         threading.Thread(target=worker, daemon=True).start()
 
     def _selected_paths(self) -> list[Path]:
+        if self.special_mode == 'trash':
+            return []
         return [child._picker_path for child in self.flow.get_selected_children()]  # type: ignore[attr-defined]
 
     def _update_accept_state(self) -> None:
         if not hasattr(self, "accept_button"):
+            return
+        if self.special_mode == 'trash':
+            self.accept_button.set_sensitive(False)
             return
         if self.request.mode == 'save' and self._computer_search_active():
             self.accept_button.set_label('Open folder')
@@ -1710,12 +1792,15 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         if self.request.mode == "save":
             enabled = bool(self.filename_entry.get_text().strip())
         elif self.request.directory:
-            enabled = not self._computer_search_active() or bool(self._selected_paths())
+            enabled = not self._computer_search_active() or any(
+                path.is_dir() for path in self._selected_paths())
         else:
             enabled = any(path.is_file() for path in self._selected_paths())
         self.accept_button.set_sensitive(enabled)
 
     def _accept(self) -> None:
+        if self.special_mode == 'trash':
+            return
         selected = self._selected_paths()
         if self.request.explorer:
             if len(selected) == 1 and selected[0].is_dir():
@@ -1819,24 +1904,41 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 self.history_index = len(self.history) - 1
         self._load()
 
+    def _open_special(self, mode):
+        self._mount_open_generation = getattr(self, '_mount_open_generation', 0) + 1
+        if self.special_mode != mode:
+            location = (mode, self.current_dir)
+            self.history = self.history[:self.history_index + 1]
+            self.history.append(location)
+            self.history_index = len(self.history) - 1
+            self._trash_restore_state = {}
+        self.special_mode = mode
+        self.path_stack.set_visible_child_name('crumbs')
+        self.search.set_text('')
+        self._load()
+
     def _open_recent(self) -> None:
-        self.special_mode = "recent"
-        self.search.set_text("")
+        self._open_special('recent')
+
+    def _restore_history_location(self):
+        location = self.history[self.history_index]
+        if isinstance(location, tuple):
+            self.special_mode, self.current_dir = location
+        else:
+            self.special_mode, self.current_dir = None, location
+        self._trash_restore_state = {}
+        self.search.set_text('')
         self._load()
 
     def _go_back(self, _button) -> None:
         if self.history_index > 0:
             self.history_index -= 1
-            self.current_dir = self.history[self.history_index]
-            self.special_mode = None
-            self._load()
+            self._restore_history_location()
 
     def _go_forward(self, _button) -> None:
         if self.history_index < len(self.history) - 1:
             self.history_index += 1
-            self.current_dir = self.history[self.history_index]
-            self.special_mode = None
-            self._load()
+            self._restore_history_location()
 
     def _go_up(self, _button) -> None:
         path = self._breadcrumb_directory()
@@ -1854,8 +1956,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.tabs.update()
         for button in self.location_buttons:
             active = getattr(button, "_picker_path", None) == self.current_dir and self.special_mode is None
-            if button._sidebar_kind == 'location' and button._sidebar_key == 'recent':
-                active = self.special_mode == 'recent'
+            if button._sidebar_kind == 'location' and button._sidebar_key in {'recent', 'trash'}:
+                active = self.special_mode == button._sidebar_key
             if active:
                 button.add_css_class("active")
             else:
@@ -1941,12 +2043,16 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             if self.path_box.buttons:
                 self.path_box.buttons[-1].grab_focus()
         else:
-            self.path_entry.set_text(str(self._breadcrumb_directory()))
+            self.path_entry.set_text(self.special_mode + ':///' if self.special_mode else str(self._breadcrumb_directory()))
             self.path_stack.set_visible_child_name("entry")
             self.path_entry.grab_focus()
             self.path_entry.select_region(0, -1)
 
     def _on_path_activate(self, entry: Gtk.Entry) -> None:
+        if entry.get_text().strip() in {'trash:///', 'recent:///'}:
+            self._open_special(entry.get_text().strip().split(':')[0])
+            self.path_stack.set_visible_child_name('crumbs')
+            return
         path = Path(entry.get_text()).expanduser()
         if path.is_file():
             self.navigate(path.parent)
