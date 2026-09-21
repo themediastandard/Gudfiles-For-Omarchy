@@ -47,7 +47,7 @@ def rows(page):
     result = []
     row = page.rows.get_first_child()
     while row:
-        if isinstance(row, Gtk.ListBoxRow):
+        if isinstance(row, Gtk.FlowBoxChild):
             result.append(row)
         row = row.get_next_sibling()
     return result
@@ -55,7 +55,7 @@ def rows(page):
 
 def select(page, name):
     page.rows.unselect_all()
-    page.rows.select_row(next(row for row in rows(page) if row.item.name == name))
+    page.rows.select_child(next(row for row in rows(page) if row.item.name == name))
 
 
 with tempfile.TemporaryDirectory(prefix='gudfiles-trash-qa-', dir=Path.home() / '.cache') as temp:
@@ -109,6 +109,40 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-trash-qa-', dir=Path.home() / 
                         window.get_renderer().render_texture(node, None).save_to_png(str(target / (theme + '.png')))
 
                     assert not page.restore_button.get_sensitive()
+                    assert page.empty_button.get_sensitive()
+                    assert all(button.get_sensitive() for button in
+                               (window.sort_button, window.grid_button, window.list_button, window.columns_button))
+                    window._set_view('list')
+                    assert page.list_header.get_visible() and page.rows.get_max_children_per_line() == 1
+                    window._set_view('grid')
+                    assert not page.list_header.get_visible() and page.rows.get_max_children_per_line() == 100
+                    window._set_view('columns')
+                    assert page.rows.get_max_children_per_line() == 1
+                    window._set_view('list')
+                    # Empty Trash defaults to Cancel. The operation uses only
+                    # its confirmed snapshot and leaves partial failures visible.
+                    deleted = []
+                    dialog = page.confirm_empty()
+                    assert dialog.get_default_widget().get_label() == 'Cancel'
+                    dialog.response(Gtk.ResponseType.CANCEL)
+                    settle()
+                    def delete(item, _cancel):
+                        if item.name == document.name:
+                            raise OSError('fixture refusal')
+                        deleted.append(item)
+                    with patch('omarchy_file_picker.trash_ui.delete_item', side_effect=delete), \
+                         patch.object(window, '_play_sound') as sound:
+                        dialog = page.confirm_empty()
+                        dialog.response(Gtk.ResponseType.ACCEPT)
+                        until(lambda: not page.busy)
+                        sound.assert_called_once_with('delete')
+                    assert len(deleted) == 1 and len(rows(page)) == 1
+                    assert rows(page)[0].item.name == document.name
+                    assert page.status.get_text() == 'Permanently deleted 1 of 2 items.'
+                    assert 'fixture refusal' in page.error_label.get_text()
+                    page.refresh()
+                    until(lambda: not page.busy)
+                    assert len(rows(page)) == 2
                     window._open_trash()
                     assert window.trash_page is page, 'Duplicate browser'
                     until(lambda: not page.busy)
@@ -137,11 +171,11 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-trash-qa-', dir=Path.home() / 
                     assert not window.file_job_active
                     # Unavailable is not rendered as an empty successful read.
                     with patch('omarchy_file_picker.trash_ui.list_trash', side_effect=OSError('Trash service unavailable')):
-                        page.refresh_button.emit('clicked')
+                        page.refresh()
                         until(lambda: not page.busy)
                         assert page.error_label.get_visible()
                         assert 'could not' in page.status.get_text()
-                    page.refresh_button.emit('clicked')
+                    page.refresh()
                     until(lambda: not page.busy)
                     assert page.status.get_text().endswith('Trash is empty.')
                     assert not page.error_label.get_visible()

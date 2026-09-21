@@ -7,6 +7,29 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Folder sizes load in the background in grid, list and column rows and in the
+  compact selection total, including nested and hidden regular files. Sizes are
+  logical bytes; symbolic links inside folders are excluded and hard links count
+  per filename. Empty folders show 0 B; incomplete scans show ≥ known bytes or
+  Unavailable. Linked folders are not traversed. The worker prioritizes selected
+  and visible folders, cancels obsolete requests, and bounds each scan to 30
+  seconds, one million entries and 4,096 pending directories; a 32-second process
+  deadline also covers stalled filesystem calls. One replaceable worker request
+  and guarded callbacks keep navigation responsive. F5 and folder refresh discard
+  measurements. Visible measurements expire after 60 seconds; Size sorting keeps
+  a snapshot until refresh so large sets can finish. Size sorting uses recursive
+  contents, with incomplete measurements last within the folders-first grouping.
+  Native `tests/ui_folder_sizes.py` covers all three views and browser/Open/Save/
+  folder modes, both palettes, mixed selections, sorting, refresh and errors.
+  September 21 verification: all 301 unit tests pass. The native folder-size
+  suite passes against source and the installed runtime, including late-success
+  cancellation, expiry and worker shutdown. Native sorting and list-details
+  regressions pass; light/dark size screenshots were reviewed. All nine changed
+  runtime modules match source after atomic package exchange with a rollback
+  backup; unrelated runtime modules were preserved. Reopen existing windows.
+  Real disconnected-NAS behavior and physical pointer input were not exercised;
+  bounded subprocess timeout/cancellation and unreadable-tree faults were tested.
+
 - SMB-encoded trailing spaces (U+F028) display as normal spaces in file rows,
   folder headings, breadcrumbs, tabs, sidebar shortcuts and Quick Look titles.
   `filename_display.py` owns display-only decoding at path-component boundaries;
@@ -52,12 +75,15 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   preview rating controls scoped to that file; the small bar retains totals for
   the whole selection. Open/Save/folder pickers keep their compact layout.
 - A compact bar beneath the file area has a thumbnail-size slider at the left
-  and a centered selected-file count/combined size. The slider works only in grid
-  view, ranges from 96 to 312 pixels wide and persists across windows. Tiles resize
+  and a centered selected-file count/combined size. The slider and its icon are
+  visible only in grid
+  (thumbnail) view; list and column views hide the controls and matching
+  spacer while keeping the selection summary centered. The slider ranges from
+  96 to 312 pixels wide and persists across windows. Tiles resize
   in place, preserving selection/native rows; bounded cached textures refresh
-  after dragging settles. The summary is blank with no selection. One background
-  worker cancels obsolete totals and identifies unavailable sizes; folder contents
-  are not scanned and mixed totals explicitly say they cover files only.
+  after dragging settles. The summary is blank with no selection. Background
+  workers cancel obsolete totals and identify unavailable sizes; selected totals
+  include recursive folder contents as described above.
 - Open/Save/folder pickers request 1750×1200 by default, capped to 90% of the
   initial monitor geometry while retaining the existing 820×560 minimum.
   Copy/Move destination pickers share this default. Footer Cancel and accept
@@ -518,9 +544,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   publication and identity verification remain the transfer engine's authority.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
-- The compact status bar summarizes multi-selections, including combined file
-  sizes and folder/file counts; folder contents are excluded and unavailable
-  sizes are marked. Non-media selections do not open a large summary panel.
+- The compact status bar summarizes multi-selections, including combined file/folder
+  sizes and folder/file counts; incomplete and unavailable sizes are marked. Non-media selections do not open a large summary panel.
 - Video grid/metadata thumbnails support silent hover-scrubbing with delayed
   entry, a thin position indicator, background decoding and poster restoration.
   Completed frames from the current hover stay visible while the pointer moves;
@@ -676,10 +701,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `folder_sizes.py` / `folder_size_ui.py` — bounded subprocess scanning and
+  shared visible/selected folder measurements with cancellation and freshness.
 - `view_status.py` — the compact file-area bar, persisted grid sizing without
   rebuilding rows, and one cancellable worker for selected-file totals.
 - `omarchy_file_picker/trash.py` / `trash_ui.py` — desktop Trash enumeration,
-  safe original-location restoration and the inline Trash browser location.
+  safe original-location restoration, revalidated permanent deletion and the
+  folder-like inline Trash location.
 - `omarchy_file_picker/context_menu.py` — shared hover navigation, delayed
   submenu handoff, native keyboard/pointer transitions and menu-bound cleanup.
 - `omarchy_file_picker/tab_strip.py` — equal-width native tab allocation with
@@ -774,6 +802,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 ```bash
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_filename_display.py
+PYTHONPATH=. python tests/ui_folder_sizes.py
 PYTHONPATH=. python tests/ui_folder_locations.py
 # With POINTER_QA_ISOLATED=1 and XDOTOOL on an isolated X11 display, this also
 # tests physical folder right-clicks. FOLDER_LOCATIONS_SCREENSHOTS saves captures.
@@ -1328,30 +1357,35 @@ gdbus introspect --session \
   A root capture gesture now dismisses clicks outside its allocation. Native
   Wayland checks cover popup ordering; isolated X11 checks cover real input.
   Desktop clicks and no click-through to Search are separately verified.
-- Trash in the sidebar opens in the main browser, with original folders,
-  deletion dates, multi-selection, Refresh and Restore Selected. It has its own
+- Trash in the sidebar opens as a folder-like location in the main browser, with
+  the same Grid, List and Column controls and grid thumbnail-size control used by
+  ordinary folders. List view includes original folders and deletion dates.
+  Trash has compact Restore and Empty Trash actions, its own
   breadcrumb, sidebar highlight and tab title, participates in Back/Forward,
   and supports independent tab selections and search of names/original paths.
-  File-only toolbar controls and picker acceptance are disabled in Trash;
+  File-only filters and picker acceptance are disabled in Trash;
   hidden ordinary-folder selections cannot receive file actions. `trash.py`
   reads GIO's `trash:///` and restores only current entries to their recorded
-  absolute destinations, with no overwrite. `trash_ui.py` performs reads/moves
-  off the GTK thread, reports partial results inline, preserves failed rows,
+  absolute destinations, with no overwrite. Empty Trash defaults to Cancel and
+  permanently deletes only the confirmed snapshot; every item is revalidated
+  immediately before deletion, so replaced or newly added entries are preserved.
+  `trash_ui.py` performs reads/moves/deletes off the GTK thread, reports partial
+  results inline, preserves failed rows,
   and cancels/discards reads after leaving the location. Restoration continues
   through navigation without pulling the user back; its receipt survives
   refresh or return. Window close is guarded during file operations. Existing
   files are never replaced. Missing original parent folders or unavailable
   mounted volumes produce a visible failure; no destination is guessed.
   Native active/light/dark tests use only uniquely named owned fixtures and
-  verify real file/folder bytes, collisions, partial success, unavailable/retry,
-  empty/reopen, leave-during-read and sidebar hide/restore. Isolated physical
+  verify real file/folder bytes, collisions, partial restore/delete, the Cancel
+  default, view switching, unavailable/retry, empty/reopen, leave-during-read and
+  sidebar hide/restore. Isolated physical
   pointer/keyboard checks cover row selection, context dismissal, tabs/history,
   asynchronous search focus, restore during navigation, and Save/folder safety.
-  Permanent deletion
-  remains the existing confirmed file action; the new Trash browser is for
-  recovery and does not offer Empty Trash. Installed real-GIO checks also pass;
-  all 58 installed runtime files match source, with rollback backups. Existing
-  windows need reopening to load the new sidebar and visual changes.
+  The focused native source regression passes in all three palettes. A disposable
+  non-empty folder was also permanently removed through the real GIO Trash API;
+  existing user Trash items were not changed. This folder-like/Empty Trash update
+  is source-only until the runtime is installed; reopen windows after installation.
 
 - September 19 rating/order/font update: 230 unit tests pass. Native isolated
   pointer/keyboard checks cover live and persisted ratings, failed saves,

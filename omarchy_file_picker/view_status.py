@@ -16,6 +16,7 @@ class ViewStatus(Gtk.CenterBox):
         self.resize_timer = 0
         self.closed = False
         self.selection = None
+        self.totals = None
         self.pending = None
         self.running = False
         self.cancelled = threading.Event()
@@ -39,11 +40,16 @@ class ViewStatus(Gtk.CenterBox):
         owner.connect('unrealize', self.close)
 
     def update(self, paths):
-        self.scale.set_sensitive(self.owner.view_mode == 'grid' and self.owner.special_mode != 'trash')
+        thumbnails = self.owner.view_mode == 'grid'
+        self.scale.set_sensitive(thumbnails)
+        self.get_start_widget().set_visible(thumbnails)
+        self.get_end_widget().set_visible(thumbnails)
         paths = tuple(paths)
         if paths == self.selection:
             return
         self.selection = paths
+        self.totals = None
+        self.owner.folder_sizes.select(paths)
         self.cancelled.set()
         self.pending = paths or None
         if not paths:
@@ -62,21 +68,8 @@ class ViewStatus(Gtk.CenterBox):
         def done(result):
             self.running = False
             if not self.closed and not cancelled.is_set() and paths == self.selection and result is not None:
-                folders, files, total, unavailable = result
-                counts = []
-                if files:
-                    counts.append(f'{files:,} ' + ('file' if files == 1 else 'files'))
-                if folders:
-                    counts.append(f'{folders:,} ' + ('folder' if folders == 1 else 'folders'))
-                text = ', '.join(counts)
-                if files:
-                    size = 'Size unavailable' if unavailable == files else format_size(total)
-                    if 0 < unavailable < files:
-                        size += ' known'
-                    if folders:
-                        size += ' in files'
-                    text += ' · ' + size
-                self.summary.set_text(text)
+                self.totals = result
+                self.render_summary()
             self._start_summary()
             return False
 
@@ -85,13 +78,43 @@ class ViewStatus(Gtk.CenterBox):
             GLib.idle_add(done, result)
         threading.Thread(target=work, name='selection-size', daemon=True).start()
 
+    def render_summary(self):
+        if self.closed or not self.selection or self.totals is None:
+            return
+        folders, files, total, unavailable = self.totals
+        counts = []
+        if files:
+            counts.append(f'{files:,} ' + ('file' if files == 1 else 'files'))
+        if folders:
+            counts.append(f'{folders:,} ' + ('folder' if folders == 1 else 'folders'))
+        pending = False
+        for path in self.owner.folder_sizes.selected:
+            result = self.owner.folder_sizes.result(path)
+            if result is None:
+                pending = True
+            else:
+                total += result.total
+                unavailable += not result.complete
+        if pending:
+            size = 'Calculating…'
+        elif unavailable:
+            size = '≥ ' + format_size(total) + ' known' if total else 'Size unavailable'
+        else:
+            size = format_size(total)
+        self.summary.set_text(', '.join(counts) + ' · ' + size)
+        self.summary.set_tooltip_text('Logical size of selected contents, including subfolders. Symbolic links inside folders are excluded.'
+                                      if folders else None)
+
     def resize(self, scale):
-        if self.closed or self.owner.view_mode != 'grid' or self.owner.special_mode == 'trash':
+        if self.closed or self.owner.view_mode != 'grid':
             return
         width = round(scale.get_value())
         self.owner.file_preferences['thumbnail_size'] = width
-        for child in self.owner.children_by_path.values():
-            self.size_tile(child.get_child(), width)
+        if self.owner.special_mode == 'trash':
+            self.owner.trash_page.resize_tiles(width)
+        else:
+            for child in self.owner.children_by_path.values():
+                self.size_tile(child.get_child(), width)
         if self.resize_timer:
             GLib.source_remove(self.resize_timer)
         self.resize_timer = GLib.timeout_add(180, self._finish_resize)
@@ -121,10 +144,11 @@ class ViewStatus(Gtk.CenterBox):
         self.owner._set_file_preference('thumbnail_size', round(self.scale.get_value()), reload=False)
         # Keep existing images painted while dragging; refresh their bounded
         # cached textures once the slider settles. Rows and selection stay put.
-        for child in self.owner.children_by_path.values():
-            parts = getattr(child.get_child(), '_grid_size_parts', None)
-            if parts and isinstance(parts[0], Thumbnail):
-                parts[0].release()
+        if self.owner.special_mode != 'trash':
+            for child in self.owner.children_by_path.values():
+                parts = getattr(child.get_child(), '_grid_size_parts', None)
+                if parts and isinstance(parts[0], Thumbnail):
+                    parts[0].release()
         if not self.closed:
             SCHEDULER.wake()
         return False

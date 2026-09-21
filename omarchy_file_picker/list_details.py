@@ -146,7 +146,11 @@ class ListDetails:
         pending = prefs['sort_key'] in EXTRA_SORTS and not self.applied and bool(self.owner.entries)
         self.status.set_visible(pending)
         if pending:
-            self.status.set_text(f'Reading {COLUMNS[prefs["sort_key"]][0]} for sorting… {len(self.data)}/{len(self.owner.entries)}')
+            done = len(self.data)
+            if prefs['sort_key'] == 'size':
+                done = sum(p in self.data and (not self.owner._entry_is_dir(p) or
+                           self.owner.folder_sizes.result(p) is not None) for p in self.owner.entries)
+            self.status.set_text(f'Reading {COLUMNS[prefs["sort_key"]][0]} for sorting… {done}/{len(self.owner.entries)}')
         self.widget.set_visible(self.owner.special_mode != 'trash' and (self.owner.view_mode == 'list' or pending))
 
     def sort(self, key):
@@ -553,6 +557,8 @@ class ListDetails:
                 value.add_css_class('muted')
                 cell.append(value)
                 cells[key] = value
+                if key == 'size' and owner._entry_is_dir(path):
+                    owner.folder_sizes.bind(path, value)
             row.append(outer)
         self.rows[path] = cells
         self.refresh_annotations([path])
@@ -608,6 +614,9 @@ class ListDetails:
         missing = [p for p in candidates if p not in self.data or (media and not self.data[p].get('_media'))]
         if not missing:
             if sorting:
+                if key == 'size' and any(owner._entry_is_dir(p) and owner.folder_sizes.result(p) is None
+                                         for p in owner.entries):
+                    return True
                 self.apply_sort()
             return True
         self.busy = True
@@ -617,7 +626,9 @@ class ListDetails:
     def ready(self, path, values, last):
         self.data[path] = values
         for key, label in self.rows.get(path, {}).items():
-            if key != 'type' and key not in ANNOTATION_COLUMNS:
+            if key == 'size' and self.owner._entry_is_dir(path):
+                self.owner.folder_sizes.paint(path, label)
+            elif key != 'type' and key not in ANNOTATION_COLUMNS:
                 text = format_value(key, values, show_time=self.owner.file_preferences['show_time'])
                 label.set_text(text)
                 label.update_property([Gtk.AccessibleProperty.LABEL],

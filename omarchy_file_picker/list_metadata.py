@@ -17,7 +17,7 @@ COLUMNS = {
 DEFAULT_COLUMNS = ['name', 'rating', 'size', 'modified', 'resolution', 'fps']
 ANNOTATION_COLUMNS = {'rating', 'color', 'rejected'}
 MEDIA_COLUMNS = {'resolution', 'fps', 'duration', 'codec'}
-EXTRA_SORTS = MEDIA_COLUMNS | {'created'}
+EXTRA_SORTS = MEDIA_COLUMNS | {'created', 'size'}
 
 
 def annotation_values(annotation):

@@ -7,6 +7,7 @@ All file timestamps and preferences belong to disposable fixtures.
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,6 +39,11 @@ def click(window, title):
     button.emit('clicked')
     settle()
     assert not window.sort_popover.get_visible()
+    if window.file_preferences['sort_key'] == 'size':
+        deadline = time.monotonic() + 12
+        while not window.list_details.applied and time.monotonic() < deadline:
+            settle()
+        assert window.list_details.applied, 'Folder size sorting did not finish'
 
 
 def capture(widget, name):

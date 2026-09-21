@@ -84,10 +84,44 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-inline-trash-') as temp, \
             until(lambda: not page.busy)
             assert window.browser_stack.get_visible_child() is page
             assert len([w for w in Gtk.Window.list_toplevels() if w.get_visible()]) == 1
-            first, second = page.rows.get_row_at_index(0), page.rows.get_row_at_index(1)
+            first, second = page.rows.get_child_at_index(0), page.rows.get_child_at_index(1)
             click(first)
-            assert page.rows.get_selected_rows() == [first]
+            assert page.rows.get_selected_children() == [first]
             assert page.restore_button.get_sensitive()
+            assert page.empty_button.get_sensitive()
+            assert all(button.get_sensitive() for button in
+                       (window.sort_button, window.grid_button, window.list_button, window.columns_button))
+            window.grid_button.emit('clicked'); settle()
+            assert window.view_mode == 'grid' and page.rows.get_max_children_per_line() == 100
+            window.columns_button.emit('clicked'); settle()
+            assert window.view_mode == 'columns' and page.rows.get_max_children_per_line() == 1
+            window.list_button.emit('clicked'); settle()
+            first, second = page.rows.get_child_at_index(0), page.rows.get_child_at_index(1)
+            # Empty Trash defaults to Cancel and deletes only the confirmed
+            # snapshot. A partial failure remains visible and selected.
+            deleted = []
+            dialog = page.confirm_empty()
+            assert dialog.get_default_widget().get_label() == 'Cancel'
+            dialog.response(Gtk.ResponseType.CANCEL)
+            settle()
+            assert not deleted and len(list(page._children())) == 3
+            def delete(item, _cancel):
+                if item is items[1]:
+                    raise OSError('fixture refusal')
+                deleted.append(item)
+            with patch('omarchy_file_picker.trash_ui.delete_item', side_effect=delete):
+                dialog = page.confirm_empty()
+                dialog.response(Gtk.ResponseType.ACCEPT)
+                until(lambda: not page.busy)
+            assert deleted == [items[0], items[2]]
+            assert page.rows.get_child_at_index(0).item is items[1]
+            assert page.rows.get_child_at_index(1) is None
+            assert 'Permanently deleted 2 of 3 items.' in page.status.get_text()
+            assert 'fixture refusal' in page.error_label.get_text()
+            page.refresh()
+            until(lambda: not page.busy and page.rows.get_child_at_index(2) is not None)
+            first, second = page.rows.get_child_at_index(0), page.rows.get_child_at_index(1)
+            click(first)
             assert not window.drag_selection.active
             # Hidden ordinary rows cannot receive file actions or preview.
             with patch.object(window, '_confirm_remove') as remove, patch.object(window, '_show_rename_dialog') as rename:
@@ -100,10 +134,10 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-inline-trash-') as temp, \
                 assert original.read_text() == 'Must not be changed by Trash shortcuts'
             # Context menu belongs to this view, closes outside, and preserves multi-select.
             key(window, 'ctrl+a')
-            assert len(page.rows.get_selected_rows()) == 3
+            assert len(page.rows.get_selected_children()) == 3
             click(second, 3)
             assert window.context_popover and window.context_popover.get_visible()
-            assert len(page.rows.get_selected_rows()) == 3
+            assert len(page.rows.get_selected_children()) == 3
             click(window.search_button)
             until(lambda: window.context_popover is None)
             key(window, 'Escape')
@@ -135,15 +169,15 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-inline-trash-') as temp, \
             # Search filters Trash and retains input focus after asynchronous reads.
             key(window, 'ctrl+f')
             window.search.set_text('Clip 1')
-            until(lambda: not page.busy and page.rows.get_row_at_index(1) is None)
-            assert page.rows.get_row_at_index(0).item.name == 'Clip 1.mov'
+            until(lambda: not page.busy and page.rows.get_child_at_index(1) is None)
+            assert page.rows.get_child_at_index(0).item.name == 'Clip 1.mov'
             assert isinstance(window.get_focus(), Gtk.Editable)
             key(window, 'Return')
             assert not window.search_popover.get_visible()
             key(window, 'Escape')
-            until(lambda: not page.busy and page.rows.get_row_at_index(2) is not None)
+            until(lambda: not page.busy and page.rows.get_child_at_index(2) is not None)
             # Navigating away while restoring cannot navigate the user back.
-            click(page.rows.get_row_at_index(0))
+            click(page.rows.get_child_at_index(0))
             started, release = threading.Event(), threading.Event()
             def restore(item, _cancel):
                 started.set()
@@ -160,10 +194,10 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-inline-trash-') as temp, \
                 assert window.tabs.current is normal and window.special_mode is None
             click(trash_tab.button)
             until(lambda: not page.busy)
-            assert page.rows.get_row_at_index(2) is None
+            assert page.rows.get_child_at_index(2) is None
             assert 'Restored 1 item.' in page.status.get_text()
             # A different Trash tab/query chosen mid-restore wins after completion.
-            click(page.rows.get_row_at_index(0))
+            click(page.rows.get_child_at_index(0))
             started.clear()
             release.clear()
             with patch('omarchy_file_picker.trash_ui.restore_item', side_effect=restore):
@@ -176,8 +210,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-inline-trash-') as temp, \
                 release.set()
                 until(lambda: not page.busy)
                 assert window.tabs.current is other
-                assert page.rows.get_row_at_index(0).item.name == 'Clip 2.mov'
-                assert page.rows.get_row_at_index(1) is None
+                assert page.rows.get_child_at_index(0).item.name == 'Clip 2.mov'
+                assert page.rows.get_child_at_index(1) is None
         finally:
             window.destroy()
             settle()

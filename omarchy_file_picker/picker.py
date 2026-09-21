@@ -47,6 +47,7 @@ from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
 from .view_status import ViewStatus
+from .folder_size_ui import FolderSizes
 from .sidebar import SidebarMenus
 from .help_window import show_help
 from .list_navigation import navigate_files
@@ -312,6 +313,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         empty.append(self.empty_detail)
         self.browser_stack.add_named(empty, "empty")
 
+        self.folder_sizes = FolderSizes(self)
         self.view_status = ViewStatus(self)
         browser.append(self.view_status)
 
@@ -862,6 +864,12 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         prefs = self.file_preferences
         if prefs['sort_key'] in EXTRA_SORTS:
             metadata = {**(metadata or {}), **self.list_details.data}
+            if prefs['sort_key'] == 'size':
+                for path in entries:
+                    if self._entry_is_dir(path):
+                        result = self.folder_sizes.result(path)
+                        metadata[path] = dict(metadata.get(path, {}), directory=True,
+                                              size=result.total if result and result.complete else None)
         elif prefs['sort_key'] in ANNOTATION_COLUMNS:
             metadata = {path: dict(annotation_values(self.ratings.get(path)),
                                    directory=self._entry_is_dir(path)) for path in entries}
@@ -886,8 +894,10 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         if trash:
             self.active_filters.set_visible(False)
             self.search_scope = 'folder'
-        for control in (self.sort_button, self.hidden_button, self.rating_filter_button,
-                        self.grid_button, self.list_button, self.columns_button, self.filter_combo):
+        self.sort_button.set_sensitive(True)
+        for control in (self.grid_button, self.list_button, self.columns_button):
+            control.set_sensitive(True)
+        for control in (self.hidden_button, self.rating_filter_button, self.filter_combo):
             control.set_sensitive(not trash)
         self.search_scope_buttons['computer'].set_sensitive(not trash)
         self._update_search_scope()
@@ -934,6 +944,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             watcher.sync()
 
     def _rebuild_files(self) -> None:
+        self.folder_sizes.reset()
         self.view_status.selection = None
         self.list_details.reset()
         self.drag_selection.cancel()
@@ -1002,7 +1013,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         detail = ""
         try:
             if path.is_dir():
-                detail = f"{len(list(path.iterdir()))} items"
+                detail = "…"
             else:
                 detail = format_size(path.stat().st_size)
         except OSError:
@@ -1010,6 +1021,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         detail_label = label(detail, "muted", xalign=0.5)
         detail_label.set_ellipsize(Pango.EllipsizeMode.END)
         detail_label.set_max_width_chars(18)
+        if self._entry_is_dir(path):
+            self.folder_sizes.bind(path, detail_label)
         if isinstance(poster, Thumbnail) and path.suffix.casefold() in IMAGE_TYPES:
             def show_dimensions(pixbuf):
                 width, height = (pixbuf.get_option('tEXt::Source' + side) for side in ('Width', 'Height'))
@@ -1201,14 +1214,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
     def _on_context_pressed(self, _gesture: Gtk.GestureClick, _presses: int, x: float, y: float) -> None:
         if self.special_mode == 'trash':
             picked = self.browser_stack.pick(x, y, Gtk.PickFlags.DEFAULT)
-            while picked and picked is not self.trash_page and not isinstance(picked, Gtk.ListBoxRow):
+            while picked and picked is not self.trash_page and not isinstance(picked, Gtk.FlowBoxChild):
                 if isinstance(picked, Gtk.Popover):
                     return
                 picked = picked.get_parent()
-            if isinstance(picked, Gtk.ListBoxRow):
+            if isinstance(picked, Gtk.FlowBoxChild):
                 if not picked.is_selected():
                     self.trash_page.rows.unselect_all()
-                    self.trash_page.rows.select_row(picked)
+                    self.trash_page.rows.select_child(picked)
             else:
                 self.trash_page.rows.unselect_all()
             _gesture.set_state(Gtk.EventSequenceState.CLAIMED)
@@ -2013,6 +2026,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         if persist:
             self._set_file_preference('view_mode', mode, reload=False)
         if self.view_mode == mode:
+            return
+        if self.special_mode == 'trash':
+            self.view_mode = mode
+            for name, button in (('grid', self.grid_button), ('list', self.list_button), ('columns', self.columns_button)):
+                (button.add_css_class if name == mode else button.remove_css_class)('active')
+            if hasattr(self, 'trash_page'):
+                self.trash_page.set_view(mode)
+            self.view_status.update([])
             return
         selected = self._selected_paths()
         self.drag_selection.cancel()

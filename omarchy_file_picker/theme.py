@@ -597,12 +597,14 @@ def build_css(colors: dict[str, str]) -> str:
     .trash-actions button:disabled {{ color: {colors['muted']}; opacity: 0.5; }}
     .trash-actions button image {{ -gtk-icon-size: 14px; }}
     .trash-error {{ color: {colors['error_ink']}; padding: 6px 12px; font-size: 12px; }}
+    .trash-list-heading {{ min-height: 24px; padding: 0 12px;
+      border-bottom: 1px solid {colors['darker_background']}; color: {colors['light_foreground']}; }}
+    .trash-list-heading label {{ font-size: 11px; font-weight: 600; }}
     .trash-list {{ background: {colors['background']}; color: {colors['foreground']}; }}
-    .trash-list row {{ padding: 7px 8px; border-radius: 3px; }}
-    .trash-list row:hover {{ background: {colors['lighter_background']}; }}
-    .trash-list row:selected {{ background: {colors['selection']}; color: {colors['foreground']}; }}
-    .trash-list row label {{ font-size: 12px; }}
-    .trash-list row .dialog-description {{ font-size: 11px; }}
+    .trash-list flowboxchild {{ padding: 2px 8px; border-radius: 3px; }}
+    .trash-list flowboxchild:hover {{ background: {colors['lighter_background']}; }}
+    .trash-list flowboxchild:selected {{ background: {colors['selection']}; color: {colors['foreground']}; }}
+    .trash-list flowboxchild label {{ font-size: 12px; }}
     .nas-button {{ margin-top: 2px; }}
     .conversion-notice {{
       background: {colors['dark_background']};

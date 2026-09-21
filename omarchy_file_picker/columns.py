@@ -231,6 +231,10 @@ class ColumnBrowser(Gtk.ScrolledWindow):
                 row.append(name)
             row.append(owner._rating_badge(item))
             if child._picker_is_dir:
+                size = Gtk.Label(xalign=1, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10)
+                size.add_css_class('muted')
+                owner.folder_sizes.bind(item, size)
+                row.append(size)
                 arrow = Gtk.Image.new_from_icon_name('go-next-symbolic')
                 arrow.add_css_class('muted')
                 arrow.set_pixel_size(12)
@@ -263,6 +267,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         focused_path = getattr(focused_row, '_picker_path', None)
         focused_index = focused_row.get_index() if focused_row else 0
         owner.list_details.reset()
+        owner.folder_sizes.invalidate()
         self.busy = True
         try:
             for column in self.columns:

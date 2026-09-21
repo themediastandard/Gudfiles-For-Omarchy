@@ -116,14 +116,15 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-status-') as temp:
                     for view in ('list', 'columns', 'grid'):
                         window._set_view(view); settle()
                         assert status.scale.get_sensitive() == (view == 'grid')
+                        assert status.scale.get_mapped() == (view == 'grid')
                         until(lambda: status.summary.get_text() == '2 files · ' + format_size(3072))
                     assert window.children_by_path[a].get_child()._grid_size_parts[0].get_size_request() == (96, 60)
                     window.flow.unselect_all(); settle()
                     assert status.summary.get_text() == ''
                     window.flow.select_child(window.children_by_path[subfolder])
-                    until(lambda: status.summary.get_text() == '1 folder')
+                    until(lambda: status.summary.get_text() == '1 folder · ' + format_size(0))
                     window.flow.select_child(window.children_by_path[a])
-                    until(lambda: status.summary.get_text() == '1 file, 1 folder · ' + format_size(1024) + ' in files')
+                    until(lambda: status.summary.get_text() == '1 file, 1 folder · ' + format_size(1024))
                     # A delayed old selection cannot replace a newer selection.
                     started, release = threading.Event(), threading.Event()
                     def delayed(paths, **kwargs):

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from omarchy_file_picker.trash import TrashItem, restore_item
+from omarchy_file_picker.trash import TrashItem, delete_item, restore_item
 
 
 class RestoreSafetyTests(unittest.TestCase):
@@ -40,3 +40,16 @@ class RestoreSafetyTests(unittest.TestCase):
         self.source.move.return_value = False
         with self.assertRaisesRegex(OSError, 'could not be restored'):
             restore_item(self.item)
+
+    def test_permanent_delete_revalidates_and_requires_a_receipt(self):
+        self.source.has_parent.return_value = True
+        self.source.delete.return_value = False
+        with self.assertRaisesRegex(OSError, 'could not be permanently deleted'):
+            delete_item(self.item)
+        self.source.delete.assert_called_once_with(None)
+
+        self.source.delete.reset_mock()
+        self.info.get_attribute_string.return_value = '2026-09-19T13:00:00'
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            delete_item(self.item)
+        self.source.delete.assert_not_called()

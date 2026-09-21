@@ -35,14 +35,8 @@ def list_trash(cancellable=None):
 
 
 def restore_item(item, cancellable=None):
-    source = Gio.File.new_for_uri(item.uri)
-    if not source.has_parent(Gio.File.new_for_uri('trash:///')):
-        raise ValueError('This item is no longer in Trash.')
-    info = source.query_info(ATTRIBUTES, Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, cancellable)
-    original = info.get_attribute_byte_string('trash::orig-path') or ''
-    deleted = info.get_attribute_string('trash::deletion-date') or ''
-    if (original, deleted) != (item.original, item.deleted):
-        raise ValueError('This item changed. Refresh Trash and select it again.')
+    source = _current_source(item, cancellable)
+    original = item.original
     if not original or not Path(original).is_absolute():
         raise ValueError('The original location is unavailable.')
     # GIO refuses existing targets, including directories and symlinks. Never
@@ -51,3 +45,23 @@ def restore_item(item, cancellable=None):
     if not source.move(target, Gio.FileCopyFlags.NOFOLLOW_SYMLINKS, cancellable, None, None):
         raise OSError('The item could not be restored.')
     return Path(original)
+
+
+def delete_item(item, cancellable=None):
+    """Permanently delete one unchanged, direct child of the desktop Trash."""
+    source = _current_source(item, cancellable)
+    if not source.delete(cancellable):
+        raise OSError('The item could not be permanently deleted.')
+
+
+def _current_source(item, cancellable=None):
+    """Resolve an item again so stale UI state cannot act on a replacement."""
+    source = Gio.File.new_for_uri(item.uri)
+    if not source.has_parent(Gio.File.new_for_uri('trash:///')):
+        raise ValueError('This item is no longer in Trash.')
+    info = source.query_info(ATTRIBUTES, Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, cancellable)
+    original = info.get_attribute_byte_string('trash::orig-path') or ''
+    deleted = info.get_attribute_string('trash::deletion-date') or ''
+    if (original, deleted) != (item.original, item.deleted):
+        raise ValueError('This item changed. Refresh Trash and select it again.')
+    return source
