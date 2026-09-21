@@ -6,13 +6,14 @@ redistribution require written permission; read the included LICENSE.
 
 ## Availability
 
-Release preparation is in progress. Public GitHub releases and the AUR entry
-must be published before the online commands below work. The intended AUR
+The public 0.1.0 friend preview is available on GitHub. Stable release
+preparation is in progress; the AUR entry must be published before the online
+AUR commands below work. The intended AUR
 package name is `gudfiles`; no AUR listing is claimed by this guide.
 
 ## Friend preview builds
 
-For a directly shared package or a private GitHub prerelease, follow
+For a directly shared package or a GitHub prerelease, follow
 the separately supplied `TESTING.md` guide. These builds install locally with pacman
 and receive updates by downloading another package; no AUR entry is required.
 
@@ -38,9 +39,14 @@ Use the release's SHA256SUMS to check downloads with `sha256sum -c SHA256SUMS`.
 
 Launch **Gudfiles** from the application menu, or run `gudfiles`. The old
 `omarchy-file-picker` command remains compatible. **Help → About & License**
-shows the installed version and a manual **Check for Updates** button. Checking
-contacts GitHub only when requested; it sends no filenames, settings or ratings.
-It reports public releases and links to notes; it does not install anything.
+shows the installed version and a manual **Check for Updates** button. Ordinary
+browser launches also check GitHub anonymously in the background, at most daily
+(hourly retry after failures). Open/Save dialogs and temporary reveals stay quiet.
+A small dismissible notice links to a newer stable release with an uploaded
+package. Closing it dismisses that version; Help can still check and open it.
+Checks send the app version, no filenames, settings or ratings. They do not
+download or install anything. Old preview users must install a package containing
+this feature once; a source push cannot update their installed app.
 
 ## Optional system Open/Save dialogs
 

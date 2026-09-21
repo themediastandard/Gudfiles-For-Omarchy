@@ -37,10 +37,15 @@ class ReleaseChecks(unittest.TestCase):
             names = [member.name for member in members]
             self.assertTrue(any(name.endswith('/LICENSE') for name in names))
             self.assertTrue(any(name.endswith('/release.json') for name in names))
+            self.assertTrue(any(name.endswith('/update_ui.py') for name in names))
+            self.assertTrue(any(name.endswith('/update_state.py') for name in names))
             self.assertFalse(any(name.endswith(('PROJECT.md', '.pyc', '.sqlite3')) or '/tests/' in name or '/.git/' in name for name in names))
             self.assertTrue(all(member.isfile() and member.mtime == 0 and member.uid == 0 for member in members))
 
     def result(self, release):
+        if isinstance(release, dict) and 'assets' not in release:
+            release = {**release, 'assets': [{'name': f"gudfiles-{release.get('tag_name', '')[1:]}-1-any.pkg.tar.zst",
+                                             'state': 'uploaded', 'size': 100}]}
         with patch.object(updates, 'urlopen', return_value=io.BytesIO(json.dumps(release).encode())) as fetch:
             result = updates.check_for_updates()
         self.assertEqual(fetch.call_args.kwargs['timeout'], 8)
@@ -62,9 +67,15 @@ class ReleaseChecks(unittest.TestCase):
                               'html_url': 'https://evil.example/download'})
         self.assertTrue(result.url.startswith('https://github.com/themediastandard/'))
 
+    def test_no_package_is_not_an_available_download(self):
+        for assets in ([], None, [{'name': 'gudfiles-2.0.0-1-any.pkg.tar.zst', 'size': 0, 'state': 'uploaded'}]):
+            self.assertEqual(self.result({'tag_name': 'v2.0.0', 'draft': False,
+                                         'prerelease': False, 'assets': assets}).status, 'unpublished')
+
     def test_network_and_unpublished(self):
         for error, status in [(TimeoutError(), 'error'),
                               (HTTPError('url', 403, 'rate limited', {}, None), 'error'),
+                              (HTTPError('url', 429, 'rate limited', {}, None), 'error'),
                               (HTTPError('url', 404, 'missing', {}, None), 'unpublished')]:
             with patch.object(updates, 'urlopen', side_effect=error):
                 self.assertEqual(updates.check_for_updates().status, status)
@@ -72,12 +83,17 @@ class ReleaseChecks(unittest.TestCase):
             with patch.object(updates, 'urlopen', return_value=io.BytesIO(content)):
                 self.assertEqual(updates.check_for_updates().status, 'error')
 
+    def test_trickled_response_has_a_body_deadline(self):
+        with patch.object(updates, 'urlopen', return_value=io.BytesIO(b'{}')), \
+                patch.object(updates.time, 'monotonic', side_effect=[100, 113]):
+            self.assertEqual(updates.check_for_updates().status, 'error')
+
     def test_versions_and_install_channel(self):
         for value in ('v1.0.0', '1.0', '01.2.3', '1.0.0-rc1', None):
             with self.assertRaises(ValueError):
                 updates.version_tuple(value)
         with patch.object(updates, '__file__', '/usr/lib/gudfiles/omarchy_file_picker/updates.py'):
-            self.assertIn('run Omarchy Update', updates.update_instructions())
+            self.assertIn('requires a published, updated AUR package', updates.update_instructions())
         self.assertIn('local development installation', updates.update_instructions())
 
 

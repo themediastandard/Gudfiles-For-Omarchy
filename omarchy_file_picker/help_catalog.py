@@ -22,6 +22,7 @@ class Feature:
     description: str
     shortcut: str = ''
     keywords: str = ''
+    requires: str = ''
 
 
 CATEGORIES = (
@@ -46,7 +47,7 @@ FEATURES = (
             'Use Show in Files or Show in Folder in another app to open the containing folder with the requested items selected and scrolled into view. Hidden targets are shown too.',
             keywords='chromium downloads reveal external selection'),
     Feature('browse', 'Folder tabs',
-            'Use + or Ctrl + T for a new Gudfiles tab. Tabs expand and fade in when opened, collapse when closed, and smoothly share the strip width. System reduced-motion settings are respected. Each tab keeps its folder history, view, filters, selection and scroll. Ctrl + W closes a tab; Ctrl + Shift + T reopens it. Drag tabs to reorder them.',
+            'Use + or Ctrl + T to open a tab. Each tab keeps its folder, history, view, filters, selection and scroll. Ctrl + W closes it; Ctrl + Shift + T reopens it. Drag tabs to reorder them. Tabs share the strip width and respect reduced-motion settings.',
             'Ctrl + T / W', 'finder tabs close reopen'),
     Feature('browse', 'Switch tabs and open folders',
             'Ctrl + Tab and Ctrl + Shift + Tab switch tabs. Alt + 1–8 selects a tab; Alt + 9 selects the last. Middle-click a folder or sidebar location to open a background tab, or use Open in New Tab in its menu.',
@@ -61,7 +62,10 @@ FEATURES = (
             'Up / Down selects items within the current column. Select a folder to open the next column; Left and Right move between columns. Each column scrolls independently.',
             '← / →'),
     Feature('browse', 'Search this folder or whole computer',
-            'Click the magnifying glass or press Ctrl + F, then choose This folder or Whole computer. This folder filters names without scanning subfolders. Whole computer searches accessible files and mounted drives recursively, skips virtual system folders and does not follow folder symlinks. Results show their folder locations. Search stops at 500 matches or 15 seconds and reports incomplete results or unreadable folders. Hidden files follow the eye toggle. Each tab remembers its scope. Enter shows results; Escape closes the popover. Remove the search chip to clear it.', 'Ctrl + F', 'find filename scope search'),
+            'Click the magnifying glass or press Ctrl + F. This folder filters names here; Whole computer searches accessible folders and mounted drives recursively. Results show their locations. The eye toggle controls hidden files. Each tab remembers its scope. Enter shows results; Escape closes search. Remove its chip to clear it.', 'Ctrl + F', 'find filename scope search'),
+    Feature('browse', 'Computer search limits',
+            'Whole computer searches for up to 15 seconds or 500 matches. It skips virtual system folders and does not follow folder symlinks. A status message reports limits or unreadable folders; refine your search when results are incomplete.',
+            keywords='search timeout partial recursive permissions'),
     Feature('browse', 'Jump to a path',
             'Enter a folder path directly. Escape returns to the breadcrumb trail.', 'Ctrl + L', 'location address'),
     Feature('browse', 'Breadcrumbs & history',
@@ -72,8 +76,20 @@ FEATURES = (
     Feature('browse', 'Clear active filters',
             'Search, file type, stars, colors and hidden-file settings appear as chips below the toolbar. Remove one chip or choose Clear all.'),
     Feature('browse', 'Sort & list details',
-            'In list view, click a heading to sort; click again to reverse. Right-click the heading row to choose file details, Rating, Color Label and Rejected columns. Drag headings left or right to rearrange them, or focus a heading and press Alt + Left / Right. A floating header and shaded column preview the new position as you drag. Name stays fixed in the first position; Escape cancels. Column choices, positions and sorting are remembered. Ratings update when you change them; a dash in Rating means unrated. Media values load in the background; sorting by them shows progress. Sort in the top bar and right-click → Sort By share the same order and optional Folders first setting.',
+            'Click a list heading to sort; click again to reverse. Right-click headings to choose details, including Rating, Color Label and Rejected. Drag headings to rearrange them; Name stays first. Your layout and sort order are remembered. The top-bar Sort menu also controls ordering and Folders first.',
             keywords='columns header metadata customize reorder positions stars rating color rejected fps resolution created modified'),
+    Feature('browse', 'Reorder list columns',
+            'Drag a heading left or right, or focus it and press Alt + Left / Right. The shaded column shows its new position. Name stays first; Escape cancels a drag. Your column choices and positions are remembered.',
+            keywords='header move arrange metadata'),
+    Feature('browse', 'Resize and fit list columns',
+            'Drag a heading’s right edge to resize its column. Double-click the edge to fit its contents. Narrow names truncate instead of widening the window. Column widths are remembered; new windows keep a compact default for Name.',
+            keywords='width filename size fit double click'),
+    Feature('browse', 'Thumbnail size',
+            'In grid view, use the slider at the bottom left to make thumbnails smaller or larger. The size is remembered and updates without reopening the folder.',
+            keywords='zoom tiles grid slider bottom bar'),
+    Feature('browse', 'Folder sizes',
+            'Folder sizes include nested and hidden files and load in the background in every view. Linked contents are excluded. An ellipsis means calculating; ≥ means incomplete; Unavailable means unreadable. Size sorting places incomplete results last. F5 recalculates. These are content sizes, not disk space used.',
+            keywords='recursive directory bytes totals calculate', requires='folder_sizes'),
     Feature('browse', 'Refresh the folder',
             'Visible folders update automatically when files change elsewhere, preserving selection and scroll position. F5 reloads manually, including network locations that cannot report changes.', 'F5'),
     Feature('browse', 'Action sounds',
@@ -83,7 +99,7 @@ FEATURES = (
             'Gudfiles reads your active Omarchy colors at launch, including its previews, menus and dialogs.'),
 
     Feature('preview', 'Quick Look',
-            'Select a file and press Space for an in-window preview. Videos open at their correct display aspect; a slow load shows a spinner until dimensions are ready. Space or Escape closes it. Down / Right previews the next file; Up / Left previews the previous file in the current sort order. Focused text and playback sliders keep their own arrow controls.',
+            'Select a file and press Space for an in-window preview. Space or Escape closes it. Down / Right previews the next file; Up / Left previews the previous file in the current sort order. Text fields and playback sliders keep their own arrow controls.',
             'Space', 'preview quicklook'),
     Feature('preview', 'Zoom in on images',
             'Scroll over an image preview to zoom up to 8× its fitted size. Drag to pan and double-click to fit again. Each image starts fitted.',
@@ -100,10 +116,10 @@ FEATURES = (
     Feature('preview', 'Text & PDF previews',
             'Quick Look shows read-only UTF-8 text up to 128 KB and the first page of a PDF with its page count. PDF support requires Poppler.'),
     Feature('preview', 'Media details at a glance',
-            'The selection strip shows a summary. Its information button reveals available resolution, frame rate, codec, duration, audio and camera metadata.',
+            'Select a photo, camera RAW file or video to show the compact media preview below the file area. Its information button opens available dimensions, frame rate, codec, duration and camera details. With mixed selections, the preview shows the first selected media file.',
             keywords='fps exif bit depth dimensions'),
-    Feature('preview', 'Selection summaries',
-            'Select items to see their file/folder count and combined size in the bottom bar. Folder sizes include nested and hidden files and load in the background in every view. Symbolic links inside folders are excluded. An ellipsis means calculating; ≥ marks an incomplete total, and Unavailable means the size could not be read. Size sorting waits for folder calculations and places incomplete sizes last. F5 recalculates.',
+    Feature('browse', 'Selection summaries',
+            'The slim bottom bar shows the selected file/folder count and combined size. Folder totals update in the background. Selecting a folder or document keeps the large media preview hidden, leaving more room for browsing.',
             keywords='multiple metadata bytes'),
 
     Feature('organize', 'Select a little or a lot',
@@ -120,10 +136,10 @@ FEATURES = (
             'Ctrl + Z or right-click → Undo reverses a rename, batch rename or same-drive move from this window. Changed items and existing destination names stop Undo safely. History lasts for this window; cross-drive moves and permanent deletion cannot be undone here. Text fields keep their own Undo.',
             'Ctrl + Z', 'undo recover rename move'),
     Feature('organize', 'Stars & rejects',
-            'Press 1–5 to rate selected files, 0 to clear stars, or X to toggle rejected. The same controls work in Quick Look. Rejecting does not delete a file.',
+            'Press 1–5 to rate selected files, 0 to clear stars, or X to toggle rejected. The same controls work in Quick Look. Rejecting marks a file without deleting it.',
             '1–5 / 0 / X', 'rating cull culling'),
     Feature('organize', 'Color labels & filters',
-            'Use the color dot in the selection strip or Quick Look to label files. The toolbar star filters by rating, rejected status or color; folders stay navigable.',
+            'Use the color dot in the media preview or Quick Look to label files. The toolbar star filters by rating, rejected status or color; folders stay navigable.',
             keywords='tag mark'),
     Feature('organize', 'Your labels stay local',
             'Ratings and colors belong to Gudfiles, not embedded media metadata. They follow renames and cut/paste moves made here; external moves are not tracked.',
@@ -134,9 +150,12 @@ FEATURES = (
     Feature('organize', 'Trash or delete',
             'Press Delete, Super + Backspace or Super + Delete to move selected items to Trash after confirmation. If a location such as a NAS does not support Trash, Gudfiles explains this and offers a separate permanent-delete confirmation for those items. Cancel keeps them in place. Shift + Delete permanently deletes after confirmation. All destructive dialogs start on Cancel.',
             'Del / Super+Backspace'),
-    Feature('organize', 'Browse, restore or empty Trash',
-            'Choose Trash in the sidebar and browse it with the normal Grid, List or Column controls. Search filters deleted names and original locations. Select items and choose Restore; existing files are never replaced and failed items stay in Trash. Empty Trash asks first, permanently deletes only the items present when you confirmed, and cannot be undone. F5 refreshes the desktop Trash.',
+    Feature('organize', 'Restore from Trash',
+            'Open Trash in the sidebar and browse it with the normal Grid, List or Column controls. Select items and use Restore to put them back. Existing files are never replaced; failures stay in Trash. Back, Forward, tabs and name/location search work here too. F5 refreshes the list.',
             keywords='recover deleted restore trash bin'),
+    Feature('organize', 'Empty Trash',
+            'In Trash, choose Empty Trash… from the action bar or right-click menu. Confirm to permanently remove the listed items, including items hidden by search. This cannot be undone. Items added after confirmation are kept; failures are reported and remain in Trash.',
+            keywords='bin delete permanently clear all', requires='empty_trash'),
     Feature('organize', 'Right-click actions',
             'Right-click a file, blank folder space or a sidebar location for its actions. Hover over a row with an arrow to open its submenu. Shift + F10 opens the menu for the focused item.',
             'Shift + F10', 'context menu'),
@@ -188,8 +207,14 @@ FEATURES = (
             'Use the video conversion submenu for MP4, WebM, MOV or GIF. FFmpeg creates a new output; the original stays intact. Completion appears as a dismissible in-window notice.',
             keywords='movie format export'),
 
-    Feature('locations', 'Favorites & recent folders',
-            'Right-click a folder and choose Add to Favorites to keep it in the Favorites sidebar section. Remove from Favorites removes only the shortcut. Favorites persist across windows and launches. Recents lists the five latest folders you used, newest first, including opening folders, choosing files, previewing, copying and file operations. Right-click a Recents entry and choose Remove from Recents to forget it without deleting anything; using the folder again can bring it back. Recent Files still shows recent files. Shared GTK bookmarks remain under Places. Use the eject icon beside supported drives to safely disconnect them.'),
+    Feature('locations', 'Favorite folders',
+            'Right-click a folder and choose Add to Favorites. Favorites stay in the sidebar across windows and launches. Remove from Favorites removes only the shortcut, never the folder.'),
+    Feature('locations', 'Recent folders and Recent Files',
+            'Recents keeps the five latest folders you used, newest first, including folders used for previews, file operations and choosing files. Right-click → Remove from Recents forgets an entry without deleting it; using that folder again can bring it back. Recent Files is a separate view of recent files.',
+            keywords='history favorites sidebar last used'),
+    Feature('locations', 'Shared bookmarks',
+            'Shared GTK bookmarks appear under Places. Favorites belong to Gudfiles and stay in their own sidebar section.',
+            keywords='places GTK bookmark'),
     Feature('locations', 'Make the sidebar yours',
             'Drag its divider to resize; the width is remembered. Right-click a location to Remove from Sidebar without deleting it. Restore Default Locations brings hidden defaults back.'),
     Feature('locations', 'Open another Gudfiles window',
@@ -209,9 +234,12 @@ FEATURES = (
     Feature('picker', 'Choose files for another app',
             'An app’s Open dialog includes its file-type filters, choices and Open / Cancel buttons. Single or multiple selection follows what that app allows.'),
     Feature('picker', 'Choose a folder',
-            'A folder request shows directories and returns the selected destination. The dialog’s footer tells you what the requesting app needs.'),
+            'Folder dialogs show files for context, but those files are disabled. Select a folder and use the footer action to return it to the requesting app.'),
     Feature('picker', 'Save a file',
             'Choose a destination and enter a name in the Save dialog. Replacing an existing file requires confirmation. Save requests can also supply several filenames.'),
+    Feature('picker', 'Update notices',
+            'Ordinary browser launches check for newer stable packages in the background, at most daily. View download opens the release page; installing is up to you. Dismiss hides that version. Open/Save dialogs and temporary reveals stay quiet. Help → About & License can check again, even for a dismissed version.',
+            keywords='automatic launch updater release notification download', requires='launch_updates'),
     Feature('picker', 'Help, always close by',
             'Click Help in the header or press F1 to open this guide. Search by feature or shortcut. In this window, Ctrl + F focuses search and Escape closes the guide.',
             'F1', 'keyboard shortcuts guide manual'),
@@ -221,7 +249,12 @@ FEATURES = (
 )
 
 
-def matching_features(query='', category=None):
+def available_features(capabilities):
+    return [feature for feature in FEATURES
+            if not feature.requires or feature.requires in capabilities]
+
+
+def matching_features(query='', category=None, *, features=None):
     # Treat punctuation in shortcuts as spacing: Ctrl+Shift+V and Ctrl Shift V
     # find the same entry. All words must match; case and whitespace do not matter.
     def normalize(value):
@@ -235,6 +268,6 @@ def matching_features(query='', category=None):
         # A shortcut's single letter must be a whole token: "V" must not
         # match the v in "view" and turn Ctrl+Shift+V into unrelated results.
         return all(word in tokens if len(word) == 1 else word in searchable for word in words)
-    return [feature for feature in FEATURES
+    return [feature for feature in (FEATURES if features is None else features)
             if (category is None or feature.category == category)
             and matches(feature)]

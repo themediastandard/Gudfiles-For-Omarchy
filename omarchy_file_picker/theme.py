@@ -606,6 +606,19 @@ def build_css(colors: dict[str, str]) -> str:
     .trash-list flowboxchild:selected {{ background: {colors['selection']}; color: {colors['foreground']}; }}
     .trash-list flowboxchild label {{ font-size: 12px; }}
     .nas-button {{ margin-top: 2px; }}
+    .update-notice {{
+      padding: 3px 8px;
+      background: {colors['dark_background']};
+      color: {colors['foreground']};
+    }}
+    .update-notice button {{
+      background: transparent; background-image: none; border: 0;
+      box-shadow: none; text-shadow: none;
+      min-height: 24px;
+      padding: 0 6px;
+      color: {colors['foreground']};
+    }}
+    .update-notice button:hover {{ background: {colors['lighter_background']}; }}
     .conversion-notice {{
       background: {colors['dark_background']};
       color: {colors['foreground']};

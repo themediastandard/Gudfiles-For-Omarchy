@@ -4,15 +4,12 @@
 
 `omarchy_file_picker/__init__.py` owns the stable `major.minor.patch` version,
 currently **0.1.2**. `omarchy_file_picker/release.json` owns the public release
-repository used by Help and the generated PKGBUILD. It currently targets
-`themediastandard/gudfiles-releases`, a proposed separate public distribution
-repository. Confirm that choice before publication. The development repository
-`themediastandard/Gudfiles-For-Omarchy` is public; its existing friend preview is separate
-from stable distribution.
+repository used by launch checks, Help and the generated PKGBUILD. It targets
+`themediastandard/Gudfiles-For-Omarchy`, the public source repository. Its existing
+0.1.0 friend preview is a prerelease; no stable release or official AUR listing
+has been published. Source pushes do not replace downloadable packages.
 
-The downloadable Python application necessarily contains its runtime Python
-files. A separate release repository keeps development history, tests and
-internal project documents private; it does not conceal the shipped Python.
+The downloadable Python application contains its runtime Python files.
 The Gudfiles Free Use License reserves modification and redistribution rights.
 Do not replace it with an open-source license during packaging.
 
@@ -49,23 +46,19 @@ does not publish releases or update the AUR automatically.
 
 ## First publication (external actions require the owner's go-ahead)
 
-Confirm the destination, then create the public release repository under The
-Media Standard with a minimal public README linking to the website, downloads,
-installation instructions and license. Do not mirror the private repository or
-its history. Confirm `gudfiles` is available on the AUR and use the owner's
-authorized AUR account; AUR Git requires that account's SSH key.
+Use the canonical repository above. Publication still requires the owner's
+go-ahead; preparing artifacts or configuring the checker does not publish them.
+Confirm `gudfiles` is available on the AUR before any AUR submission and use the
+owner's authorized account; AUR Git requires that account's SSH key.
 
-Create a **draft** GitHub release for `v0.1.0` in that destination, attach exactly:
-
-- `gudfiles-0.1.0.tar.gz`
-- `gudfiles-0.1.0-1-any.pkg.tar.zst`
-- `SHA256SUMS`
-
-Use `dist/0.1.0/RELEASE-NOTES.md` for its body. Review the draft and publish it as
-a stable release (the update check deliberately ignores prereleases). Download
-all three assets anonymously and verify checksums before publishing the AUR
-recipe. Publish only PKGBUILD and `.SRCINFO` to the AUR; source downloads must
-come from The Media Standard's official immutable version URL.
+Create a **draft** GitHub release for `v<version>` tied to the reviewed source
+commit. Attach the generated runtime archive, `gudfiles-<version>-1-any.pkg.tar.zst`
+and `SHA256SUMS`, using `dist/<version>/RELEASE-NOTES.md` as its body. Include the
+installation guide. Review and publish as a stable release; the update check
+ignores prereleases and requires an uploaded, nonempty matching Arch package
+before offering a newer version. Download the assets anonymously and verify
+checksums before publishing the AUR recipe. Publish only PKGBUILD and `.SRCINFO`
+to the AUR; source downloads must use the official immutable version URL.
 
 Run a fresh `yay -S gudfiles` and confirm `gudfiles --version`. Confirm the
 anonymous GitHub latest-release endpoint returns the expected tag. The first
@@ -82,27 +75,31 @@ users receive the newer package on their next normal update after AUR publicatio
 Direct package downloads also participate once the official matching AUR entry
 is live. A GitHub release by itself does not update an AUR recipe.
 
-No in-app installer replaces files while the app runs. Help checks GitHub only
-when asked, times out on network failure, and distinguishes unpublished,
-up-to-date, newer-public and ahead-of-public versions. Data remains in the
-existing user paths. Explain any future storage migration and rollback limits
-in release notes before shipping it.
+Ordinary browser launches check anonymously in the background. Successful checks
+are cached for 24 hours; failures retry on a launch after one hour. Open/Save,
+folder pickers and temporary external reveals do not check automatically.
+The notice appears at most once per version per day across windows/processes;
+its close button dismisses that version persistently. Help → About & License
+can always request a fresh check, including for a dismissed version. Automatic
+checks stay silent on failure or when no eligible newer stable package exists.
+The View download action opens the verified release page; downloading and
+installation remain explicit user actions. Checks send the app version, no
+filenames, settings or ratings. No in-app installer replaces running files.
+
+Existing 0.1.0 preview users must install a newer package containing this feature
+once to receive future launch notices. A source push cannot add it to their old
+installation. Settings and file data remain in their existing paths. Explain any
+future storage migration and rollback limits in release notes before shipping.
 
 Reference: [Arch PKGBUILD manual](https://man.archlinux.org/man/PKGBUILD.5.en.html)
 and [GitHub releases API](https://docs.github.com/en/rest/releases/releases).
 
-## Private friend previews
+## Friend previews
 
-For authorized early testing, use a prerelease in the existing private
-`themediastandard/Gudfiles-For-Omarchy` repository. Build and verify the same allowlisted
-artifacts, attach `docs/TESTING.md` as `TESTING.md`, and use a distinct preview
-tag such as `v0.1.0-preview.1` tied to the source commit. Keep the release marked
-prerelease. Repository access is required; the owner can also send the assets
-directly. Do not change repository visibility or publish to the proposed public
-release repository as part of a private preview.
-
-The app currently uses stable numeric versions, so this preview reports 0.1.0.
-After distributing it, use a new app version for changed runtime contents and
-never replace its assets. Its manual update check intentionally ignores private
-previews; testers install each supplied package with pacman. Include the tester
-guide separately because the runtime archive only includes INSTALL.md.
+The existing `v0.1.0-preview.1` prerelease is publicly downloadable from the
+canonical source repository. For future authorized previews, build and verify
+the same allowlisted artifacts and use a distinct preview tag tied to the source
+commit. Keep it marked prerelease, attach `docs/TESTING.md` separately, and never
+replace published assets. The shipped preview reports 0.1.0 and predates launch
+notices. Stable checks intentionally ignore previews; testers install each
+supplied package with pacman. No AUR entry is required for direct installation.

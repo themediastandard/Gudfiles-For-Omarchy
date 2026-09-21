@@ -30,6 +30,42 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Real disconnected-NAS behavior and physical pointer input were not exercised;
   bounded subprocess timeout/cancellation and unreadable-tree faults were tested.
 
+- Help refresh (September 21): the catalog now includes list resizing/fitting,
+  thumbnail sizing, selection totals, conditional media previews, Favorites,
+  Recents, bookmarks, folder-picker constraints and launch notices. Long search,
+  tabs and list-layout descriptions are split into focused topics. Folder-size,
+  Empty Trash and launch-notice entries are shown only when their corresponding
+  runtime capabilities exist; this keeps mixed development installations honest.
+  The catalog contains 72 entries, with counts derived from the available subset.
+- Help uses a single slim title/search row, neutral topic navigation, flat content
+  rows, small shortcut badges and lighter About/License sections. Dedicated
+  `help_style.py` CSS is scoped to the guide and removed when it is destroyed.
+  Search, category navigation, F1/Ctrl+F/Escape, license text, manual checking and
+  browser/picker ownership behavior are preserved.
+
+- Launch update discovery (September 21): ordinary browser windows check stable
+  releases from `themediastandard/Gudfiles-For-Omarchy` after their first map.
+  Browsing stays usable; Open/Save/folder pickers and temporary external reveals
+  never check automatically. A slim theme-aware notice offers View download and
+  dismissal only for a newer stable version with an uploaded, nonempty matching
+  Arch package. The action opens the exact trusted GitHub release page; no
+  download, installation, privilege escalation or restart happens automatically.
+- Help shares the checker and allows a fresh manual request, including dismissed
+  versions. It reports failures and absent stable releases explicitly. Anonymous
+  requests send the app version only. A 12-second coordinator deadline ignores
+  late replies; HTTP reads also have socket/body/time limits.
+- Update bookkeeping is separate at `$XDG_STATE_HOME/gudfiles/updates` (default
+  `~/.local/state/gudfiles/updates`): atomic bounded JSON, advisory process locks,
+  channel/version-scoped 24-hour check cache and one-hour error retry. One notice
+  per version per day across windows/processes; dismissal persists for that
+  version. Future timestamps invalidate freshness. Storage/network failure is
+  silent on launch; Help reports it. A pending check never blocks dismissal.
+- The public 0.1.0 preview predates this feature. Its users need one manual package
+  upgrade; pushing source cannot retrofit notices. The live stable endpoint still
+  reports no release. AUR publication and fresh-machine package/login acceptance
+  remain pending. Release configuration and docs now use the public source repo;
+  neither stable publication nor an AUR listing was performed for this feature.
+
 - SMB-encoded trailing spaces (U+F028) display as normal spaces in file rows,
   folder headings, breadcrumbs, tabs, sidebar shortcuts and Quick Look titles.
   `filename_display.py` owns display-only decoding at path-component boundaries;
@@ -382,9 +418,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   pinned AUR recipe and `.SRCINFO`, SHA-256 checksums, deterministic allowlisted
   runtime archive, release notes and a packaging-only CI workflow. Source and
   friend-preview downloads are now public; stable releases and an AUR listing
-  remain unpublished. `release.json` currently uses the
-  proposed `themediastandard/gudfiles-releases` destination; owner confirmation
-  is pending. Shipped Python remains readable regardless of repository privacy.
+  remain unpublished. `release.json` uses the canonical public
+  `themediastandard/Gudfiles-For-Omarchy` release channel. Shipped Python remains
+  readable; the Gudfiles Free Use License is unchanged.
 - Help → About & License displays the version and a manual asynchronous GitHub
   release check. It sends no user files/settings, does not install anything, and
   distinguishes package installs from local development copies. Official AUR
@@ -731,8 +767,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   focus restoration shared with columns and Quick Look.
 - `omarchy_file_picker/help_catalog.py` — feature descriptions, category metadata
   and search; the single content source for the in-app guide.
-- `omarchy_file_picker/help_window.py` — native help window, category navigation,
-  shortcut badges, search states and owner-bound lifetime.
+- `omarchy_file_picker/help_window.py` / `help_style.py` — native help window,
+  capability-aware catalog, compact scoped styling, category navigation, shortcut
+  badges, search states and owner-bound lifetime.
 - `omarchy_file_picker/about.py` / `LICENSE` — creator credit, website and the
   free-use license; shared by the About page and installed application.
 - `omarchy_file_picker/thumbnails.py`, `thumbnail_decode.py`, `thumbnail_widgets.py`
@@ -789,7 +826,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   release inputs and CI; `docs/INSTALL.md` / `docs/RELEASING.md` own distribution
   instructions. `dist/` contains ignored generated review artifacts.
 - `omarchy_file_picker/updates.py`, `launcher.py`, `portal_setup.py`,
-  `release.json` — manual updates, diagnostic commands and per-user portal choice.
+  `release.json` — stable release checks, diagnostic commands and per-user portal choice.
+- `update_state.py` / `update_ui.py` — shared launch/Help checks, private update
+  history, process coordination and owner-bound native notices.
 
 ## Development
 
@@ -801,6 +840,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_updates.py
 PYTHONPATH=. python tests/ui_filename_display.py
 PYTHONPATH=. python tests/ui_folder_sizes.py
 PYTHONPATH=. python tests/ui_folder_locations.py
@@ -1186,6 +1226,37 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- Launch-update verification (September 21): 302 unit tests pass. Isolated GTK
+  `ui_updates.py` covers actual application activation, delayed replies while
+  browsing all three views, duplicate windows, shared Help checks, manual/cache
+  races, trusted links, persistent dismissal, newer versions, stale-owner cleanup,
+  silent non-update results and exclusion of caller-owned picker/external modes.
+  Light/dark 820-pixel notice captures were inspected. Help, explorer/Open/Save
+  and real transfer regressions pass; the explorer fixture now correctly expects
+  no large preview for non-media. Package build, deterministic archive checks and
+  release verification pass. The complete launch-notice suite also passes against
+  the extracted Arch package. The live channel returns no stable public release.
+- Launch notices and the Help refresh are now installed locally. Installation
+  staged the current runtime plus only eight update/Help paths, checked its full
+  byte manifest before and after an atomic package exchange, and retained a
+  rollback copy. All 70 staged runtime files matched installation; existing
+  folder-size changes were preserved. Portal services and windows stayed running.
+  Existing windows need reopening. Source changes remain on
+  `codex/launch-update-notice`; reconcile them with concurrent main-checkout work
+  before publishing or replacing the installed package from a single checkout.
+  No release assets or AUR entry were published. Old preview users still need a
+  one-time upgrade after an authorized stable release.
+- Help verification (September 21): 304 unit tests pass. Native checks cover
+  source, a combined installation stage and the installed runtime in
+  active/light/dark palettes, full
+  and minimum dimensions, actual new-topic searches and capability omissions,
+  category counts, empty/long searches, unchanged window geometry, update/error
+  states, license expansion, Ctrl+F/Escape/F1, owner cleanup, selection retention
+  and Open/Save/folder/SaveFiles isolation. Light/dark captures were reviewed;
+  dark title/search contrast was corrected. The launch suite also passes against
+  the combined stage. `help_style.py` enters the deterministic runtime archive
+  through the standard recursive runtime allowlist.
 
 - September 21 conditional-preview verification: 295 unit tests pass. Isolated
   native tests exercise empty, folder, document, photo, video and mixed selections
