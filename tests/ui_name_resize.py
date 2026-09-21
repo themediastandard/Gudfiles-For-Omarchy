@@ -50,14 +50,14 @@ def point(widget, fraction=1):
 
 def aligned(window):
     details = window.list_details
-    row = next(iter(window.children_by_path.values())).get_child()
-    cell = row.get_first_child()
-    for key in details.columns():
-        _, body = cell.compute_bounds(window)
-        _, head = details.buttons[key].compute_bounds(window)
-        assert abs(body.get_x() - head.get_x()) <= 1, key
-        assert abs(body.get_width() - head.get_width()) <= 1, (key, body.get_width(), head.get_width())
-        cell = cell.get_next_sibling()
+    for child in window.children_by_path.values():
+        cell = child.get_child().get_first_child()
+        for key in details.columns():
+            _, body = cell.compute_bounds(window)
+            _, head = details.buttons[key].compute_bounds(window)
+            assert abs(body.get_x() - head.get_x()) <= 1, (child._picker_path.name, key)
+            assert abs(body.get_width() - head.get_width()) <= 1, (child._picker_path.name, key, body.get_width(), head.get_width())
+            cell = cell.get_next_sibling()
 
 
 with tempfile.TemporaryDirectory(prefix='gudfiles-name-resize-') as temp:
@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-name-resize-') as temp:
                 request = PickerRequest(current_folder=folder, explorer=mode == 'browser',
                                         mode='save' if mode == 'save' else 'open', directory=mode == 'folder')
                 window = PickerWindow(app, request, None)
-                window.set_default_size(960, 640)
+                window.set_default_size(1800, 640)
                 window._set_view('list')
                 window.present()
                 settle()
@@ -92,6 +92,27 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-name-resize-') as temp:
                     selection = window._selected_paths()
                     sort = window.file_preferences['sort_key'], window.file_preferences['descending']
                     before = details.buttons['name'].get_width()
+                    start = point(details.buttons['name'])
+                    send('mousemove', *start)
+                    send('mousedown', 1)
+                    send('mousemove', start[0] + 120 - before, start[1])
+                    send('mouseup', 1)
+                    assert details.buttons['name'].get_width() == 120
+                    aligned(window)
+                    assert details.name_labels[longest][0].get_layout().is_ellipsized()
+                    if mode == 'browser' and theme == 'active':
+                        vertical = window.standard_scroller.get_vadjustment()
+                        vertical.set_value(vertical.get_upper() - vertical.get_page_size())
+                        settle()
+                        snapshot = Gtk.Snapshot.new()
+                        Gtk.WidgetPaintable.new(window).snapshot(snapshot, window.get_width(), window.get_height())
+                        window.get_renderer().render_texture(snapshot.to_node(), None).save_to_png(
+                            '/tmp/gudfiles-name-truncation.png')
+                        vertical.set_value(0)
+                    details._set_name_width(0, save=True)
+                    settle()
+                    before = details.buttons['name'].get_width()
+                    assert before == 220, before
                     start = point(details.buttons['name'])
                     send('mousemove', *start)
                     send('mousedown', 1)
@@ -117,6 +138,14 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-name-resize-') as temp:
                     label, _ = details.name_labels[longest]
                     assert not label.get_layout().is_ellipsized(), (fitted, label.get_width())
                     assert fitted > before + 125, fitted
+                    assert window.file_preferences['list_name_width'] == before + 125
+                    restored = PickerWindow(app, request, None)
+                    restored.present()
+                    settle()
+                    assert restored.list_details.buttons['name'].get_width() == before + 125
+                    restored.destroy()
+                    settle()
+                    send('windowfocus', window.get_surface().get_xid())
                     assert (window.file_preferences['sort_key'], window.file_preferences['descending']) == sort
                     assert window._selected_paths() == selection
                     aligned(window)

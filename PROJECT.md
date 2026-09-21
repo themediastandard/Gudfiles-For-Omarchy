@@ -21,9 +21,12 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   keyboard focus; the accept action has no blue suggested-action fill.
 - The Name heading's right edge resizes the filename column by dragging;
   double-click fits every filename in the current list, including offscreen
-  rows, using rendered text widths plus icons and annotation badges. The width
-  persists across views and new browser/Open/Save/folder windows. Escape cancels
-  a drag; Reset columns restores automatic width. Sorting, column reordering,
+  rows, using rendered text widths plus icons and annotation badges. Narrowing
+  truncates names within one shared column width; filename/metadata natural
+  widths cannot push cells past their headings. New/reset layouts start at
+  220 pixels. Dragged widths persist; double-click fitting stays in the current
+  window and does not change the saved default. Escape cancels
+  a drag; Reset columns restores the compact default. Sorting, column reordering,
   selection and horizontal header/body alignment remain independent.
 - Thumbnail decoder crash fix (September 21): source and user-local runtime are
   now 0.1.1. Glycin aborted while creating threads under the old 1 GiB virtual
@@ -1110,6 +1113,18 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 filename truncation correction: reproduced a 120-pixel header
+  with a 952-pixel filename cell in a wide window. Earlier resize checks used a
+  narrow viewport and inspected only the first short-name row, missing spare-space
+  allocation. The regression now physically narrows columns in an 1800-pixel
+  window and compares every row/cell against its heading, including long offscreen
+  Unicode names. Labels constrain their natural width while retaining native
+  ellipsis; default widths stay compact and fitting does not become a new-window
+  default. All 289 unit tests pass. Installed wide-window pointer checks pass in
+  browser/Open/Save/folder modes and active/light palettes, including new-window
+  defaults after fitting. Existing column reordering and metadata/alignment suites
+  pass in three palettes. The narrowed long-name snapshot was visually checked;
+  all 63 runtime files match source and the portal remains active.
 - September 21 file-area bar verification: 289 unit tests pass. Isolated X11
   pointer/keyboard tests cover slider endpoints, real tile dimensions, row and
   selection preservation, grid-only sensitivity, persistence, center alignment,

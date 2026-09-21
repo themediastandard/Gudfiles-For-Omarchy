@@ -110,7 +110,7 @@ class ListDetails:
             button = Gtk.Button()
             button.add_css_class('list-heading-button')
             button.set_size_request((self.name_width or COLUMNS[key][1]) if key == 'name' else COLUMNS[key][1], -1)
-            button.set_hexpand(key == 'name' and not self.name_width)
+            button.set_hexpand(False)
             if key == 'name':
                 button.add_css_class('name-heading')
             text = Gtk.Label(xalign=1 if key == columns[-1] and key != 'name' else 0,
@@ -232,7 +232,7 @@ class ListDetails:
         for key, widget in [*self.buttons.items(), *self._column_cells()]:
             if key == 'name':
                 widget.set_size_request(self.name_width or COLUMNS['name'][1], -1)
-                widget.set_hexpand(not self.name_width)
+                widget.set_hexpand(False)
         if save:
             self.owner._set_file_preference('list_name_width', self.name_width, reload=False)
 
@@ -261,7 +261,8 @@ class ListDetails:
                 child = child.get_next_sibling()
             width = max(width, needed + 2)
         self.resize_start = None
-        self._set_name_width(width, save=True)
+        # Fitting is an explicit action for this window, not a new-window default.
+        self._set_name_width(width)
 
     def _install_column_drag(self):
         # The viewport stays in place while headings reorder beneath it, so
@@ -507,7 +508,7 @@ class ListDetails:
         columns = self.columns()
         for key in columns:
             cell = Gtk.Box(width_request=(self.name_width or COLUMNS[key][1]) if key == 'name' else COLUMNS[key][1],
-                           hexpand=key == 'name' and not self.name_width)
+                           hexpand=False)
             cell.add_css_class('list-cell')
             outer = cell
             outer._list_column = key
@@ -527,12 +528,17 @@ class ListDetails:
                 image.set_margin_end(6)
                 cell.append(image)
                 name = Gtk.Label(label=path.name, xalign=0, hexpand=True,
-                                 ellipsize=Pango.EllipsizeMode.MIDDLE, width_chars=1)
+                                 ellipsize=Pango.EllipsizeMode.MIDDLE, width_chars=1, max_width_chars=1)
+                # size_request is only a minimum. Bound the label's natural
+                # width too, or Gtk.Box grants each row its full filename width
+                # when the window has spare space, ignoring the header divider.
                 self.name_labels[path] = (name, cell)
                 if owner._computer_search_active():
                     title = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
                     title.append(name)
-                    title.append(owner._search_location_label(path))
+                    location = owner._search_location_label(path)
+                    location.set_max_width_chars(1)
+                    title.append(location)
                     cell.append(title)
                 else:
                     cell.append(name)
@@ -542,7 +548,7 @@ class ListDetails:
                 if key == 'type' and owner._entry_is_dir(path):
                     text = 'Folder'
                 value = Gtk.Label(label=text or 'File', xalign=1 if key == columns[-1] else 0, hexpand=True,
-                                  ellipsize=Pango.EllipsizeMode.END, width_chars=1)
+                                  ellipsize=Pango.EllipsizeMode.END, width_chars=1, max_width_chars=1)
                 value.add_css_class('muted')
                 cell.append(value)
                 cells[key] = value
