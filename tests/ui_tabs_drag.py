@@ -42,6 +42,7 @@ class Gesture:
 colors = load_colors()
 with tempfile.TemporaryDirectory(prefix='tabs-drag-') as temporary, \
         patch.object(Path, 'home', return_value=Path(temporary)), \
+        patch.dict(os.environ, {'XDG_STATE_HOME': str(Path(temporary) / 'state')}), \
         patch.object(Gio.VolumeMonitor, 'get_mounts', return_value=[]), \
         patch('omarchy_file_picker.picker.load_colors', return_value=colors):
     root = Path(temporary)

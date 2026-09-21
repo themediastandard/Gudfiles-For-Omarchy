@@ -124,6 +124,37 @@ class MoveAnnotationsTests(unittest.TestCase):
 
 
 
+    def test_recovered_moves_do_not_repopulate_recents_but_new_moves_do(self):
+        self.owner.current_dir = self.root
+        self.owner._refresh_files = lambda: None
+        self.owner._creative_transfer_paths_renamed = lambda mapping, receipt: (
+            self.store.move(mapping, receipt=receipt) or True)
+
+        def finish(queue, path):
+            job = queue.add([path], self.destination, cut=True)
+            queue.start(job)
+            deadline = time.monotonic() + 5
+            while queue.active_jobs and time.monotonic() < deadline:
+                time.sleep(.005)
+            self.assertEqual(job.state, 'completed', job.error)
+            self.owner._poll_transfers()
+
+        with patch('omarchy_file_picker.transfer_ui.default_directory', return_value=self.root/'journal'):
+            self.owner._init_transfers()
+            queue = self.owner.transfer_queue
+            finish(queue, self.paths[0])
+            self.owner._record_file_interaction.assert_called_once()
+            queue.close()
+            self.owner._record_file_interaction.reset_mock()
+            self.owner._init_transfers()
+            queue = self.owner.transfer_queue
+            self.addCleanup(queue.close)
+            self.owner._poll_transfers()
+            self.owner._record_file_interaction.assert_not_called()
+            finish(queue, self.paths[1])
+            self.owner._record_file_interaction.assert_called_once_with(
+                [self.destination/self.paths[1].name, self.paths[1]])
+
     def test_failed_labels_hold_chained_receipts_until_explicit_retry(self):
         with patch('omarchy_file_picker.transfer_ui.default_directory', return_value=self.root/'journal'):
             self.owner._init_transfers()

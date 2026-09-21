@@ -121,6 +121,8 @@ class SidebarMenus:
                     text = 'Could not save recent folders'
                 note = Gtk.Label(label=text, xalign=0)
                 note.add_css_class('muted')
+                if not error:
+                    note.add_css_class('sidebar-empty')
                 note.set_wrap(True)
                 note.set_margin_start(12)
                 note.set_margin_end(12)

@@ -179,6 +179,11 @@ class TransferUI:
         self.transfer_annotation_backlog = []
         self.transfer_seen_states = {}
         self.transfer_historical_jobs = {job.id for job in self.transfer_queue.jobs if job.state in TERMINAL}
+        # Recovery replays completed moves for annotation receipts, not new user
+        # activity. Do not resurrect removed Recents on every app launch.
+        self.transfer_recent_replays = {(job.id, source, target)
+                                       for job in self.transfer_queue.jobs
+                                       for source, target in job.completed.items()}
         self.transfer_sounds = {}
         self.transfer_changed_dirs = {}
         self.transfer_closing = None
@@ -407,7 +412,15 @@ class TransferUI:
         # jobs in a different order from the visible list. No GTK on workers.
         for job, events in groupby(completed_events, key=lambda event: event[0]):
             mapping = {source: target for _, source, target in events}
-            self._record_file_interaction([*mapping.values(), *mapping])
+            fresh = {}
+            for source, target in mapping.items():
+                replay = (job.id, source, target)
+                if replay in self.transfer_recent_replays:
+                    self.transfer_recent_replays.remove(replay)
+                else:
+                    fresh[source] = target
+            if fresh:
+                self._record_file_interaction([*fresh.values(), *fresh])
             changed = self.transfer_changed_dirs.setdefault(job.id, set())
             changed.update(target.parent for target in mapping.values())
             if job.cut:

@@ -520,6 +520,7 @@ def build_css(colors: dict[str, str]) -> str:
     .file-view-status scale:disabled {{ opacity: 0.35; }}
     .filename {{ color: {colors['foreground']}; }}
     .muted {{ color: {colors['dark_foreground']}; font-size: 12px; }}
+    .sidebar-empty {{ font-size: 10px; }}
     .metadata-strip {{
       padding: 10px 16px;
       border-top: 1px solid {colors['darker_background']};

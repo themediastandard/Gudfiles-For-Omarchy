@@ -12,7 +12,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   folder to Add to Favorites; removal deletes only the shortcut. Existing GTK
   bookmarks and default places are preserved; the former Recent place is labeled
   Recent Files to distinguish it from folder Recents. Empty sections display
-  NO FAVORITES YET and NO RECENT FOLDERS, aligned with their headings.
+  NO FAVORITES YET and NO RECENT FOLDERS in 10-pixel text, aligned with their headings.
   Right-click a Recents entry to Remove from Recents; this persists without
   changing Favorites or deleting anything. A later visit can add it again.
   Recents persists the five distinct most recently used folder paths, newest
@@ -26,6 +26,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   concurrent window writes, and failures preserve existing data. Sidebar sections
   refresh across windows within a second, deferring during menus and drags;
   automatic history-save errors appear inline without blocking picker results.
+  Completed transfers replayed during recovery do not update Recents; only
+  newly completed transfer events do. Native transfer QA must isolate
+  XDG_STATE_HOME as well as Path.home() to avoid persisting fixture receipts.
 - A compact bar beneath the file area has a thumbnail-size slider at the left
   and a centered selected-file count/combined size. The slider works only in grid
   view, ranges from 96 to 312 pixels wide and persists across windows. Tiles resize
@@ -1135,6 +1138,17 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 Recents replay fix: completed transfer receipts were being
+  replayed into Recents on every launch. Recovery still applies annotation
+  receipts, but ignores those historical events for folder activity; new
+  completions still update Recents. A tabs/drag fixture had also persisted
+  receipts through the real exported XDG_STATE_HOME despite mocking Path.home().
+  That test now isolates its state directory. 295 unit tests pass, including
+  real journal reopen followed by a new move. Installed tabs/drag and recovery
+  tests pass, with the live history/receipt files unchanged before and after.
+  No verified test-root entries remain in live Recents. Existing active windows
+  retain their recovery locks; unrelated history and receipts were preserved.
+  Installed empty-state labels measure 10 pixels and align with section titles.
 - September 21 shortcut-removal follow-up: 294 unit tests pass. Installed native
   menus remove Favorites and Recents independently, preserve folder contents,
   and keep removed Recents absent after passive refresh in all three views,
