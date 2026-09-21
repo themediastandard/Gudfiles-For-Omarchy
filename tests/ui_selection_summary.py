@@ -1,24 +1,30 @@
-"""Collective selection previews in all views, without growing the window."""
+"""Media-only preview visibility, independent totals, and stable outer geometry."""
 import os
-import json
-import subprocess
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 from unittest.mock import patch
 
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gio, GLib, Gtk
+from gi.repository import GdkPixbuf, Gio, GLib, Gtk
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
-from omarchy_file_picker.selection_summary import SelectionStack
-from omarchy_file_picker.theme import load_colors
+from omarchy_file_picker.theme import DEFAULT_COLORS, load_colors
+
+errors = []
+def callback_error(*args):
+    errors.append(args)
+    sys.__excepthook__(*args)
+sys.excepthook = callback_error
 
 
 def settle():
     loop = GLib.MainLoop()
-    GLib.timeout_add(150, lambda: loop.quit() or False)
+    GLib.timeout_add(250, lambda: loop.quit() or False)
     loop.run()
+    assert not errors, errors
 
 
 def texts(widget):
@@ -31,88 +37,72 @@ def texts(widget):
 
 
 colors = load_colors()
-with tempfile.TemporaryDirectory(prefix='picker-selection-summary-') as temp, \
+with tempfile.TemporaryDirectory(prefix='picker-media-strip-') as temp, \
         patch.object(Path, 'home', return_value=Path(temp)), \
-        patch.object(Gio.VolumeMonitor, 'get_mounts', return_value=[]), \
-        patch('omarchy_file_picker.picker.load_colors', return_value=colors):
+        patch.dict(os.environ, {name: str(Path(temp) / name) for name in
+                                ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME')}), \
+        patch.object(Gio.VolumeMonitor, 'get_mounts', return_value=[]):
     root = Path(temp)
-    folders = [root / name for name in ('Footage', 'Audio', 'Exports')]
-    for folder in folders:
-        folder.mkdir()
-        (folder / 'not-an-additional-selection.txt').write_text('fixture')
-    files = [root / name for name in ('Notes.txt', 'Shot list.txt')]
-    for path in files:
-        path.write_text('fixture')
-    request = PickerRequest(current_folder=root, explorer=True, multiple=True)
-    app = PickerApplication(request, None)
+    folder = root / 'Folder'
+    folder.mkdir()
+    document = root / 'Notes.txt'
+    document.write_text('fixture')
+    photo = root / 'Photo.PNG'
+    pixels = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 320, 200)
+    pixels.fill(0x2277aaff)
+    pixels.savev(str(photo), 'png', [], [])
+    video = root / 'Clip.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x200:d=1',
+                    '-threads', '1', '-pix_fmt', 'yuv420p', str(video)], check=True)
+    app = PickerApplication(PickerRequest(), None)
     app.register(None)
-    window = PickerWindow(app, request, None)
-    window.present()
-    settle()
-    try:
-        # Concurrent native QA can retile windows. Float only this test's exact
-        # surface so desktop layout changes do not look like preview resizing.
-        clients = json.loads(subprocess.check_output(['hyprctl', 'clients', '-j']))
-        client = next(c for c in clients if c['pid'] == os.getpid() and c['class'] == 'org.omarchy.FilePicker')
-        selector = json.dumps('address:' + client['address'])
-        if not client['floating']:
-            subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True)
+    for palette, theme in [('active', colors), ('light', DEFAULT_COLORS)]:
+        for context in ('explorer', 'open', 'save'):
+            request = PickerRequest(current_folder=root, explorer=context == 'explorer', multiple=True,
+                                    mode='save' if context == 'save' else 'open')
+            with patch('omarchy_file_picker.picker.load_colors', return_value=theme):
+                window = PickerWindow(app, request, None)
+            window.set_default_size(1000, 700)
+            window.present()
             settle()
-        for mode in ('grid', 'list', 'columns'):
-            window._set_view(mode)
-            settle()
-            size = window.get_width(), window.get_height()
-            strip_height = window.metadata_viewport.get_height()
-            browser_height = window.browser_stack.get_height()
-            for paths, kind, title, detail in (
-                    (folders[:2], 'folders', '2 items selected', '2 folders'),
-                    (folders, 'folders', '3 items selected', '3 folders'),
-                    (files, 'files', '2 items selected', '2 files'),
-                    ([folders[0], *files], 'mixed', '3 items selected', '1 folder · 2 files')):
-                window.flow.unselect_all()
-                for path in paths:
-                    window.flow.select_child(window.children_by_path[path])
-                settle()
-                icon = window.metadata.get_first_child()
-                assert isinstance(icon, SelectionStack) and icon.kind == kind
-                assert title in texts(window.metadata) and detail in texts(window.metadata)
-                if kind in ('files', 'mixed'):
-                    assert '14 B' in texts(window.metadata)
-                assert not any(text.startswith('Combined size') for text in texts(window.metadata))
-                assert (window.get_width(), window.get_height()) == size
-                assert window.metadata_viewport.get_height() == strip_height
-                assert window.browser_stack.get_height() == browser_height
-                # Label changes must retain the collective preview and affect all selected items.
-                window._apply_annotation(paths, color='blue')
-                settle()
-                assert all(window.ratings.get(path)[1] == 'blue' for path in paths)
-                assert title in texts(window.metadata)
-                # Group previews must never start a probe for the first selected item.
-                with patch('omarchy_file_picker.picker.make_details_widget') as details:
-                    window._update_metadata(paths[0])
-                    details.assert_not_called()
-                if kind == 'mixed' and os.environ.get('SELECTION_SUMMARY_QA_SCREENSHOT'):
+            try:
+                for mode in ('grid', 'list', 'columns'):
+                    window._set_view(mode)
+                    window.flow.unselect_all()
                     settle()
-                    snapshot = Gtk.Snapshot.new()
-                    Gtk.WidgetPaintable.new(window.metadata_viewport).snapshot(snapshot,
-                        window.metadata_viewport.get_width(), window.metadata_viewport.get_height())
-                    node = snapshot.to_node()
-                    if node:
-                        window.get_renderer().render_texture(node, None).save_to_png(os.environ['SELECTION_SUMMARY_QA_SCREENSHOT'])
-            for totals, expected in (((1, 2, 7, 1), ('7 B known', '1 item unavailable')),
-                                     ((1, 2, 0, 2), ('Unavailable', '2 items unavailable')),
-                                     ((1, 2, 0, 0), ('0 B',))):
-                with patch('omarchy_file_picker.selection_summary.selection_totals', return_value=totals):
-                    window._update_metadata(paths[0])
-                    assert all(text in texts(window.metadata) for text in expected)
-            window.flow.unselect_all()
-            window.flow.select_child(window.children_by_path[files[0]])
-            settle()
-            assert not isinstance(window.metadata.get_first_child(), SelectionStack)
-            assert files[0].name in texts(window.metadata)
-            window.flow.unselect_all()
-            settle()
-            assert 'Select a file to preview' in texts(window.metadata)
-            print('PASS:', mode, 'folder/file/mixed counts, combined/zero/unavailable sizes, stacked icon, group labels, single/empty reset and stable geometry')
-    finally:
-        window.destroy()
+                    size = window.get_width(), window.get_height()
+                    full_height = window.browser_stack.get_height()
+                    assert not window.metadata_viewport.get_mapped()
+                    for paths, media in (([document], None), ([folder], None),
+                                         ([folder, document], None), ([photo], photo),
+                                         ([video], video), ([document, photo], photo),
+                                         ([document], None), ([], None)):
+                        window.flow.unselect_all()
+                        for path in paths:
+                            window.flow.select_child(window.children_by_path[path])
+                        settle()
+                        visible = context == 'explorer' and media is not None
+                        assert window.metadata_viewport.get_mapped() == visible, (context, mode, paths)
+                        assert window.view_status.get_mapped()
+                        assert bool(window.view_status.summary.get_text()) == bool(paths)
+                        assert (window.get_width(), window.get_height()) == size
+                        if visible:
+                            assert media.name in texts(window.metadata)
+                            assert window.browser_stack.get_height() < full_height - 90
+                            with patch.object(window, '_rating_controls', wraps=window._rating_controls) as rating:
+                                window._update_metadata(paths[0])
+                                rating.assert_called_once_with([media])
+                        else:
+                            assert window.metadata.get_first_child() is None
+                            assert window.browser_stack.get_height() == full_height
+                        if context == 'explorer' and mode == 'list' and palette == 'light' and paths in ([photo], [document]):
+                            settle()
+                            snapshot = Gtk.Snapshot.new()
+                            Gtk.WidgetPaintable.new(window).snapshot(snapshot, window.get_width(), window.get_height())
+                            name = 'photo' if media else 'clean'
+                            window.get_renderer().render_texture(snapshot.to_node(), None).save_to_png(
+                                f'/tmp/gudfiles-media-strip-{name}.png')
+                    print('PASS:', palette, context, mode, 'media visibility, totals, rating scope and stable geometry', flush=True)
+            finally:
+                window.destroy()
+                settle()

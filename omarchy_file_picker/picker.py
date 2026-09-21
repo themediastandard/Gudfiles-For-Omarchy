@@ -45,7 +45,6 @@ from .folder_watch import FolderWatch
 from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
-from .selection_summary import show_selection_summary
 from .view_status import ViewStatus
 from .sidebar import SidebarMenus
 from .help_window import show_help
@@ -56,7 +55,7 @@ from .list_details import ListDetails
 from .list_metadata import ANNOTATION_COLUMNS, EXTRA_SORTS, annotation_values
 from .search_ui import SearchTools
 from .context_menu import HoverSubmenus
-from .thumbnails import IMAGE_TYPES, VIDEO_TYPES, thumbnail_file
+from .thumbnails import IMAGE_TYPES, RAW_TYPES, VIDEO_TYPES, thumbnail_file
 from .thumbnail_widgets import Thumbnail
 
 
@@ -318,7 +317,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.metadata = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
         self.metadata.add_css_class("metadata-strip")
         # Preview content must never contribute a new minimum/natural window
-        # size. Reserve the same strip even when selection or image shape changes.
+        # size. Reserve a fixed height only while a media preview is visible.
         self.metadata_viewport = Gtk.Overlay()
         reserved_strip = Gtk.Box()
         reserved_strip.set_size_request(-1, 113)  # 92 content + padding and border.
@@ -327,7 +326,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.metadata_viewport.set_measure_overlay(self.metadata, False)
         self.metadata_viewport.set_clip_overlay(self.metadata, True)
         browser.append(self.metadata_viewport)
-        self.metadata_viewport.set_visible(self.request.explorer)
+        self.metadata_viewport.set_visible(False)
 
         self.footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.footer.add_css_class("footer")
@@ -883,7 +882,6 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._last_search = self.search.get_text()
         self._update_active_filters()
         trash = self.special_mode == 'trash'
-        self.metadata_viewport.set_visible(self.request.explorer and not trash)
         if trash:
             self.active_filters.set_visible(False)
             self.search_scope = 'folder'
@@ -1104,29 +1102,23 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
 
     def _clear_metadata(self) -> None:
         self.media_details.cancel()
+        self.metadata_viewport.set_visible(False)
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
-        if not self.request.explorer:
-            return
-        image = Gtk.Image.new_from_icon_name("document-open-symbolic")
-        image.set_pixel_size(32)
-        self.metadata.append(image)
-        copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
-        copy.append(label("Select a folder" if self.request.directory else "Select a file to preview", "metadata-title"))
-        copy.append(label("Files remain visible to help you choose." if self.request.directory else
-                          "Image, camera RAW and video thumbnails appear here.", "muted"))
-        self.metadata.append(copy)
 
     def _update_metadata(self, path: Path) -> None:
-        self.media_details.cancel()
-        while child := self.metadata.get_first_child():
-            self.metadata.remove(child)
-        if not self.request.explorer:
+        self._clear_metadata()
+        if not self.request.explorer or self.special_mode == 'trash':
             return
         paths = self._selected_paths() or [path]
-        if len(paths) > 1:
-            show_selection_summary(self, paths)
+        # Mixed selections keep their totals in ViewStatus. Preview the first
+        # selected media file, with controls scoped to that displayed file.
+        path = next((candidate for candidate in paths
+                     if candidate.suffix.casefold() in IMAGE_TYPES | RAW_TYPES | VIDEO_TYPES
+                     and candidate.is_file()), None)
+        if path is None:
             return
+        self.metadata_viewport.set_visible(True)
         poster = picture_for(path, 132, 76, crop=True, priority=0)
         self.metadata.append(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
@@ -1141,7 +1133,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             detail_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             detail_label.set_max_width_chars(36)
             primary.append(detail_label)
-        primary.append(self._rating_controls(paths))
+        primary.append(self._rating_controls([path]))
         self.metadata.append(primary)
         try:
             stat = path.stat()

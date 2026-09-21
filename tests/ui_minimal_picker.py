@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='minimal-picker-') as temporary, \
             row = window.children_by_path[folder / 'Photo 000.png']
             assert row.get_height() <= 30, row.get_height()
             if mode == 'explorer':
-                assert window.metadata_viewport.get_mapped()
+                assert not window.metadata_viewport.get_mapped()
                 assert not window.footer.get_mapped()
             else:
                 assert not window.metadata_viewport.get_mapped()

@@ -31,6 +31,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Completed transfers replayed during recovery do not update Recents; only
   newly completed transfer events do. Native transfer QA must isolate
   XDG_STATE_HOME as well as Path.home() to avoid persisting fixture receipts.
+- The standalone browser shows its large bottom preview only when a photo,
+  camera RAW image or video is selected. Empty/folder/document selections reclaim
+  that space. Mixed selections preview the first selected media file, with the
+  preview rating controls scoped to that file; the small bar retains totals for
+  the whole selection. Open/Save/folder pickers keep their compact layout.
 - A compact bar beneath the file area has a thumbnail-size slider at the left
   and a centered selected-file count/combined size. The slider works only in grid
   view, ranges from 96 to 312 pixels wide and persists across windows. Tiles resize
@@ -85,7 +90,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   repeated prompt, selection summary and shortcut legend are absent; the caller's
   selected file filter and required custom choices remain honored. Popups have no
   preview/metadata strip and do not start its hidden metadata work. Space preview
-  remains available, and the standalone browser retains its preview strip. Pickers
+  remains available, and the standalone browser shows its strip for media selections. Pickers
   retain their separate application identity and no browser tabs.
 - List view uses real image, camera RAW and video thumbnails beside filenames,
   preserving 28-pixel rows and aspect ratios. It shares the grid's versioned
@@ -460,7 +465,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   filters, file operations and Space preview use the shared interaction paths.
 - Standalone browsing runs in explorer mode: footer hidden, normal default-app
   file opening without quitting, and Escape clears selection. The preview strip
-  remains. Portal requests, CLI `--result`, folder picking and Save modes retain
+  appears for media selections. Portal requests, CLI `--result`, folder picking and Save modes retain
   picker footer controls and result semantics.
 - List view uses compact 28-pixel rows with a 2-pixel gap (30-pixel pitch).
   Column rows also have a 2-pixel gap; grid spacing is unchanged. Selected
@@ -495,14 +500,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   publication and identity verification remain the transfer engine's authority.
 - Image and cached video thumbnails, selection metadata, search, file filters,
   multi-select, folder selection, Open, Save, and SaveFiles modes.
-- Multi-selection metadata shows a theme-colored stack of folders/documents,
-  the selected item count and a folder/file breakdown, rather than previewing
-  only the first item. Shared rating controls still apply to the whole selection.
-  Counts refer to selected entries, not recursively scanned folder contents.
-- Multi-file summaries show the combined logical file size value without a
-  "Combined size" heading, including zero-byte totals. Mixed selections exclude
-  folder contents (clarified in the byte-value tooltip); unavailable
-  entries mark the total as partial/unavailable instead of silently undercounting.
+- The compact status bar summarizes multi-selections, including combined file
+  sizes and folder/file counts; folder contents are excluded and unavailable
+  sizes are marked. Non-media selections do not open a large summary panel.
 - Video grid/metadata thumbnails support silent hover-scrubbing with delayed
   entry, a thin position indicator, background decoding and poster restoration.
   Completed frames from the current hover stay visible while the pointer moves;
@@ -645,11 +645,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   ProRes/PCM, VP9/Opus and AV1/AAC clips verify decoding, play, pause, seek,
   resume and stop on preview close. Actual user media and audible output remain
   separate manual checks.
-- Selection previews occupy a reserved 113-pixel strip. Neither the strip's
-  content nor the Quick Look overlay participates in window size requests;
-  long titles and metadata ellipsize with full values available in tooltips.
-  Empty, single-file and multi-selection text blocks remain vertically centered,
-  with the text rows in each block sharing the same left edge.
+- Media selection previews occupy a 113-pixel strip only while visible. Its
+  content and Quick Look do not participate in window size requests; long titles
+  and metadata ellipsize. Hiding the strip expands the file area without changing
+  the outer window size. Clearing selection cancels obsolete metadata work.
 - NAS dialog uses flat theme-colored controls, automatically searches Avahi/
   GVfs network advertisements, and offers explicit SMB share browsing, Refresh,
   saved/mounted locations, inline errors and cancellable mounting.
@@ -1139,6 +1138,14 @@ gdbus introspect --session \
   excluding other desktop windows and authentication overlays.
 
 ## Known risks and next actions
+
+- September 21 conditional-preview verification: 295 unit tests pass. Isolated
+  native tests exercise empty, folder, document, photo, video and mixed selections
+  across grid/list/columns, browser/Open/Save and active/light palettes. They
+  verify mapped visibility, independent totals, single-media rating scope,
+  recovered browser height and stable outer dimensions. The existing compact
+  picker and status-bar suites pass. All 64 installed runtime files match source;
+  atomic replacement retains a rollback copy and leaves existing windows open.
 
 - September 21 Recents replay fix: completed transfer receipts were being
   replayed into Recents on every launch. Recovery still applies annotation
