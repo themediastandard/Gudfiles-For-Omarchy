@@ -82,13 +82,19 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-list-') as temp:
             settle()
             details = window.list_details
             try:
-                client = next(c for c in json.loads(subprocess.check_output(['hyprctl', 'clients', '-j'])) if c['pid'] == os.getpid())
-                selector = json.dumps('address:' + client['address'])
-                if not client['floating']:
-                    subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True, capture_output=True)
-                    settle()
+                x11 = Gdk.Display.get_default().__gtype__.name == 'GdkX11Display'
+                overhead = window.get_default_size()[0] - window.get_width()
+                if not x11:
+                    client = next(c for c in json.loads(subprocess.check_output(['hyprctl', 'clients', '-j'])) if c['pid'] == os.getpid())
+                    selector = json.dumps('address:' + client['address'])
+                    if not client['floating']:
+                        subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.float({action="toggle",window=' + selector + '})'], check=True, capture_output=True)
+                        settle()
                 def resize(width):
-                    subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.resize({x=' + str(width) + ',y=700,relative=false,window=' + selector + '})'], check=True, capture_output=True)
+                    if x11:
+                        window.set_default_size(width + overhead, 700)
+                    else:
+                        subprocess.run(['hyprctl', 'dispatch', 'hl.dsp.window.resize({x=' + str(width) + ',y=700,relative=false,window=' + selector + '})'], check=True, capture_output=True)
                     settle()
                     assert window.get_width() == width
                 def aligned():

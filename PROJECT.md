@@ -7,13 +7,25 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Thumbnail decoder crash fix (September 21): source and user-local runtime are
+  now 0.1.1. Glycin aborted while creating threads under the old 1 GiB virtual
+  address-space limit; disposable decoders now allow 4 GiB while retaining the
+  20-second CPU/deadline and 256 MiB file-size limits. This is an address-space
+  ceiling, not a RAM reservation. Decoder failures log at most 4 KiB of stderr
+  plus the exit status/reason and retain the ordinary file icon.
+- Thumbnail speed: browser and Open/Save dialogs share a single-pass image
+  decoder, immediate worker refill, stable display ordering and selected-preview
+  priority. Two-worker concurrency, viewport cancellation, source-version cache
+  keys and hidden-texture release remain bounded. Cached PNGs are checked without
+  an extra GdkPixbuf metadata decode. Image decoding remains CPU-based; GPU
+  rendering is provided by GTK. GPU decode acceleration has not been implemented.
 - The public README features `docs/screenshots/gudfiles-demo.png`, the
   unmodified full-app grid capture from demo v3. Its adjacent README owns
   sample-media attribution and identifies the simulated sidebar devices.
 - Friend preview packaging is documented in `docs/TESTING.md` and
   `docs/RELEASING.md`. The repository and preview downloads are public
   following the owner's September 20 visibility change. The app
-  reports 0.1.0, with preview tag `v0.1.0-preview.1`; changed runtime contents
+  published preview reports 0.1.0, with tag `v0.1.0-preview.1`; changed runtime contents
   after this distribution require a new app version. Public/AUR publication
   remains separate, and a fresh-machine install plus portal login cycle remains
   the next acceptance check.
@@ -23,9 +35,18 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   empty. Preserve this visibility: Tommy needs to recognize folder contents
   before choosing a folder. Open/Save/folder popups use the same compact header,
   navigation, toolbar groups and styling as the regular Gudfiles browser. Caller
-  titles remain window titles; file prompts, choices, filenames and Open/Save/Cancel
-  remain in the footer. Pickers
+  titles remain window titles. Popup footers are a compact action row with Cancel
+  and Open/Save, plus a filename entry when saving. The file-type dropdown,
+  repeated prompt, selection summary and shortcut legend are absent; the caller's
+  selected file filter and required custom choices remain honored. Popups have no
+  preview/metadata strip and do not start its hidden metadata work. Space preview
+  remains available, and the standalone browser retains its preview strip. Pickers
   retain their separate application identity and no browser tabs.
+- List view uses real image, camera RAW and video thumbnails beside filenames,
+  preserving 28-pixel rows and aspect ratios. It shares the grid's versioned
+  cache, two-worker limit, viewport-only scheduling and cancellation. Folders and
+  unsupported files retain icons; whole-computer search retains its lightweight
+  icons. This applies to the standalone browser and Open/Save/folder popups.
 - File/folder items have no hover tooltips in grid, list, columns or Trash,
   including filenames, metadata cells and rating badges. The selection strip
   also omits redundant filename/fact tooltips. Toolbar and action-button hints
@@ -694,6 +715,10 @@ POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_rating_columns.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_mount_controls.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_trash_inline.py
 THUMBNAIL_NEF=/path/to/sample.NEF PYTHONPATH=. python tests/ui_thumbnails.py
+THUMBNAIL_MODE=open PYTHONPATH=. python tests/ui_thumbnails.py
+THUMBNAIL_MODE=save PYTHONPATH=. python tests/ui_thumbnails.py
+# Read-only local timings, nine links to a supplied JPEG; run each mode separately:
+BENCH_MODE=browser PYTHONPATH=. python tests/benchmark_thumbnails.py /path/to/photo.jpg
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_hover.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_context_dismiss.py
@@ -743,6 +768,7 @@ PYTHONPATH=. python tests/ui_sidebar_actions.py
 PYTHONPATH=. python tests/ui_explorer.py
 PYTHONPATH=. python tests/ui_folder_picker.py
 PYTHONPATH=. python tests/ui_picker_chrome.py
+MINIMAL_PICKER_SCREENSHOTS=/tmp/gudfiles-minimal PYTHONPATH=. python tests/ui_minimal_picker.py
 REVEAL_QA_HYPRLAND=1 PYTHONPATH=. python tests/ui_external_reveal.py
 PYTHONPATH=. python tests/ui_drag_selection.py
 PYTHONPATH=. python tests/ui_conversion_notice.py
@@ -1062,6 +1088,49 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 minimal-popup/list-thumbnail verification: all 288 unit tests pass.
+  Native isolated X11 checks cover browser/Open/Save/folder modes in active/light
+  palettes, real PNG/video list textures, preserved compact rows, visible-only
+  decoding, scrolling, view switching and worker cleanup. Popup footers without
+  caller options remain at most 46 pixels tall; their preview strip is unmapped
+  and empty. Header/picker checks at 820/960/1200 pixels preserve selection,
+  filename entry, caller filters, custom choices and returned URIs. Folder-only
+  dialogs, Copy/Move destination selection, list metadata/sorting/columns in three
+  palettes, and the 1,000-image grid regression pass. Open/Save snapshots were
+  visually inspected. Installed minimal-picker, header/results, folder-picker and
+  explorer suites pass; all 62 runtime files match source after atomic package
+  exchange with rollback backup. The portal stayed active; reopen existing
+  browser/popup windows to load these UI changes.
+- September 21 thumbnail performance verification: 288 unit tests pass, including
+  preserved EXIF rotation and original dimensions with the single-pass decoder.
+  Native Wayland checks pass in browser, Open and Save modes with 1,000 image
+  entries, viewport loading, cancellation, corrupt-RAW fallback and navigation
+  recovery. A controlled nine-tile fixture linked to one 6048×4032 NAS JPEG
+  measured full visible thumbnail completion before/after: browser 4.07→2.17s
+  cold and 0.436→0.044s cached; Open 3.95→2.12s and 0.446→0.054s; Save
+  4.09→2.22s and 0.447→0.051s. Cold means no app thumbnail cache; OS/NAS caches
+  were not flushed. These are local samples, not general latency guarantees.
+  The native timing script owns fixture construction and measurement boundaries.
+  Installed with an atomic package exchange and rollback backup; all 62 runtime
+  files match source. All three native mode suites pass against the installed
+  package, and its Save benchmark measured 2.17s uncached / 0.048s cached for
+  nine tiles. The portal stayed active; no new core dumps were recorded during
+  the performance checks. Reopen existing windows to load the scheduler changes.
+- September 21 decoder verification: reproduced SIGABRT and the thread-creation
+  error with the old limit on a NAS camera JPEG. The patched decoder passed that
+  photo plus seven neighboring JPEGs with two concurrent workers and unchanged
+  source hashes. All 287 unit tests pass, including camera-JPEG decoding, bounded
+  failure diagnostics/retry, cache integrity, cancellation and descendant cleanup.
+  Native Wayland thumbnail checks pass against source and installed code: 1,000
+  large images, 16 resident thumbnails, about 0.22-second grid switching, scrolling,
+  cancellation and corrupt-RAW icon fallback/recovery. The installed decoder also
+  passed the original failing NAS photo. All 62 runtime files match source after
+  an atomic package exchange with rollback backup under
+  `~/.local/state/gudfiles/install-backups`; the portal stayed active. Existing
+  windows should reopen for the updated parent-side diagnostic logging. No new
+  core-dump events occurred during verification. This fixes the reproduced worker
+  abort; it is not an exhaustive guarantee against other application crashes.
+  Version 0.1.1 release notes are prepared; no new release has been published.
 - September 20 friend preview verification: all 285 unit tests pass. Isolated
   X11 GTK folder-picker, picker-chrome, explorer, Help, transfer-destination and
   hover-scrub suites pass without callback exceptions. `makepkg` built the

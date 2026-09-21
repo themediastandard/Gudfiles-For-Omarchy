@@ -3,6 +3,8 @@ from gi.repository import Gdk, GLib, Gtk, Pango
 from .list_metadata import (ANNOTATION_COLUMNS, COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, MEDIA_COLUMNS,
                             ListMetadataWorker, annotation_values, format_value, normalize_columns)
 from .ratings import COLORS
+from .thumbnail_widgets import Thumbnail
+from .thumbnails import thumbnail_file
 
 
 class ListDetails:
@@ -420,8 +422,14 @@ class ListDetails:
             cell.set_margin_end(0 if key == columns[-1] else 8)
             outer.append(cell)
             if key == 'name':
-                image = Gtk.Image.new_from_gicon(owner._search_result_icon(path))
-                image.set_pixel_size(14)
+                icon = owner._search_result_icon(path)
+                if not owner._computer_search_active() and not owner._entry_is_dir(path):
+                    image = Thumbnail(path, 24, 20, icon, thumbnail_file, crop=False)
+                else:
+                    image = Gtk.Image.new_from_gicon(icon)
+                    image.set_pixel_size(14)
+                    image.set_size_request(24, 20)
+                image.set_valign(Gtk.Align.CENTER)
                 image.set_margin_end(6)
                 cell.append(image)
                 name = Gtk.Label(label=path.name, xalign=0, hexpand=True,

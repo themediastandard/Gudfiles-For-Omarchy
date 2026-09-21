@@ -13,7 +13,10 @@ from .thumbnails import IMAGE_TYPES, RAW_TYPES, VIDEO_TYPES
 def main():
     # Set limits inside the child (preexec_fn is unsafe in a threaded GTK app).
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024,) * 2)
+    # This caps virtual address space, not resident RAM. Glycin's decoder
+    # threads need stack/mapping headroom even for an ordinary camera JPEG;
+    # 1 GiB made thread creation abort on this backend. Keep the child bounded.
+    resource.setrlimit(resource.RLIMIT_AS, (4 * 1024 * 1024 * 1024,) * 2)
     resource.setrlimit(resource.RLIMIT_CPU, (20, 20))
     # Glycin uses memory-backed files for decoded pixels (including full photos).
     resource.setrlimit(resource.RLIMIT_FSIZE, (256 * 1024 * 1024,) * 2)
@@ -38,8 +41,23 @@ def main():
         source = intermediate
     elif suffix not in IMAGE_TYPES:
         return 1
-    dimensions = GdkPixbuf.Pixbuf.get_file_info(str(source))[1:] if suffix in IMAGE_TYPES else None
-    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(source), size, size, True)
+    # get_file_info() can fully decode through Glycin. Capture dimensions from
+    # the same streaming decode that produces the thumbnail, reading NAS data once.
+    loader = GdkPixbuf.PixbufLoader.new()
+    dimensions = []
+
+    def prepared(loader, width, height):
+        if suffix in IMAGE_TYPES:
+            dimensions.extend((width, height))
+        scale = min(size / width, size / height, 1)
+        loader.set_size(max(1, round(width * scale)), max(1, round(height * scale)))
+
+    loader.connect('size-prepared', prepared)
+    with source.open('rb') as stream:
+        while chunk := stream.read(256 * 1024):
+            loader.write(chunk)
+    loader.close()
+    pixbuf = loader.get_pixbuf()
     pixbuf = pixbuf.apply_embedded_orientation()
     keys = ['tEXt::SourceWidth', 'tEXt::SourceHeight'] if dimensions else []
     values = [str(value) for value in dimensions] if dimensions else []

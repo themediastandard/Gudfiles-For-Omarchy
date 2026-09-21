@@ -10,34 +10,51 @@ gi.require_version('Gdk', '4.0')
 gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 
-from .thumbnails import IMAGE_TYPES, RAW_TYPES, VIDEO_TYPES
+from .thumbnails import IMAGE_TYPES, RAW_TYPES, VIDEO_TYPES, _valid_png
 
 
 class ThumbnailScheduler:
     def __init__(self):
-        self.widgets = weakref.WeakSet()
+        self.widgets = weakref.WeakKeyDictionary()
         self.running = 0
         self.timer = 0
+        self.wake_id = 0
+        self.sequence = 0
 
     def add(self, widget):
-        self.widgets.add(widget)
+        self.widgets[widget] = self.sequence
+        self.sequence += 1
         if not self.timer:
-            self.timer = GLib.timeout_add(100, self.tick)
+            self.timer = GLib.timeout_add(50, self.tick)
+        self.wake()
+
+    def wake(self):
+        if not self.wake_id:
+            self.wake_id = GLib.idle_add(self._wake)
+
+    def _wake(self):
+        self.wake_id = 0
+        self._pump()
+        return GLib.SOURCE_REMOVE
 
     def remove(self, widget):
-        self.widgets.discard(widget)
+        self.widgets.pop(widget, None)
         widget.release()
 
     def tick(self):
-        for widget in list(self.widgets):
-            if not widget.in_view():
-                widget.release()
-            elif not widget.loaded and not widget.failed and widget.cancelled is None and self.running < 2:
-                self.start(widget)
+        self._pump()
         if not self.widgets and not self.running:
             self.timer = 0
             return GLib.SOURCE_REMOVE
         return GLib.SOURCE_CONTINUE
+
+    def _pump(self):
+        # Stable display order; selection previews go ahead of unfinished tiles.
+        for widget in sorted(self.widgets, key=lambda w: (w.priority, self.widgets[w])):
+            if not widget.in_view():
+                widget.release()
+            elif not widget.loaded and not widget.failed and widget.cancelled is None and self.running < 2:
+                self.start(widget)
 
     def start(self, widget):
         self.running += 1
@@ -51,8 +68,7 @@ class ThumbnailScheduler:
                 source = loader(path, cancelled=cancelled.is_set)
                 if source and not cancelled.is_set():
                     # Only bounded decoder output enters the application process.
-                    info, w, h = GdkPixbuf.Pixbuf.get_file_info(str(source))
-                    if info and 0 < w <= 360 and 0 < h <= 360:
+                    if _valid_png(source):
                         pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(source), width, height, True)
             except Exception:
                 # Unreadable/unsupported media retains its ordinary file icon.
@@ -72,6 +88,7 @@ class ThumbnailScheduler:
                         target.loaded = True
                         if target.on_loaded:
                             target.on_loaded(pixbuf)
+            self.wake()
             return GLib.SOURCE_REMOVE
 
         threading.Thread(target=work, name='file-thumbnail', daemon=True).start()
@@ -81,15 +98,16 @@ SCHEDULER = ThumbnailScheduler()
 
 
 class Thumbnail(Gtk.Overlay):
-    def __init__(self, path, width, height, icon, loader, *, crop=True):
+    def __init__(self, path, width, height, icon, loader, *, crop=True, priority=1):
         super().__init__()
         self.path, self.width, self.height, self.loader = path, width, height, loader
+        self.priority = priority
         self.loaded = self.failed = False
         self.on_loaded = None
         self.cancelled = None
         self.set_size_request(width, height)
         self.image = Gtk.Image.new_from_gicon(icon)
-        self.image.set_pixel_size(min(64, height - 18))
+        self.image.set_pixel_size(min(64, max(14, height - 18)))
         self.image.add_css_class('muted')
         self.set_child(self.image)
         self.picture = Gtk.Picture()

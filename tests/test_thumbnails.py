@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import struct
 import sys
 import tempfile
 import threading
@@ -55,6 +56,54 @@ class ThumbnailsTest(unittest.TestCase):
         self.assertEqual(thumbnails.thumbnail_file(self.source), result)
         image = GdkPixbuf.Pixbuf.new_from_file(str(result))
         self.assertEqual(image.get_width(), 360)
+
+    def test_camera_jpeg_decoder(self):
+        self.source = self.root / 'camera.jpg'
+        image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 6000, 4000)
+        image.fill(0x558833ff)
+        image.savev(str(self.source), 'jpeg', [], [])
+        del image
+        original = self.source.read_bytes()
+        result = thumbnails.thumbnail_file(self.source)
+        self.assertIsNotNone(result)
+        image = GdkPixbuf.Pixbuf.new_from_file(str(result))
+        self.assertEqual((image.get_width(), image.get_height()), (360, 240))
+        self.assertEqual(image.get_option('tEXt::SourceWidth'), '6000')
+        self.assertEqual(self.source.read_bytes(), original)
+
+    def test_failed_decoder_logs_bounded_diagnostics_and_recovers(self):
+        real_popen = subprocess.Popen
+        def failed(_command, **kwargs):
+            return real_popen([sys.executable, '-c',
+                              'import sys; sys.stderr.write("decoder broke\\n" + "x" * 100000); sys.exit(7)'],
+                             **kwargs)
+        with patch.object(thumbnails.subprocess, 'Popen', side_effect=failed), \
+                self.assertLogs(thumbnails.__name__, level='WARNING') as logs:
+            self.assertIsNone(thumbnails.thumbnail_file(self.source))
+        self.assertIn('exit 7', logs.output[0])
+        self.assertIn('decoder broke', logs.output[0])
+        self.assertLess(len(logs.output[0]), 4600)
+        self.assertFalse(list((self.root / '.cache/omarchy-file-picker/thumbnails-v2').iterdir()))
+        self.assertIsNotNone(thumbnails.thumbnail_file(self.source))
+
+    def test_jpeg_embedded_orientation_and_original_dimensions(self):
+        self.source = self.root / 'rotated.jpg'
+        image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 1200, 800)
+        image.fill(0x558833ff)
+        image.savev(str(self.source), 'jpeg', [], [])
+        # Minimal EXIF IFD: orientation 6 (90 degrees clockwise).
+        exif = (b'Exif\0\0II' + struct.pack('<HIH', 42, 8, 1) +
+                struct.pack('<HHIHHI', 0x112, 3, 1, 6, 0, 0))
+        jpeg = self.source.read_bytes()
+        self.source.write_bytes(jpeg[:2] + b'\xff\xe1' + struct.pack('>H', len(exif) + 2) + exif + jpeg[2:])
+        original = self.source.read_bytes()
+        result = thumbnails.thumbnail_file(self.source)
+        self.assertIsNotNone(result)
+        image = GdkPixbuf.Pixbuf.new_from_file(str(result))
+        self.assertEqual((image.get_width(), image.get_height()), (240, 360))
+        self.assertEqual(image.get_option('tEXt::SourceWidth'), '1200')
+        self.assertEqual(image.get_option('tEXt::SourceHeight'), '800')
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_source_changed_during_decode_is_not_published(self):
         real_popen = subprocess.Popen

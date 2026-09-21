@@ -72,13 +72,13 @@ def icon_for(path: Path) -> Gio.Icon:
     return Gio.ThemedIcon.new("folder-symbolic" if path.is_dir() else "text-x-generic-symbolic")
 
 
-def picture_for(path: Path, width: int, height: int, *, crop: bool = True) -> Gtk.Widget:
+def picture_for(path: Path, width: int, height: int, *, crop: bool = True, priority: int = 1) -> Gtk.Widget:
     # Guess from the name; synchronous GIO content probes can read entire RAWs.
     content_type, _ = Gio.content_type_guess(path.name, None)
     icon = Gio.content_type_get_icon(content_type) if content_type else Gio.ThemedIcon.new('text-x-generic-symbolic')
     if path.is_dir():
         icon = Gio.ThemedIcon.new('folder-symbolic')
-    return Thumbnail(path, width, height, icon, thumbnail_file, crop=crop)
+    return Thumbnail(path, width, height, icon, thumbnail_file, crop=crop, priority=priority)
 
 
 def label(text: str, css_class: str | None = None, *, xalign: float = 0.0) -> Gtk.Label:
@@ -314,6 +314,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.metadata_viewport.set_measure_overlay(self.metadata, False)
         self.metadata_viewport.set_clip_overlay(self.metadata, True)
         browser.append(self.metadata_viewport)
+        self.metadata_viewport.set_visible(self.request.explorer)
 
         self.footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.footer.add_css_class("footer")
@@ -585,7 +586,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.chooser_prompt = label(prompt, 'muted')
         self.chooser_prompt.set_ellipsize(Pango.EllipsizeMode.END)
         self.chooser_prompt.set_max_width_chars(60)
-        self.footer.append(self.chooser_prompt)
+        self.chooser_prompt.set_visible(False)
         if self.request.choices:
             choices_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
             for choice in self.request.choices:
@@ -623,8 +624,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.filter_combo.set_active(requested)
         self.filter_combo.connect("changed", lambda _combo: self._refresh_files())
         self.filter_combo.set_size_request(210, -1)
-        self.filter_combo.set_visible(not self.request.directory)
-        row.append(self.filter_combo)
+        # Honor the caller's selected filter without adding chooser chrome.
+        self.filter_combo.set_visible(False)
 
         if self.request.mode == "save":
             self.filename_entry = Gtk.Entry(placeholder_text="File name")
@@ -639,15 +640,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.selection_label.set_hexpand(True)
             self.selection_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             self.selection_label.set_max_width_chars(36)
-            row.append(self.selection_label)
-
-        hints = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        hints.append(label("Ctrl+F Search", "key-hint"))
-        hints.append(label("Ctrl+H Hidden", "key-hint"))
-        if not self.request.directory:
-            hints.append(label("Space Preview", "key-hint"))
-        hints.append(label("Enter Open", "key-hint"))
-        row.append(hints)
+            self.selection_label.set_visible(False)
+            row.append(Gtk.Box(hexpand=True))
 
         cancel = Gtk.Button(label="Cancel")
         cancel.connect("clicked", lambda _button: self._finish(cancelled=True))
@@ -871,7 +865,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._last_search = self.search.get_text()
         self._update_active_filters()
         trash = self.special_mode == 'trash'
-        self.metadata_viewport.set_visible(not trash)
+        self.metadata_viewport.set_visible(self.request.explorer and not trash)
         if trash:
             self.active_filters.set_visible(False)
             self.search_scope = 'folder'
@@ -1089,6 +1083,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.media_details.cancel()
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
+        if not self.request.explorer:
+            return
         image = Gtk.Image.new_from_icon_name("document-open-symbolic")
         image.set_pixel_size(32)
         self.metadata.append(image)
@@ -1102,11 +1098,13 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.media_details.cancel()
         while child := self.metadata.get_first_child():
             self.metadata.remove(child)
+        if not self.request.explorer:
+            return
         paths = self._selected_paths() or [path]
         if len(paths) > 1:
             show_selection_summary(self, paths)
             return
-        poster = picture_for(path, 132, 76, crop=True)
+        poster = picture_for(path, 132, 76, crop=True, priority=0)
         self.metadata.append(HoverScrub(path, poster) if path.suffix.casefold() in VIDEO_TYPES else poster)
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
         primary.set_size_request(140, -1)
@@ -1149,7 +1147,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 self.filename_entry.set_text(path.name)
         else:
             self._clear_metadata()
-        if hasattr(self, "selection_label"):
+        if hasattr(self, "selection_label") and self.selection_label.get_visible():
             count = len(selected)
             if count:
                 total = 0

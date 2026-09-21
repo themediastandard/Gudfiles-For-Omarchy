@@ -1,4 +1,4 @@
-"""PYTHONPATH=. python tests/ui_thumbnails.py; optional THUMBNAIL_NEF=/path/file.NEF."""
+"""Native thumbnail QA; optional THUMBNAIL_MODE=explorer|open|save and THUMBNAIL_NEF."""
 import hashlib
 import json
 import os
@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import time
 from unittest.mock import patch
+from unittest import TestCase
 
 from omarchy_file_picker.model import PickerRequest
 from omarchy_file_picker.picker import PickerApplication, PickerWindow
@@ -54,7 +55,11 @@ with tempfile.TemporaryDirectory(prefix='thumbnail-ui-') as tmp, patch.object(Pa
     config = root / '.config/omarchy-file-picker'
     config.mkdir(parents=True)
     (config / 'preferences.json').write_text(json.dumps({'view_mode': 'list'}))
-    request = PickerRequest(current_folder=folder, explorer=True, multiple=True, title='Thumbnail regression QA')
+    mode = os.environ.get('THUMBNAIL_MODE', 'explorer')
+    assert mode in {'explorer', 'open', 'save'}, mode
+    request = PickerRequest(current_folder=folder, explorer=mode == 'explorer',
+                            mode='save' if mode == 'save' else 'open',
+                            multiple=True, title='Thumbnail regression QA')
     app = PickerApplication(request, None)
     app.register(None)
     window = PickerWindow(app, request, None)
@@ -81,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix='thumbnail-ui-') as tmp, patch.object(Pa
     adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
     until(lambda: all(not w.loaded for w in loaded))
     until(lambda: any(w.loaded and int(w.path.stem) > 900 for w in SCHEDULER.widgets))
-    window._set_view('list')
+    window._set_view('columns')
     until(lambda: SCHEDULER.running == 0 and not SCHEDULER.widgets)
     print(f'PASS: 1000 large images; grid switch {switch_seconds:.2f}s; {len(loaded)} resident thumbnails; responsive GTK, scrolling and cancellation')
 
@@ -104,6 +109,16 @@ with tempfile.TemporaryDirectory(prefix='thumbnail-ui-') as tmp, patch.object(Pa
     until(lambda: any(w.loaded for w in SCHEDULER.widgets))
     print('PASS: slow decoders cancelled on view switch; returning to grid recovers')
 
+    # Warm viewport fills on worker completion, without 100ms batch delays.
+    until(lambda: all(w.loaded for w in SCHEDULER.widgets if w.in_view()))
+    window._set_view('columns')
+    until(lambda: SCHEDULER.running == 0 and not SCHEDULER.widgets)
+    started = time.monotonic()
+    window._set_view('grid')
+    until(lambda: any(w.loaded for w in SCHEDULER.widgets))
+    until(lambda: all(w.loaded for w in SCHEDULER.widgets if w.in_view()))
+    print(f'PASS: {mode} warm visible thumbnails {time.monotonic() - started:.3f}s')
+
     sample = os.environ.get('THUMBNAIL_NEF')
     if sample:
         nef = Path(sample)
@@ -114,7 +129,10 @@ with tempfile.TemporaryDirectory(prefix='thumbnail-ui-') as tmp, patch.object(Pa
         window.navigate(raw_folder)
         until(lambda: any(w.loaded and w.path.suffix == '.NEF' for w in SCHEDULER.widgets), 30)
         window.flow.select_child(window.children_by_path[raw_folder / 'Nikon.NEF'])
-        until(lambda: any(isinstance(w, Thumbnail) and w.loaded for w in walk(window.metadata)), 30)
+        if request.explorer:
+            until(lambda: any(isinstance(w, Thumbnail) and w.loaded for w in walk(window.metadata)), 30)
+        else:
+            assert not window.metadata_viewport.get_mapped()
         screenshot = os.environ.get('THUMBNAIL_SCREENSHOT')
         if screenshot:
             if window.quicklook.get_visible():
@@ -129,8 +147,10 @@ with tempfile.TemporaryDirectory(prefix='thumbnail-ui-') as tmp, patch.object(Pa
     broken = root / 'broken'
     broken.mkdir()
     (broken / 'bad.NEF').write_bytes(b'not a RAW file')
-    window.navigate(broken)
-    until(lambda: any(w.failed for w in SCHEDULER.widgets), 30)
+    with TestCase().assertLogs('omarchy_file_picker.thumbnails', level='WARNING') as logs:
+        window.navigate(broken)
+        until(lambda: any(w.failed for w in SCHEDULER.widgets), 30)
+    assert 'bad.NEF' in logs.output[0]
     assert all(w.image.get_visible() and not w.loaded for w in SCHEDULER.widgets)
     window.navigate(folder)
     until(lambda: any(w.loaded for w in SCHEDULER.widgets))

@@ -128,7 +128,7 @@ def build_css(colors: dict[str, str]) -> str:
       border: 1px solid alpha({colors['accent']}, 0.35);
     }}
     headerbar.compact-header {{ min-height: 30px; padding: 0 4px; }}
-    .file-chooser .footer {{ padding: 8px 10px; }}
+    .file-chooser .footer {{ padding: 5px 8px; }}
     .file-chooser .footer button {{
       min-height: 26px; padding: 1px 6px; border-radius: 4px;
       background-image: none; box-shadow: none; text-shadow: none;

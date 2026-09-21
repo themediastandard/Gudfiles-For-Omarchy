@@ -87,12 +87,14 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-picker-chrome-') as temporary:
                             settle()
                             if kind != 'explorer':
                                 contained(window.accept_button, window.footer)
-                                contained(window.chooser_prompt, window.footer)
+                                assert not window.chooser_prompt.get_mapped()
+                                assert not window.metadata_viewport.get_mapped()
+                                assert window.metadata.get_first_child() is None
                                 assert not window.tabs.get_visible()
                         if kind == 'folder':
                             assert not window.filter_combo.get_mapped()
                         elif kind != 'explorer':
-                            assert window.filter_combo.get_mapped()
+                            assert not window.filter_combo.get_mapped()
                             assert window.chooser_prompt.get_text() == request.title
                             # Quick Look disables browsing while keeping utilities available.
                             window.flow.select_child(window.children_by_path[text])
@@ -120,6 +122,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-picker-chrome-') as temporary:
                             expected = folder / 'saved.txt' if kind == 'save' else folder if kind == 'folder' else text
                             assert payload['uris'] == [expected.as_uri()], payload
                             assert payload['choices'] == {'choice': 'true'}
+                            if kind != 'folder':
+                                assert payload['current_filter'] == ['Text', [[0, '*.txt']]], payload
                     finally:
                         window.destroy()
                         settle()

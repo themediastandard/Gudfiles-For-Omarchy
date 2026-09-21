@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import atexit
 import hashlib
+import logging
 import os
 from pathlib import Path
 import signal
@@ -24,6 +25,14 @@ THUMBNAIL_SIZE = 360
 DECODE_TIMEOUT = 20
 _processes = {}
 _process_lock = threading.Lock()
+_log = logging.getLogger(__name__)
+
+
+def _decode_failure(path, reason, diagnostics):
+    diagnostics.seek(0)
+    detail = diagnostics.read(4096).decode('utf-8', errors='replace').strip()
+    _log.warning('Thumbnail decode failed for %r (%s): %s', str(path), reason,
+                 detail or 'no decoder diagnostics')
 
 
 def _kill_group(process):
@@ -88,23 +97,32 @@ def thumbnail_file(path: Path, cancelled=lambda: False) -> Path | None:
             output = Path(temporary) / 'thumbnail.png'
             command = [sys.executable, '-m', 'omarchy_file_picker.thumbnail_decode',
                        str(path.absolute()), str(output), str(THUMBNAIL_SIZE)]
-            with subprocess.Popen(command, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            # A file avoids pipe backpressure and unbounded in-memory stderr.
+            # The child's file-size limit bounds writes; only log a short excerpt.
+            with tempfile.TemporaryFile() as diagnostics, subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.DEVNULL, stderr=diagnostics,
                                   start_new_session=True) as process:
                 with _process_lock:
                     _processes[process] = temporary
                 try:
                     deadline = time.monotonic() + DECODE_TIMEOUT
                     while process.poll() is None:
-                        if cancelled() or time.monotonic() >= deadline:
+                        if cancelled():
+                            return None
+                        if time.monotonic() >= deadline:
+                            _decode_failure(path, 'deadline exceeded', diagnostics)
                             return None
                         try:
                             process.wait(timeout=.05)
                         except subprocess.TimeoutExpired:
                             pass
-                    if process.returncode or cancelled() or identity(path) != version:
+                    if cancelled() or identity(path) != version:
+                        return None
+                    if process.returncode:
+                        _decode_failure(path, f'exit {process.returncode}', diagnostics)
                         return None
                     if not _valid_png(output):
+                        _decode_failure(path, 'invalid output', diagnostics)
                         return None
                     os.replace(output, cache)
                     return cache
