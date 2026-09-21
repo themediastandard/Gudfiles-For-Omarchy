@@ -32,6 +32,7 @@ class MoveAnnotationsTests(unittest.TestCase):
         self.owner = FileManagement()
         self.owner.undo_history = UndoHistory()
         self.owner.action_sounds = Mock()
+        self.owner._record_file_interaction = Mock()
         self.calls = []
         def migrate(mapping):
             self.calls.append((mapping.copy(), threading.get_ident()))

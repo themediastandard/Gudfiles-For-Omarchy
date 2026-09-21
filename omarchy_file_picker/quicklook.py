@@ -293,6 +293,7 @@ class QuickLook(Gtk.Widget):
         return self.owner.get_width() / 2, self.owner.get_height() / 2, 80, 80
 
     def show_file(self, path):
+        self.owner._record_file_interaction([path])
         self.path = path
         self.origin = self._source_rect(path)
         self.owner._close_context_menu()
@@ -441,6 +442,7 @@ class QuickLook(Gtk.Widget):
         index = files.index(self.path) + direction
         if 0 <= index < len(files):
             self.path = files[index]
+            self.owner._record_file_interaction([self.path])
             self.owner.flow.unselect_all()
             self.owner.flow.select_child(self.owner.children_by_path[self.path])
             self._load_file(self.path)

@@ -188,8 +188,8 @@ FEATURES = (
             'Use the video conversion submenu for MP4, WebM, MOV or GIF. FFmpeg creates a new output; the original stays intact. Completion appears as a dismissible in-window notice.',
             keywords='movie format export'),
 
-    Feature('locations', 'Favorites & recent files',
-            'Use the sidebar for common folders, Recent, Trash and mounted devices. Use the eject icon beside a supported device or network share to safely eject, unmount or disconnect it. Open a folder, right-click empty space and choose Folder → Add to Bookmarks to pin it. Bookmarks are shared with GTK apps.'),
+    Feature('locations', 'Favorites & recent folders',
+            'Right-click a folder and choose Add to Favorites to keep it in the Favorites sidebar section. Remove from Favorites removes only the shortcut. Favorites persist across windows and launches. Recents lists the five latest folders you used, newest first, including opening folders, choosing files, previewing, copying and file operations. Recent Files still shows recent files. Shared GTK bookmarks remain under Places. Use the eject icon beside supported drives to safely disconnect them.'),
     Feature('locations', 'Make the sidebar yours',
             'Drag its divider to resize; the width is remembered. Right-click a location to Remove from Sidebar without deleting it. Restore Default Locations brings hidden defaults back.'),
     Feature('locations', 'Open another Gudfiles window',

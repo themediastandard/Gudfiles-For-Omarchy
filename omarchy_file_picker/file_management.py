@@ -253,6 +253,9 @@ class FileManagement(TransferUI):
         def complete(paths, error):
             self.file_job_active = False
             self.set_title(self.request.title)
+            completed = getattr(error, 'completed', []) if error else paths
+            if completed:
+                self._record_file_interaction(completed)
             if refresh:
                 refresh(paths or [])
             else:
@@ -383,6 +386,7 @@ class FileManagement(TransferUI):
                 entry.grab_focus()
                 return False
             self._record_undo(receipt)
+            self._record_file_interaction([target])
             self._dismiss_dialog(dialog)
             migrate = getattr(self, '_creative_paths_renamed', None)
             if migrate and target != path:
@@ -474,7 +478,7 @@ class FileManagement(TransferUI):
     def _copy_location(self, paths):
         self.get_clipboard().set('\n'.join(str(p.absolute()) for p in paths))
 
-    def _copy_files(self, paths, cut=False):
+    def _copy_files(self, paths, cut=False, *, record=True):
         if not paths: return
         uris = [p.absolute().as_uri() for p in paths]
         providers = [
@@ -484,6 +488,8 @@ class FileManagement(TransferUI):
                 GLib.Bytes.new(('\r\n'.join(uris) + '\r\n').encode())),
         ]
         self.get_clipboard().set_content(Gdk.ContentProvider.new_union(providers))
+        if record:
+            self._record_file_interaction(paths)
 
     def _can_paste(self):
         formats = self.get_clipboard().get_formats()
@@ -566,7 +572,7 @@ class FileManagement(TransferUI):
                         if not cut or provider[0] is None or clip.get_content() != provider[0]:
                             return
                         remaining = [p for p in paths if p not in mapping]
-                        self._copy_files(remaining or list(mapping.values()), cut=bool(remaining))
+                        self._copy_files(remaining or list(mapping.values()), cut=bool(remaining), record=False)
                         provider[0] = clip.get_content()
                     self.transfer_callbacks[job.id] = moved
                     self._show_transfers(automatic_job=None if queued else job)
@@ -662,6 +668,7 @@ class FileManagement(TransferUI):
         dialog.connect('response', response)
         dialog.present()
         close.grab_focus()
+        self._record_file_interaction(paths)
         return dialog
 
     def _append_common_context(self, menu, paths, *, background, qa):
@@ -678,6 +685,10 @@ class FileManagement(TransferUI):
             action('Open Folder' if len(paths) == 1 and paths[0].is_dir() else self.request.accept_label,
                    lambda: self.navigate(paths[0]) if len(paths) == 1 and paths[0].is_dir() else self._accept(),
                    'document-open-symbolic')
+            if len(paths) == 1 and paths[0].is_dir():
+                favorite = self._is_favorite(paths[0])
+                action('Remove from Favorites' if favorite else 'Add to Favorites',
+                       lambda: self._set_favorite(paths[0], not favorite), 'starred-symbolic')
             if (self.special_mode == 'recent' or self._computer_search_active()) and len(paths) == 1:
                 action('Visit File', lambda: self._visit_file(paths[0]), 'go-jump-symbolic')
             action('Batch Rename…' if len(paths) > 1 else 'Rename…',
@@ -700,6 +711,10 @@ class FileManagement(TransferUI):
             action('Select All', self.flow.select_all, 'edit-select-all-symbolic', self.request.multiple, 'Ctrl+A')
             action('Refresh', self._refresh_files, 'view-refresh-symbolic', detail='F5')
             folder = self.current_dir
+            if self.special_mode is None and not self._computer_search_active():
+                favorite = self._is_favorite(folder)
+                action('Remove from Favorites' if favorite else 'Add to Favorites',
+                       lambda: self._set_favorite(folder, not favorite), 'starred-symbolic')
             submenu('Folder', 'folder-symbolic', [
                 ('Open With File Manager', '', 'folder-open-symbolic', lambda: self._open_file_manager(folder)),
                 ('Copy Location', '', 'edit-copy-symbolic', lambda: self._copy_location([folder])),

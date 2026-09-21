@@ -2,13 +2,133 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
 from gi.repository import Gdk, Gio, GLib, Gtk
+from .folder_locations import FolderLocations
 
 
 class SidebarMenus:
+    def _init_folder_locations(self):
+        self.folder_locations = FolderLocations()
+        self._folder_snapshot = None
+        self._folder_read_error = ''
+        self._recent_write_error = ''
+        self._folder_sections = {}
+        self._folder_refresh_timer = GLib.timeout_add(1000, self._poll_folder_locations)
+        self.connect('unrealize', self._stop_folder_locations)
+
+    def _stop_folder_locations(self, *_):
+        if self._folder_refresh_timer:
+            GLib.source_remove(self._folder_refresh_timer)
+            self._folder_refresh_timer = 0
+
+    def _read_folder_locations(self):
+        try:
+            snapshot = self.folder_locations.read()
+            self._folder_read_error = ''
+            return snapshot
+        except (OSError, sqlite3.Error) as error:
+            self._folder_read_error = str(error)
+            return [], []
+
+    def _is_favorite(self, path):
+        return Path(self.folder_locations.key(path)) in self._read_folder_locations()[0]
+
+    def _set_favorite(self, path, present):
+        try:
+            self.folder_locations.set_favorite(path, present)
+        except (OSError, sqlite3.Error) as error:
+            self._show_error('Could not update Favorites', str(error))
+            return
+        self._update_folder_sections()
+
+    def _record_recent_folders(self, paths):
+        try:
+            self.folder_locations.touch(paths)
+            self._recent_write_error = ''
+        except (OSError, sqlite3.Error) as error:
+            # History failure must not cancel a successful Open/Save or file job.
+            self._recent_write_error = str(error)
+        # Polling updates only the two sections after menu/drag interactions end.
+        # Never replace the clicked widget from inside its event dispatch.
+
+    def _record_file_interaction(self, paths):
+        self._record_recent_folders([path.parent for path in paths])
+
+    def _open_folder_shortcut(self, path):
+        if not path.is_dir():
+            self._show_error('Folder unavailable',
+                             'This folder may have moved or its drive may be disconnected.\n' + str(path))
+            return
+        self.navigate(path)
+
+    def _append_folder_sections(self):
+        self._folder_sections = {}
+        for kind, title in (('favorite', 'FAVORITES'), ('recent-folder', 'RECENTS')):
+            heading = Gtk.Label(label=title, xalign=0)
+            heading.add_css_class('sidebar-heading')
+            heading.add_css_class('sidebar-section')
+            self.sidebar.append(heading)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            self.sidebar.append(box)
+            self._folder_sections[kind] = box
+        self._folder_snapshot = None
+        self._update_folder_sections()
+
+    def _update_folder_sections(self):
+        if not self._folder_sections:
+            return
+        favorites, recents = self._read_folder_locations()
+        snapshot = (favorites, recents, self._folder_read_error, self._recent_write_error)
+        if snapshot == self._folder_snapshot:
+            return
+        self._folder_snapshot = snapshot
+        focus = self.get_focus()
+        focused_key = getattr(self._sidebar_target(focus), '_sidebar_key', None)
+        for kind, paths in (('favorite', favorites), ('recent-folder', recents)):
+            box = self._folder_sections[kind]
+            buttons = [b for b in self.location_buttons if b._sidebar_kind == kind]
+            for button in buttons:
+                self.location_buttons.remove(button)
+            while child := box.get_first_child():
+                box.remove(child)
+            for path in paths:
+                button = self._sidebar_button(path.name or '/', 'folder-symbolic',
+                                              lambda _b, p=path: self._open_folder_shortcut(p))
+                button._picker_path = path
+                button._sidebar_kind = kind
+                button._sidebar_key = f'{kind}:{path}'
+                button.set_tooltip_text(str(path))
+                box.append(button)
+                if button._sidebar_key == focused_key:
+                    button.grab_focus()
+            error = self._folder_read_error or (self._recent_write_error if kind == 'recent-folder' else '')
+            if error or not paths:
+                text = ('Favorites unavailable' if kind == 'favorite' else 'Recents unavailable') if error else (
+                    'No favorites yet' if kind == 'favorite' else 'No recent folders yet')
+                if error and kind == 'recent-folder' and not self._folder_read_error:
+                    text = 'Could not save recent folders'
+                note = Gtk.Label(label=text, xalign=0)
+                note.add_css_class('muted')
+                note.set_wrap(True)
+                note.set_margin_start(8)
+                note.set_margin_end(8)
+                if error:
+                    note.set_tooltip_text(error)
+                box.append(note)
+        # During construction the remaining browser controls do not exist yet.
+        if hasattr(self, 'tabs'):
+            self._update_active_location()
+
+    def _poll_folder_locations(self):
+        if (not self.context_popover and not getattr(self.drag_copy, 'active', False)
+                and not getattr(self.drag_selection, 'active', False)):
+            self._update_folder_sections()
+        return True
+
     def _install_sidebar_context(self):
         self.sidebar_mount_operations = {}
         self.sidebar_context_gesture = Gtk.GestureClick(button=3)
@@ -96,6 +216,9 @@ class SidebarMenus:
                 separator()
                 action('Copy Location', lambda: self._copy_location([path]), 'edit-copy-symbolic')
                 action('Properties', lambda: self._show_properties([path]), 'dialog-information-symbolic')
+                favorite = self._is_favorite(path)
+                action('Remove from Favorites' if favorite else 'Add to Favorites',
+                       lambda: self._set_favorite(path, not favorite), 'starred-symbolic')
             if kind in {'location', 'bookmark'}:
                 separator()
                 action('Remove from Sidebar', lambda: self._remove_sidebar_item(button), 'list-remove-symbolic',

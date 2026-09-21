@@ -109,6 +109,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.location_buttons: list[Gtk.Button] = []
         self.choice_widgets: dict[str, Gtk.Widget] = {}
         self._init_file_management()
+        self._init_folder_locations()
         self._init_creative()
         self.media_details = MediaDetailsService()
         self.connect('unrealize', lambda *_: self.media_details.close())
@@ -391,7 +392,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             if path is not None and not path.exists():
                 continue
             if name == "Recent":
-                button = self._sidebar_button(name, icon, lambda _b: self._open_recent())
+                button = self._sidebar_button('Recent Files', icon, lambda _b: self._open_recent())
+                button._sidebar_key = 'recent'
             elif name == "Trash":
                 button = self._sidebar_button(name, icon, lambda _b: self._open_trash())
             else:
@@ -405,6 +407,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             button._picker_path = path
             button._sidebar_kind = 'bookmark'
             self.sidebar.append(button)
+        self._append_folder_sections()
         # Group from the mount's native URI: GVfs exposes network shares as
         # local paths too, so checking the filesystem path mislabels them.
         network, devices = [], []
@@ -1495,6 +1498,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             except OSError as error:
                 self._show_error("Could not create text file", str(error))
                 return
+            self._record_file_interaction([destination])
             self._refresh_files([destination])
             child = self.children_by_path.get(destination)
             if child:
@@ -1530,6 +1534,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 dialog.set_error(message, entry)
                 return
             self._dismiss_dialog(dialog)
+            self._record_file_interaction([destination])
             self._load()
             child = self.children_by_path.get(destination)
             if child:
@@ -1590,6 +1595,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             if not self.active_processes:
                 self.set_title(self.request.title)
             if successful and output.exists():
+                self._record_file_interaction([output])
                 self._load()
                 child = self.children_by_path.get(output)
                 if child:
@@ -1837,6 +1843,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 if path.is_file():
                     try:
                         Gio.AppInfo.launch_default_for_uri(safe_uri(path), None)
+                        self._record_file_interaction([path])
                     except GLib.Error as error:
                         self._show_error(f'Could not open {path.name}', error.message)
             return
@@ -1887,6 +1894,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self._show_error('File operation in progress', 'Wait for the operation to finish before closing the picker.')
             return
         self.finished = True
+        if not cancelled and paths:
+            self._record_recent_folders(paths if self.request.directory else [path.parent for path in paths])
         if self.sidebar_save_timer:
             self._save_sidebar_width()
         self.media_details.close()
@@ -1923,6 +1932,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             return
         self.special_mode = None
         self.current_dir = path.resolve()
+        self._record_recent_folders([self.current_dir])
         self.search.set_text("")
         if record:
             self.history = self.history[: self.history_index + 1]
@@ -1953,6 +1963,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.special_mode, self.current_dir = location
         else:
             self.special_mode, self.current_dir = None, location
+            self._record_recent_folders([self.current_dir])
         self._trash_restore_state = {}
         self.search.set_text('')
         self._load()

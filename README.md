@@ -192,6 +192,13 @@ succeeds. History is limited to 20 actions and is cleared when the window closes
 folders over 10,000 entries are not recorded. Text fields keep native Undo.
 Cross-drive moves and permanent deletion are excluded; Trash has its own Restore.
 
+Right-click a folder and choose **Add to Favorites** to save it in the sidebar.
+**Remove from Favorites** removes only the shortcut. **Recents** lists your five
+most recently used folders, newest first, including folders used for file
+selection, previews and file operations. Both sections persist across launches
+and are shared by the browser and Open/Save pickers. **Recent Files** still opens
+the recent-file list, and existing shared GTK bookmarks remain under Places.
+
 Right-click a sidebar location for **Open**, **Open in New Window**, **Copy
 Location**, and **Properties**. Local folders also offer **Show in Enclosing
 Folder**. **Remove from Sidebar** hides a default location or removes a shared

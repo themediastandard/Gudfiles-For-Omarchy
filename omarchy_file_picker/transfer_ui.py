@@ -407,6 +407,7 @@ class TransferUI:
         # jobs in a different order from the visible list. No GTK on workers.
         for job, events in groupby(completed_events, key=lambda event: event[0]):
             mapping = {source: target for _, source, target in events}
+            self._record_file_interaction([*mapping.values(), *mapping])
             changed = self.transfer_changed_dirs.setdefault(job.id, set())
             changed.update(target.parent for target in mapping.values())
             if job.cut:

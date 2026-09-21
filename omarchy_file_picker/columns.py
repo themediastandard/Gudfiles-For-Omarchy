@@ -360,6 +360,8 @@ class ColumnBrowser(Gtk.ScrolledWindow):
                 owner.history = owner.history[:owner.history_index + 1]
                 owner.history.append(column.path)
                 owner.history_index = len(owner.history) - 1
+                if owner.special_mode is None:
+                    owner._record_recent_folders([column.path])
             owner._rebuild_pathbar()
             owner._update_nav_state()
             owner._update_active_location()
@@ -424,6 +426,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             self.busy = False
         if target:
             self.append(target)
+            owner._record_recent_folders([target])
         self._sync_watch()
         owner._rebuild_pathbar()
         owner._update_nav_state()

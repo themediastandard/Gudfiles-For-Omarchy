@@ -7,6 +7,22 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Favorites and Recents are separate sidebar sections in browser/Open/Save/folder
+  windows. Right-click a folder, the current folder background, or a sidebar
+  folder to Add to Favorites; removal deletes only the shortcut. Existing GTK
+  bookmarks and default places are preserved; the former Recent place is labeled
+  Recent Files to distinguish it from folder Recents.
+  Recents persists the five distinct most recently used folder paths, newest
+  first. Explicit navigation (including columns, history and tabs), accepted
+  picker choices, file opening/preview, clipboard copy/cut, Properties, ratings,
+  and completed file operations update it. Startup, thumbnail work and passive
+  refresh/selection restoration do not. Disconnected shortcuts stay saved and
+  report an unavailable folder when opened.
+  `folder_locations.py` owns the private `folders.sqlite3` beside the ratings
+  database, outside the replaceable runtime package. SQLite transactions merge
+  concurrent window writes, and failures preserve existing data. Sidebar sections
+  refresh across windows within a second, deferring during menus and drags;
+  automatic history-save errors appear inline without blocking picker results.
 - A compact bar beneath the file area has a thumbnail-size slider at the left
   and a centered selected-file count/combined size. The slider works only in grid
   view, ranges from 96 to 312 pixels wide and persists across windows. Tiles resize
@@ -732,6 +748,9 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_folder_locations.py
+# With POINTER_QA_ISOLATED=1 and XDOTOOL on an isolated X11 display, this also
+# tests physical folder right-clicks. FOLDER_LOCATIONS_SCREENSHOTS saves captures.
 PYTHONPATH=. python tests/ui_list_details.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_name_resize.py
@@ -1113,6 +1132,25 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 Favorites/Recents verification: 293 unit tests pass, including
+  concurrent SQLite connections, duplicate paths, five-folder eviction, reopen,
+  locked writes, corruption preservation and shortcut-only removal. Native tests
+  against source and installed code cover physical folder right-clicks, add/remove,
+  selection preservation, cross-window refresh, navigation/clipboard/preview/
+  annotation history, disabled-file folder pickers, actual Open/Save results,
+  unavailable folders and write-error recovery in all three views and four window
+  modes with active/light palettes. Screenshots were reviewed at the compact
+  window size. Native Wayland sidebar actions also pass, including bookmark
+  preservation, hide/restore, device guards and independent windows.
+  Installed transfer-destination and tab/drag suites pass; real copy completion
+  checks assert destination/source ordering in Recents. The portal remains active.
+  All 64 installed runtime files match source; atomic package exchange retained
+  a rollback backup and left existing windows open. Reopen to load the changes.
+  The older `ui_columns.py` still fails its folder-only-entries assertion on both
+  unchanged HEAD and this version: current folder pickers intentionally show
+  disabled files. The new feature suite tests that current contract. The batch
+  rename suite passes its action assertions but its dummy MOV fixtures produce
+  expected thumbnail-decoder errors; these are distinct from GTK callback errors.
 - September 21 filename truncation correction: reproduced a 120-pixel header
   with a 952-pixel filename cell in a wide window. Earlier resize checks used a
   narrow viewport and inspected only the first short-name row, missing spare-space

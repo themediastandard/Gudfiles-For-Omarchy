@@ -203,6 +203,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-destination-') as temporary:
                     job = window.transfer_queue.jobs[-1]
                     wait_for(lambda: job.state in {'completed', 'failed'})
                     assert job.state == 'completed', job.error
+                    window._poll_transfers()
+                    assert window.folder_locations.read()[1][:2] == [destination, source]
                     assert set(job.completed) == {first, folder}
                     assert job.completed[first].read_bytes() == first.read_bytes()
                     assert (destination / first.name).read_text() == 'keep existing'

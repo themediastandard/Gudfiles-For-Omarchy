@@ -321,6 +321,7 @@ def _dialog_class():
         def _completed(self, result):
             self.active = self.owner.file_job_active = False
             if result.completed:
+                self.owner._record_file_interaction(list(result.completed.values()))
                 record = getattr(self.owner, '_record_undo', None)
                 if record:
                     record(result.undo_receipt)

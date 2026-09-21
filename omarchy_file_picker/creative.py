@@ -60,6 +60,7 @@ class CreativeTools:
         except (OSError, sqlite3.Error, ValueError) as error:
             self._show_error('Could not save labels', str(error))
             return
+        self._record_file_interaction(paths)
         for path in paths:
             self._update_rating_badge(path)
         self.list_details.refresh_annotations(paths)

@@ -173,6 +173,8 @@ class BrowserTabs(Gtk.Box):
         finally:
             owner._restoring_tab = False
         owner._load()
+        if owner.special_mode is None:
+            owner._record_recent_folders([owner.current_dir])
         owner._search_restore_selection = state.get('selected', [])
         generation = self.generation
         frames = 0
