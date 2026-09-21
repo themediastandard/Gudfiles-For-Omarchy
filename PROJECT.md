@@ -11,7 +11,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   windows. Right-click a folder, the current folder background, or a sidebar
   folder to Add to Favorites; removal deletes only the shortcut. Existing GTK
   bookmarks and default places are preserved; the former Recent place is labeled
-  Recent Files to distinguish it from folder Recents.
+  Recent Files to distinguish it from folder Recents. Empty Favorites retains
+  its heading without a placeholder message, as requested.
   Recents persists the five distinct most recently used folder paths, newest
   first. Explicit navigation (including columns, history and tabs), accepted
   picker choices, file opening/preview, clipboard copy/cut, Properties, ratings,
