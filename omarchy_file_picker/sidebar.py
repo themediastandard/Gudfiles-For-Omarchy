@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from gi.repository import Gdk, Gio, GLib, Gtk
+from .filename_display import display_filename
 from .folder_locations import FolderLocations
 
 
@@ -109,7 +110,7 @@ class SidebarMenus:
                 button._picker_path = path
                 button._sidebar_kind = kind
                 button._sidebar_key = f'{kind}:{path}'
-                button.set_tooltip_text(str(path))
+                button.set_tooltip_text(display_filename(str(path)))
                 box.append(button)
                 if button._sidebar_key == focused_key:
                     button.grab_focus()

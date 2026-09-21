@@ -29,6 +29,7 @@ from .actions import (
     normalize_nas_uri,
     video_convert_command,
 )
+from .filename_display import display_filename
 from .model import PickerRequest, file_type, format_size, list_directory, recent_files, safe_uri
 from .theme import build_css, load_colors, prepare_colors
 from .file_management import FileManagement, SIDEBAR_MIN_WIDTH
@@ -359,11 +360,11 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         icon = Gtk.Image.new_from_icon_name(icon_name)
         icon.set_pixel_size(14)
         row.append(icon)
-        item_label = label(text)
+        item_label = label(display_filename(text))
         item_label.set_hexpand(True)
         item_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         item_label.set_max_width_chars(20)
-        button.set_tooltip_text(text)
+        button.set_tooltip_text(display_filename(text))
         row.append(item_label)
         button.set_child(row)
         button.connect("clicked", callback)
@@ -649,7 +650,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             self.filename_entry.connect("activate", lambda _entry: self._accept())
             row.append(self.filename_entry)
         else:
-            selection_text = f"Current folder: {self.current_dir.name or '/'}" if self.request.directory else "No file selected"
+            selection_text = f"Current folder: {display_filename(self.current_dir.name) or '/'}" if self.request.directory else "No file selected"
             self.selection_label = label(selection_text, "muted")
             self.selection_label.set_hexpand(True)
             self.selection_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
@@ -988,7 +989,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         thumbnail.set_measure_overlay(badge, False)
         frame.append(thumbnail)
         item.append(frame)
-        name = label(path.name, "filename", xalign=0.5)
+        name = label(display_filename(path.name), "filename", xalign=0.5)
         name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         name.set_width_chars(18)
         name.set_max_width_chars(18)
@@ -1124,7 +1125,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         primary = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, valign=Gtk.Align.CENTER)
         primary.set_size_request(140, -1)
         primary.set_hexpand(True)
-        title = label(path.name, "metadata-title")
+        title = label(display_filename(path.name), "metadata-title")
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         title.set_max_width_chars(32)
         primary.append(title)
@@ -1177,7 +1178,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                 suffix = f" ({format_size(total)})" if total else ""
                 self.selection_label.set_text(f"{count} {noun} selected{suffix}")
             elif self.request.directory:
-                self.selection_label.set_text(f"Current folder: {self.current_dir.name or '/'}")
+                self.selection_label.set_text(f"Current folder: {display_filename(self.current_dir.name) or '/'}")
             else:
                 self.selection_label.set_text("No file selected")
         self._update_accept_state()
@@ -1640,7 +1641,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.conversion_notice_status.set_visible_child_name('working' if working else 'complete')
         self.conversion_notice_spinner.set_spinning(working)
         self.conversion_notice_headline.set_text(headline)
-        self.conversion_notice_filename.set_text(output.name)
+        self.conversion_notice_filename.set_text(display_filename(output.name))
         self.conversion_notice.set_reveal_child(True)
         def expire():
             self.conversion_notice_timer = 0

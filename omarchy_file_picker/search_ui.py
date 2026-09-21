@@ -4,6 +4,7 @@ from pathlib import Path
 
 from gi.repository import Gtk, GLib, Gio, Pango
 
+from .filename_display import display_filename
 from .search import SearchService
 
 
@@ -188,7 +189,7 @@ class SearchTools:
         return Gio.content_type_get_icon(content_type)
 
     def _search_location_label(self, path):
-        location = Gtk.Label(label=str(path.parent), xalign=0,
+        location = Gtk.Label(label=display_filename(str(path.parent)), xalign=0,
                              ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
         location.add_css_class('muted')
         return location

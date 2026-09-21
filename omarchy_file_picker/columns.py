@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
+from .filename_display import display_filename
 from .drag_copy import disable_native_rubberband
 from .list_navigation import focus_file
 
@@ -161,7 +162,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
         panel.add_css_class('browser-column')
         panel.set_size_request(260, -1)
         title = Gtk.Label(label='Whole computer' if owner._computer_search_active() else
-                          'Recent' if owner.special_mode == 'recent' else path.name or '/', xalign=0)
+                          'Recent' if owner.special_mode == 'recent' else display_filename(path.name) or '/', xalign=0)
         title.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         title.set_max_width_chars(26)
         title.add_css_class('column-heading')
@@ -217,7 +218,7 @@ class ColumnBrowser(Gtk.ScrolledWindow):
             row = Gtk.Box(spacing=8, height_request=28)
             row.append(Gtk.Image.new_from_gicon(Gio.content_type_get_icon('inode/directory') if child._picker_is_dir
                        else Gio.content_type_get_icon(Gio.content_type_guess(str(item), None)[0])))
-            name = Gtk.Label(label=item.name, xalign=0, hexpand=True)
+            name = Gtk.Label(label=display_filename(item.name), xalign=0, hexpand=True)
             name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
             name.set_width_chars(8)
             name.set_max_width_chars(22)

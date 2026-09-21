@@ -7,6 +7,18 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- SMB-encoded trailing spaces (U+F028) display as normal spaces in file rows,
+  folder headings, breadcrumbs, tabs, sidebar shortcuts and Quick Look titles.
+  `filename_display.py` owns display-only decoding at path-component boundaries;
+  filesystem paths, selection keys, portal URIs and editable names stay raw.
+  Native regression `tests/ui_filename_display.py` checks all three views in
+  two palettes and accepts distinct files whose rendered names are identical.
+  The regression also covers browser tabs, breadcrumbs, Recents and Quick Look.
+  September 21 verification: 295 unit tests pass; the native display regression
+  passes against source and the installed runtime. All 65 runtime files match
+  source after atomic package exchange with a rollback backup. Reopen existing
+  windows to load the change. Actual NAS names and contents are unchanged.
+
 - Current app version: 0.1.2, with changes recorded in `releases/0.1.2.md`.
   This source/version update does not publish new download assets or an AUR package.
 
@@ -761,6 +773,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 
 ```bash
 python -m unittest discover -v
+PYTHONPATH=. python tests/ui_filename_display.py
 PYTHONPATH=. python tests/ui_folder_locations.py
 # With POINTER_QA_ISOLATED=1 and XDOTOOL on an isolated X11 display, this also
 # tests physical folder right-clicks. FOLDER_LOCATIONS_SCREENSHOTS saves captures.

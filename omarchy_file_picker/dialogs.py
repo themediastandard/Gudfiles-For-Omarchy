@@ -1,6 +1,7 @@
 """Shared native dialog layout, file summaries and readable detail cards."""
 from gi.repository import Gdk, Gio, Gtk, Pango
 
+from .filename_display import display_filename
 from .model import file_type
 
 
@@ -129,7 +130,7 @@ def file_summary(path=None, *, title='', detail='', icon=None):
     plate.append(image)
     card.append(plate)
     copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True, valign=Gtk.Align.CENTER)
-    name = Gtk.Label(label=title or path.name or str(path), xalign=0, hexpand=True,
+    name = Gtk.Label(label=title or display_filename(path.name or str(path)), xalign=0, hexpand=True,
                      ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=32)
     name.add_css_class('dialog-file-name')
     name.set_tooltip_text(name.get_text())
@@ -188,9 +189,9 @@ def path_list(paths, *, limit=100):
         image = Gtk.Image.new_from_icon_name(glyph) if isinstance(glyph, str) else Gtk.Image.new_from_gicon(glyph)
         image.set_pixel_size(16)
         row.append(image)
-        name = Gtk.Label(label=path.name or str(path), xalign=0, hexpand=True,
+        name = Gtk.Label(label=display_filename(path.name or str(path)), xalign=0, hexpand=True,
                          ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=36)
-        name.set_tooltip_text(str(path))
+        name.set_tooltip_text(display_filename(str(path)))
         row.append(name)
         box.append(row)
     if len(paths) > limit:

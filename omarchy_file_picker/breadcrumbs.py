@@ -3,6 +3,7 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Graphene', '1.0')
 from gi.repository import Gdk, Graphene, Gsk, Gtk, Pango
+from .filename_display import display_filename
 
 TIP = 10
 
@@ -11,6 +12,7 @@ class BreadcrumbButton(Gtk.Button):
     __gtype_name__ = 'OmarchyBreadcrumbButton'
 
     def __init__(self, text, colors, *, first=False, current=False):
+        text = display_filename(text)
         super().__init__(label=text)
         self.set_tooltip_text(text)
         self.colors, self.first, self.current = colors, first, current

@@ -4,6 +4,7 @@ import threading
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
+from .filename_display import display_filename
 from .trash import list_trash, restore_item
 
 
@@ -177,7 +178,7 @@ class TrashPage(Gtk.Box):
                 icon.set_pixel_size(16)
                 box.append(icon)
                 copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
-                name = Gtk.Label(label=item.name, xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
+                name = Gtk.Label(label=display_filename(item.name), xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
                 copy.append(name)
                 location = Gtk.Label(label=str(Path(item.original).parent) if item.original else 'Original location unavailable',
                                      xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)

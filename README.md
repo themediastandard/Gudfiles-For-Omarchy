@@ -1,4 +1,4 @@
-# Gudfiles
+# Gudfiles — A Visual File Manager for Omarchy
 
 A visual, keyboard-friendly file manager and file picker that follows the active
 Omarchy theme and serves as an XDG desktop portal backend.

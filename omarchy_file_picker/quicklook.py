@@ -12,6 +12,7 @@ gi.require_version('Gtk', '4.0')
 gi.require_version('Graphene', '1.0')
 from gi.repository import Gdk, GdkPixbuf, GLib, Graphene, Gsk, Gtk, Pango
 
+from .filename_display import display_filename
 from .model import file_type, format_size
 from .image_preview import ZoomImage
 from .list_navigation import focus_file
@@ -351,7 +352,7 @@ class QuickLook(Gtk.Widget):
             # Arrow navigation replaces the contents of an already open card;
             # retain its geometry while loading and don't replay the entry zoom.
             self.progress = 1.0
-        self.title.set_text(path.name)
+        self.title.set_text(display_filename(path.name))
         self.refresh_ratings()
         try:
             self.details = f'{file_type(path)}  ·  {format_size(path.stat().st_size)}'

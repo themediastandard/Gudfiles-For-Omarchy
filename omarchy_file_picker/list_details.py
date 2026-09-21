@@ -1,5 +1,6 @@
 """Aligned list headings, customizable cells, and asynchronous media sorting."""
 from gi.repository import Gdk, GLib, Gtk, Pango
+from .filename_display import display_filename
 from .list_metadata import (ANNOTATION_COLUMNS, COLUMNS, DEFAULT_COLUMNS, EXTRA_SORTS, MEDIA_COLUMNS,
                             ListMetadataWorker, annotation_values, format_value, normalize_columns)
 from .ratings import COLORS
@@ -527,7 +528,7 @@ class ListDetails:
                 image.set_valign(Gtk.Align.CENTER)
                 image.set_margin_end(6)
                 cell.append(image)
-                name = Gtk.Label(label=path.name, xalign=0, hexpand=True,
+                name = Gtk.Label(label=display_filename(path.name), xalign=0, hexpand=True,
                                  ellipsize=Pango.EllipsizeMode.MIDDLE, width_chars=1, max_width_chars=1)
                 # size_request is only a minimum. Bound the label's natural
                 # width too, or Gtk.Box grants each row its full filename width

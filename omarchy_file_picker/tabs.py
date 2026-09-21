@@ -4,6 +4,7 @@ from pathlib import Path
 import uuid
 
 from gi.repository import Gdk, GLib, Gtk, Pango
+from .filename_display import display_filename
 from .tab_strip import AnimatedTabStrip
 
 
@@ -120,8 +121,8 @@ class BrowserTabs(Gtk.Box):
         for tab in self.items:
             mode = tab.state.get('special_mode')
             name = mode.title() if mode else tab.path.name or '/'
-            tab.label.set_text(name)
-            tab.button.set_tooltip_text(name if mode else str(tab.path))
+            tab.label.set_text(display_filename(name))
+            tab.button.set_tooltip_text(display_filename(name if mode else str(tab.path)))
             (tab.widget.add_css_class if tab is self.current else tab.widget.remove_css_class)('active')
 
     def new(self, path=None, *, background=False, special_mode=None):
