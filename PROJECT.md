@@ -73,8 +73,10 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   an extra GdkPixbuf metadata decode. Image decoding remains CPU-based; GPU
   rendering is provided by GTK. GPU decode acceleration has not been implemented.
 - The public README features `docs/screenshots/gudfiles-demo.png`, the
-  unmodified full-app grid capture from demo v3. Its adjacent README owns
-  sample-media attribution and identifies the simulated sidebar devices.
+  framed 0.1.2 product image with Favorites, Recents and media-preview captions.
+  It uses an isolated native capture with mock folders/files; the original is
+  `docs/screenshots/gudfiles-0.1.2-capture.png`. The adjacent README owns provenance
+  and sample-media attribution.
 - Friend preview packaging is documented in `docs/TESTING.md` and
   `docs/RELEASING.md`. The repository and preview downloads are public
   following the owner's September 20 visibility change. The app

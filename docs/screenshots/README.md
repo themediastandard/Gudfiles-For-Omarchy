@@ -1,10 +1,15 @@
 # Gudfiles demo screenshot
 
-`gudfiles-demo.png` is the unmodified 1360 × 820 full-app grid-view capture
-from the Gudfiles full-app demo v3, created September 20, 2026. It shows the
-real application with a sample project, generated coastal photos and video
-samples. Sidebar SD cards, drives and NAS are simulated demo devices, not
-live hardware or a claim of tested connectivity.
+`gudfiles-demo.png` is the framed Gudfiles 0.1.2 product image, updated
+September 21, 2026. It highlights Favorites, the five-folder Recents section,
+and previews that appear for selected photos/videos. The native window border
+remains visible inside a soft product frame, with feature text outside the app.
+
+The source is a fresh capture of the actual app using isolated mock folders,
+favorites, recent history, notes and sample media. No personal files or real
+storage devices are shown. ImageGen added the surrounding product presentation.
+The unmodified native capture is [gudfiles-0.1.2-capture.png](gudfiles-0.1.2-capture.png).
+The sample scene demonstrates the UI; it is not a claim of connected hardware.
 
 ## Sample-media credits
 
