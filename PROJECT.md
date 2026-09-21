@@ -12,6 +12,13 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   Help guide, plus PNG clipboard screenshot paste recovered from its detached
   worktree. All 314 unit tests pass. Native Wayland suites pass for screenshot
   paste, update notices, Help, folder sizes and the live disposable Trash browser.
+  The consolidated user-local runtime is installed: all 70 runtime files match
+  source byte-for-byte, with rollback backup
+  `~/.local/state/gudfiles/install-backups/20260921-190438-00ukp32r`. The portal
+  and freedesktop file-manager services were restarted from the new package and
+  expose their D-Bus interfaces without restarts. The same screenshot, update,
+  Help, folder-size and disposable Trash suites pass with imports forced to the
+  installed runtime.
   The isolated Xvfb/xdotool Trash pointer suite was not rerun because those tools
   are unavailable. The older transfer-mode branch was not replayed because its
   final integrated implementation is already in `main`.
