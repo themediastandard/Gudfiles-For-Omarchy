@@ -54,7 +54,7 @@ class FileManagement(TransferUI):
         defaults = dict(sort_key='name', descending=False, folders_first=True,
                         show_size=True, show_type=True, show_time=True, sidebar_width=SIDEBAR_DEFAULT_WIDTH,
                         transfer_mode='queue', hidden_locations=[], view_mode='grid', sound_effects=True,
-                        list_columns=list(DEFAULT_COLUMNS))
+                        list_columns=list(DEFAULT_COLUMNS), list_name_width=0)
         saved = {}
         try:
             saved = json.loads(self.preferences_path.read_text())
@@ -78,6 +78,8 @@ class FileManagement(TransferUI):
             defaults['view_mode'] = 'grid'
         defaults['hidden_locations'] = [key for key in defaults['hidden_locations'] if isinstance(key, str)]
         defaults['sidebar_width'] = max(SIDEBAR_MIN_WIDTH, defaults['sidebar_width'])
+        defaults['list_name_width'] = (max(96, min(32768, defaults['list_name_width']))
+                                       if defaults['list_name_width'] > 0 else 0)
         self.file_preferences = defaults
         self.action_sounds = ActionSounds(self.preferences_path)
         self.connect('unrealize', self.action_sounds.close)

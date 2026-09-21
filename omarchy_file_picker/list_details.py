@@ -11,6 +11,9 @@ class ListDetails:
     def __init__(self, owner):
         self.owner = owner
         self.data, self.rows, self.buttons = {}, {}, {}
+        self.name_labels = {}
+        self.resize_start = None
+        self.name_width = owner.file_preferences['list_name_width']
         self.busy = False
         self.scope = None
         self.applied = False
@@ -66,6 +69,7 @@ class ListDetails:
         owner.connect('unrealize', self.close)
 
     def close(self, *_):
+        self._end_name_resize()
         self._end_column_drag()
         self.worker.close()
         if self.timer:
@@ -78,16 +82,19 @@ class ListDetails:
         return normalize_columns(self.owner.file_preferences['list_columns'])
 
     def reset(self):
+        self._end_name_resize()
         self._end_column_drag()
         self.worker.cancel()
         self.busy = self.applied = False
         self.scope = None
         self.data.clear()
         self.rows.clear()
+        self.name_labels.clear()
         self.owner.standard_flow.set_sort_func(None)
         self.configure()
 
     def configure(self):
+        self._end_name_resize()
         self._end_column_drag()
         self.popover.popdown()
         while child := self.header.get_first_child():
@@ -102,8 +109,10 @@ class ListDetails:
         for key in columns:
             button = Gtk.Button()
             button.add_css_class('list-heading-button')
-            button.set_size_request(COLUMNS[key][1], -1)
-            button.set_hexpand(key == 'name')
+            button.set_size_request((self.name_width or COLUMNS[key][1]) if key == 'name' else COLUMNS[key][1], -1)
+            button.set_hexpand(key == 'name' and not self.name_width)
+            if key == 'name':
+                button.add_css_class('name-heading')
             text = Gtk.Label(xalign=1 if key == columns[-1] and key != 'name' else 0,
                              ellipsize=Pango.EllipsizeMode.END)
             text.set_margin_start(0 if key == 'name' else 8)
@@ -128,7 +137,8 @@ class ListDetails:
             active = key == prefs['sort_key']
             (button.add_css_class if active else button.remove_css_class)('active')
             button.get_child().set_text(title + (' ↓' if prefs['descending'] else ' ↑') if active else title)
-            movement = 'Name stays first.' if key == 'name' else 'Drag or Alt+Left/Right to reorder.'
+            movement = ('Drag the right edge to resize; double-click it to fit filenames. Name stays first.'
+                        if key == 'name' else 'Drag or Alt+Left/Right to reorder.')
             button.set_tooltip_text(f'Sort by {title}. Click again to reverse. {movement} Right-click to choose columns.')
             button.update_property([Gtk.AccessibleProperty.LABEL],
                 [title + (', descending' if prefs['descending'] else ', ascending') if active else title])
@@ -139,7 +149,7 @@ class ListDetails:
         self.widget.set_visible(self.owner.special_mode != 'trash' and (self.owner.view_mode == 'list' or pending))
 
     def sort(self, key):
-        if self.dragged_column is not None:
+        if self.dragged_column is not None or self.resize_start is not None:
             return
         prefs = self.owner.file_preferences
         descending = not prefs['descending'] if prefs['sort_key'] == key else key not in {'name', 'type', 'codec', 'color'}
@@ -209,6 +219,50 @@ class ListDetails:
             self._mark_column_target(*self.drag_position)
         return True
 
+    def _name_edge(self, x, y):
+        button = self.buttons.get('name')
+        if button is None:
+            return False
+        valid, bounds = button.compute_bounds(self.header_scroll)
+        return (valid and 0 <= y <= self.header_scroll.get_height()
+                and abs(x - bounds.get_x() - bounds.get_width()) <= 6)
+
+    def _set_name_width(self, width, *, save=False):
+        self.name_width = max(96, min(32768, round(width))) if width else 0
+        for key, widget in [*self.buttons.items(), *self._column_cells()]:
+            if key == 'name':
+                widget.set_size_request(self.name_width or COLUMNS['name'][1], -1)
+                widget.set_hexpand(not self.name_width)
+        if save:
+            self.owner._set_file_preference('list_name_width', self.name_width, reload=False)
+
+    def _end_name_resize(self, *, commit=False):
+        if self.resize_start is None:
+            return
+        _, previous = self.resize_start
+        self.resize_start = None
+        self._set_name_width(self.name_width if commit else previous, save=commit)
+        self.header_scroll.set_cursor_from_name(None)
+
+    def fit_name(self):
+        # Measure every displayed row, including offscreen names, using its actual
+        # font. Copy the layout so measuring never changes the live ellipsized text.
+        width = COLUMNS['name'][1]
+        for label, cell in self.name_labels.values():
+            layout = label.get_layout().copy()
+            layout.set_width(-1)
+            layout.set_ellipsize(Pango.EllipsizeMode.NONE)
+            needed = layout.get_pixel_size()[0] + cell.get_margin_start() + cell.get_margin_end()
+            child = cell.get_first_child()
+            while child:
+                # Search wraps the filename with its parent-location label.
+                if child is not label and child is not label.get_parent() and child.get_visible():
+                    needed += child.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+                child = child.get_next_sibling()
+            width = max(width, needed + 2)
+        self.resize_start = None
+        self._set_name_width(width, save=True)
+
     def _install_column_drag(self):
         # The viewport stays in place while headings reorder beneath it, so
         # drag coordinates never jump with the dragged button's allocation.
@@ -218,6 +272,11 @@ class ListDetails:
         def begin(_gesture, x, y):
             start[:] = [x, y]
             self.drag_candidate = None
+            if self._name_edge(x, y):
+                self.resize_start = (self.buttons['name'].get_width(), self.name_width)
+                self.buttons['name'].grab_focus()
+                _gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+                return
             picked = self.header_scroll.pick(x, y, Gtk.PickFlags.DEFAULT)
             while picked and picked not in self.buttons.values():
                 picked = picked.get_parent()
@@ -226,6 +285,10 @@ class ListDetails:
                 valid, bounds = picked.compute_bounds(self.header_scroll)
                 self.drag_offset = x - bounds.get_x() if valid else 0
         def update(source, dx, dy):
+            if self.resize_start is not None:
+                self._set_name_width(self.resize_start[0] + dx)
+                self.header_scroll.set_cursor_from_name('col-resize')
+                return
             key = self.drag_candidate
             if key is None:
                 return
@@ -248,6 +311,11 @@ class ListDetails:
             self.drag_position = (start[0] + dx, start[1] + dy)
             self._mark_column_target(*self.drag_position)
         def end(_gesture, _dx, _dy):
+            if self.resize_start is not None:
+                # A single edge click must not turn an automatic width into a
+                # fixed width. Only a drag or double-click changes preferences.
+                self._end_name_resize(commit=abs(_dx) >= 1)
+                return
             key = self.dragged_column
             commit = key is not None and self.drag_valid
             order = list(self.display_columns)
@@ -259,14 +327,34 @@ class ListDetails:
         gesture.connect('drag-update', update)
         gesture.connect('drag-end', end)
         def cancel(*_):
+            self._end_name_resize()
             self.drag_candidate = None
             self._end_column_drag()
         gesture.connect('cancel', cancel)
         self.header_scroll.add_controller(gesture)
+        click = Gtk.GestureClick(button=Gdk.BUTTON_PRIMARY)
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self.header_scroll.add_controller(click)
+        click.group(gesture)
+        def pressed(source, count, x, y):
+            if self._name_edge(x, y):
+                source.set_state(Gtk.EventSequenceState.CLAIMED)
+                if count == 2:
+                    self.fit_name()
+        click.connect('pressed', pressed)
+        motion = Gtk.EventControllerMotion()
+        def moved(_controller, x, y):
+            if self.dragged_column is None:
+                self.header_scroll.set_cursor_from_name(
+                    'col-resize' if self.resize_start is not None or self._name_edge(x, y) else None)
+        motion.connect('motion', moved)
+        motion.connect('leave', lambda *_: self.header_scroll.set_cursor_from_name(None)
+                       if self.resize_start is None and self.dragged_column is None else None)
+        self.header_scroll.add_controller(motion)
         keys = Gtk.EventControllerKey()
         keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         def key_pressed(_controller, value, *_):
-            if value == Gdk.KEY_Escape and self.dragged_column is not None:
+            if value == Gdk.KEY_Escape and (self.dragged_column is not None or self.resize_start is not None):
                 cancel()
                 return True
             return False
@@ -369,6 +457,11 @@ class ListDetails:
                                              show_type='type' in columns), reload=False)
         self.owner._refresh_files(rescan=False)
 
+    def reset_columns(self):
+        self._end_name_resize()
+        self._set_name_width(0, save=True)
+        self.set_columns(DEFAULT_COLUMNS)
+
     def menu_key(self, _controller, key, _code, modifiers):
         if key == Gdk.KEY_Menu or (key == Gdk.KEY_F10 and modifiers & Gdk.ModifierType.SHIFT_MASK):
             self.show_menu(None, 1, 12, 12)
@@ -396,7 +489,7 @@ class ListDetails:
         content.append(hint)
         reset = Gtk.Button(label='Reset columns')
         reset.add_css_class('columns-reset')
-        reset.connect('clicked', lambda *_: self.set_columns(DEFAULT_COLUMNS))
+        reset.connect('clicked', lambda *_: self.reset_columns())
         content.append(reset)
         self.popover.set_child(content)
         rect = Gdk.Rectangle()
@@ -413,7 +506,8 @@ class ListDetails:
         cells = {}
         columns = self.columns()
         for key in columns:
-            cell = Gtk.Box(width_request=COLUMNS[key][1], hexpand=key == 'name')
+            cell = Gtk.Box(width_request=(self.name_width or COLUMNS[key][1]) if key == 'name' else COLUMNS[key][1],
+                           hexpand=key == 'name' and not self.name_width)
             cell.add_css_class('list-cell')
             outer = cell
             outer._list_column = key
@@ -434,6 +528,7 @@ class ListDetails:
                 cell.append(image)
                 name = Gtk.Label(label=path.name, xalign=0, hexpand=True,
                                  ellipsize=Pango.EllipsizeMode.MIDDLE, width_chars=1)
+                self.name_labels[path] = (name, cell)
                 if owner._computer_search_active():
                     title = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
                     title.append(name)

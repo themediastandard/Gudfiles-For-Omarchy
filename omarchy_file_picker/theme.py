@@ -426,6 +426,7 @@ def build_css(colors: dict[str, str]) -> str:
     button.list-heading-button:hover {{ background: transparent; color: {colors['muted']}; }}
     button.list-heading-button.active {{ color: {colors['foreground']}; }}
     button.list-heading-button label {{ font-size: 11px; font-weight: 500; }}
+    button.list-heading-button.name-heading {{ box-shadow: inset -1px 0 alpha({colors['foreground']}, 0.12); }}
     button.list-heading-button.column-drag-slot,
     .list-cell.column-drag-slot {{ background: alpha({colors['accent']}, 0.12);
       box-shadow: inset 1px 0 alpha({colors['accent']}, 0.3), inset -1px 0 alpha({colors['accent']}, 0.3); }}

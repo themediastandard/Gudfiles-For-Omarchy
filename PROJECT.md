@@ -7,6 +7,12 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- The Name heading's right edge resizes the filename column by dragging;
+  double-click fits every filename in the current list, including offscreen
+  rows, using rendered text widths plus icons and annotation badges. The width
+  persists across views and new browser/Open/Save/folder windows. Escape cancels
+  a drag; Reset columns restores automatic width. Sorting, column reordering,
+  selection and horizontal header/body alignment remain independent.
 - Thumbnail decoder crash fix (September 21): source and user-local runtime are
   now 0.1.1. Glycin aborted while creating threads under the old 1 GiB virtual
   address-space limit; disposable decoders now allow 4 GiB while retaining the
@@ -711,6 +717,7 @@ unchanged; picker windows add the dedicated child application ID documented abov
 python -m unittest discover -v
 PYTHONPATH=. python tests/ui_list_details.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_name_resize.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_rating_columns.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_mount_controls.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_trash_inline.py
