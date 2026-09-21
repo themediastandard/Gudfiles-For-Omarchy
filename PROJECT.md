@@ -7,6 +7,26 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- First stable release preparation (September 21): a fresh release audit on
+  `b89a185` confirmed the public canonical repository, unused `v0.1.2` tag,
+  successful GitHub package CI at that exact commit, and no AUR `gudfiles`
+  entry. All 314 unit tests pass. Native explorer/Open/Save/SaveFiles, real
+  disposable transfer, update notice, Wayland screenshot paste and live
+  disposable Trash checks pass. Help passes in active/light/dark palettes with
+  GTK's Cairo renderer; its default GL run stalled in the current Wayland render
+  wait. The deterministic archive rebuilt byte-for-byte and the generated Arch
+  package passed checksum, metadata, license, manifest and user-data-boundary
+  verification. Review artifacts and a precise acceptance checklist are under
+  ignored `dist/0.1.2/`; nothing was tagged or published.
+  Stable publication remains blocked by the required disposable current-Omarchy
+  install/portal-login/preview-upgrade acceptance. No VM or suitable disposable
+  graphical Omarchy environment is available on this workstation. A second
+  current-session blocker also needs rechecking there: both source and installed
+  `tests/ui_columns.py` receive a zero-sized column allocation, causing
+  `tests/ui_folder_sizes.py` to time out in column view. Do not change the
+  preparation-only INSTALL availability wording, create `v0.1.2`, or publish a
+  stable release until those gates pass and the final artifacts are rebuilt.
+
 - Branch consolidation (September 21): `main` now includes the recursive folder
   sizes and folder-like Trash work, launch update discovery and the refreshed
   Help guide, plus PNG clipboard screenshot paste recovered from its detached
