@@ -133,6 +133,18 @@ def build_css(colors: dict[str, str]) -> str:
       min-height: 26px; padding: 1px 6px; border-radius: 4px;
       background-image: none; box-shadow: none; text-shadow: none;
     }}
+    .file-chooser .footer button.chooser-action {{
+      min-height: 22px; min-width: 56px; padding: 0 9px; border-radius: 3px;
+      border: 1px solid alpha({colors['foreground']}, 0.14);
+      background: alpha({colors['foreground']}, 0.04); color: {colors['foreground']};
+      font-size: 12px; font-weight: 500;
+      outline-color: {colors['foreground']}; outline-width: 1px;
+      outline-offset: 2px; outline-style: none;
+    }}
+    .file-chooser .footer button.chooser-action:hover {{ background: alpha({colors['foreground']}, 0.09); }}
+    .file-chooser .footer button.chooser-action:active {{ background: alpha({colors['foreground']}, 0.14); }}
+    .file-chooser .footer button.chooser-action:disabled {{ opacity: 0.4; }}
+    .file-chooser .footer button.chooser-action:focus-visible {{ outline-style: solid; }}
     .file-chooser .footer entry {{ min-height: 28px; padding: 1px 8px; border-radius: 4px; }}
     headerbar.compact-header button.header-utility,
     headerbar.compact-header windowcontrols button {{

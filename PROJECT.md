@@ -7,6 +7,11 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Open/Save/folder pickers request 1750×1200 by default, capped to 90% of the
+  initial monitor geometry while retaining the existing 820×560 minimum.
+  Copy/Move destination pickers share this default. Footer Cancel and accept
+  buttons have neutral fills, thin borders and 24-pixel targets with visible
+  keyboard focus; the accept action has no blue suggested-action fill.
 - The Name heading's right edge resizes the filename column by dragging;
   double-click fits every filename in the current list, including offscreen
   rows, using rendered text widths plus icons and annotation badges. The width
@@ -124,7 +129,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   dialogs use 15-pixel titles, compact fields/actions and flat file summaries.
   Batch Rename, NAS, Help/About, Transfers, search/column/media popovers and
   Open/Save/destination pickers follow the lighter spacing and controls.
-  Destination pickers open at 960×640; Help at 760×600, Transfers at 640×460,
+  Destination pickers use the large picker default; Help opens at 760×600, Transfers at 640×460,
   and Batch Rename at 680×520. Native scrolling, keyboard focus, inline errors,
   cancellation, destructive-action defaults and transfer close guards remain.
   Keep future secondary surfaces compact and consistent with the browser.
@@ -1095,6 +1100,17 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 name-resize and picker-size verification: 288 unit tests pass.
+  Real isolated X11 drags/double-clicks cover fit of offscreen Unicode names,
+  cancellation, persistence, view switching and horizontal alignment in browser,
+  Open, Save and folder modes in active/light palettes. Existing list sorting
+  and physical column-reordering suites pass in three palettes. Picker results,
+  caller options and Copy/Move destination suites pass. The installed package
+  matches all 62 source runtime files and passes resize/picker-chrome checks.
+  A real Wayland picker opens floating at 1750×1200 with compact neutral actions;
+  the portal stays active. The user-local picker rule now lets the app size itself
+  instead of inheriting Omarchy's generic 875×600 floating-window rule. Reopen
+  existing windows for updated code; no public release was published.
 - September 21 minimal-popup/list-thumbnail verification: all 288 unit tests pass.
   Native isolated X11 checks cover browser/Open/Save/folder modes in active/light
   palettes, real PNG/video list textures, preserved compact rows, visible-only

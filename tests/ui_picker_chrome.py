@@ -60,6 +60,11 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-picker-chrome-') as temporary:
                 with patch('omarchy_file_picker.picker.load_colors', return_value=colors), \
                         patch.object(app, 'quit'):
                     window = PickerWindow(app, request, result)
+                    if kind != 'explorer':
+                        monitor = window.get_display().get_monitors().get_item(0).get_geometry()
+                        assert tuple(window.get_default_size()) == (
+                            min(1750, max(820, int(monitor.width * .9))),
+                            min(1200, max(560, int(monitor.height * .9))))
                     window._set_view('list')
                     window.present()
                     settle()
@@ -87,6 +92,8 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-picker-chrome-') as temporary:
                             settle()
                             if kind != 'explorer':
                                 contained(window.accept_button, window.footer)
+                                assert 22 <= window.accept_button.get_height() <= 26
+                                assert not window.accept_button.has_css_class('suggested-action')
                                 assert not window.chooser_prompt.get_mapped()
                                 assert not window.metadata_viewport.get_mapped()
                                 assert window.metadata.get_first_child() is None

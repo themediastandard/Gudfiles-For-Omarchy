@@ -119,6 +119,14 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self._init_search()
 
         self.set_default_size(1200, 800)
+        if not request.explorer:
+            width, height = 1750, 1200
+            monitors = self.get_display().get_monitors()
+            if monitors.get_n_items():
+                bounds = monitors.get_item(0).get_geometry()
+                width = min(width, max(820, int(bounds.width * .9)))
+                height = min(height, max(560, int(bounds.height * .9)))
+            self.set_default_size(width, height)
         self.set_size_request(820, 560)
         self.add_css_class("picker-root")
         if not request.explorer:
@@ -644,10 +652,13 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             row.append(Gtk.Box(hexpand=True))
 
         cancel = Gtk.Button(label="Cancel")
+        cancel.set_valign(Gtk.Align.CENTER)
+        cancel.add_css_class('chooser-action')
         cancel.connect("clicked", lambda _button: self._finish(cancelled=True))
         row.append(cancel)
         self.accept_button = Gtk.Button(label=self.request.accept_label)
-        self.accept_button.add_css_class("suggested-action")
+        self.accept_button.set_valign(Gtk.Align.CENTER)
+        self.accept_button.add_css_class('chooser-action')
         self.accept_button.connect("clicked", lambda _button: self._accept())
         row.append(self.accept_button)
 

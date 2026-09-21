@@ -518,7 +518,6 @@ class FileManagement(TransferUI):
                                 title=f'{verb} {len(sources)} item{"s" if len(sources) != 1 else ""} to…',
                                 accept_label=f'{verb} here')
         chooser = PickerWindow(self.get_application(), request, None, on_result=chosen)
-        chooser.set_default_size(960, 640)
         self.destination_picker = chooser
         chooser.set_transient_for(self)
         chooser.set_modal(True)
