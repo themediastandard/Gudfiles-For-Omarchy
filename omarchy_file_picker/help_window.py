@@ -2,7 +2,8 @@
 import weakref
 from gi.repository import Gdk, GLib, Gtk, Pango
 
-from .help_catalog import CATEGORIES, FEATURES, matching_features
+from .help_catalog import CATEGORIES, available_features, matching_features
+from .help_style import build_help_css
 from .about import CREATOR, WEBSITE, TAGLINE, LICENSE_NAME, LICENSE_SUMMARY, license_text
 from . import __version__
 from .updates import releases_url, update_instructions
@@ -27,6 +28,20 @@ class HelpWindow(Gtk.Window):
         self.set_size_request(660, 480)
         self.set_hide_on_close(True)
         self.add_css_class('files-help')
+        self.style = Gtk.CssProvider()
+        self.style.load_from_string(build_help_css(owner.colors))
+        Gtk.StyleContext.add_provider_for_display(self.get_display(), self.style,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        self.connect('unrealize', self._remove_style)
+        from .trash_ui import TrashPage
+        capabilities = set()
+        if hasattr(owner, 'folder_sizes'):
+            capabilities.add('folder_sizes')
+        if hasattr(TrashPage, 'confirm_empty'):
+            capabilities.add('empty_trash')
+        if hasattr(owner, 'update_notice'):
+            capabilities.add('launch_updates')
+        self.features = available_features(capabilities)
         self.category = None
         self.visible_features = []
         self.update_running = False
@@ -37,13 +52,16 @@ class HelpWindow(Gtk.Window):
         heading = Gtk.Box(spacing=8)
         heading.add_css_class('help-heading')
         icon = Gtk.Image.new_from_icon_name('help-browser-symbolic')
-        icon.set_pixel_size(18)
+        icon.set_pixel_size(16)
         icon.add_css_class('help-emblem')
         heading.append(icon)
-        titles = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, hexpand=True)
-        titles.append(text('A little help with Gudfiles', 'help-title'))
-        titles.append(text('Find a feature. Learn a shortcut. Make yourself at home.', 'help-description'))
-        heading.append(titles)
+        title = Gtk.Label(label='Gudfiles Help', xalign=0, css_classes=['help-title'])
+        heading.append(title)
+        self.search = Gtk.SearchEntry(hexpand=True)
+        self.search.set_placeholder_text('Search features or shortcuts…')
+        self.search.update_property([Gtk.AccessibleProperty.LABEL], ['Search Help'])
+        self.search.connect('search-changed', self._search_changed)
+        heading.append(self.search)
         self.close_button = Gtk.Button.new_from_icon_name('window-close-symbolic')
         self.close_button.add_css_class('flat')
         self.close_button.set_tooltip_text('Close help (Escape)')
@@ -56,23 +74,14 @@ class HelpWindow(Gtk.Window):
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(root)
-        search_box = Gtk.Box()
-        search_box.add_css_class('help-search-box')
-        self.search = Gtk.SearchEntry(hexpand=True)
-        self.search.set_placeholder_text('Find a feature or shortcut…')
-        self.search.set_tooltip_text('Search all features (Ctrl+F)')
-        self.search.connect('search-changed', self._search_changed)
-        search_box.append(self.search)
-        root.append(search_box)
-
         body = Gtk.Box(vexpand=True)
         root.append(body)
         nav_scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=False)
         nav_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         nav_scroll.set_size_request(176, -1)
         nav_scroll.add_css_class('help-nav')
-        nav = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        nav.append(text('EXPLORE', 'help-eyebrow'))
+        nav = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        nav.append(text('TOPICS', 'help-eyebrow'))
         self.nav_buttons = {}
         for key, title, icon_name in [(None, 'All features', 'view-grid-symbolic')] + [
                 (group.key, group.title, group.icon) for group in CATEGORIES] + [
@@ -82,7 +91,7 @@ class HelpWindow(Gtk.Window):
             if self.nav_buttons:
                 button.set_group(self.nav_buttons[None])
             row = Gtk.Box(spacing=9)
-            row.append(Gtk.Image.new_from_icon_name(icon_name))
+            row.append(Gtk.Image(icon_name=icon_name, pixel_size=14))
             row.append(text(title, 'help-nav-title'))
             button.set_child(row)
             button.connect('clicked', self._choose_category, key)
@@ -93,7 +102,7 @@ class HelpWindow(Gtk.Window):
 
         self.scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
         self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.content.add_css_class('help-content')
         self.scroll.set_child(self.content)
         body.append(self.scroll)
@@ -111,6 +120,9 @@ class HelpWindow(Gtk.Window):
         self.add_controller(keys)
         self.nav_buttons[None].set_active(True)
         self._render()
+
+    def _remove_style(self, *_):
+        Gtk.StyleContext.remove_provider_for_display(self.get_display(), self.style)
 
     def _key_pressed(self, _controller, key, _code, state):
         if key == Gdk.KEY_Escape:
@@ -142,19 +154,19 @@ class HelpWindow(Gtk.Window):
         if self.category == 'about' and not query:
             self._render_about()
             return
-        self.visible_features = matching_features(query, self.category)
+        self.visible_features = matching_features(query, self.category, features=self.features)
         groups = [group for group in CATEGORIES if self.category in (None, group.key)]
-        title = 'Search results' if query else groups[0].title if self.category else 'Get to know Gudfiles'
+        title = 'Search results' if query else groups[0].title if self.category else 'All features'
         description = ('Matching features from across the app.' if query else
                        groups[0].description if self.category else
-                       'Everyday essentials and a few things worth discovering.')
+                       'Browse a topic or search by name or shortcut.')
         intro = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         intro.append(text(title, 'help-section-title'))
         intro.append(text(description, 'help-description', wrap=True))
         self.content.append(intro)
         count = len(self.visible_features)
-        self.summary.set_text(f'{count} of {len(FEATURES)} features' if query or self.category else
-                              f'{len(FEATURES)} features · Made for your everyday workflow')
+        self.summary.set_text(f'{count} of {len(self.features)} features' if query or self.category else
+                              f'{len(self.features)} features')
         if not count:
             empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
             empty.add_css_class('help-empty')

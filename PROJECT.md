@@ -7,6 +7,19 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Help refresh (September 21): the catalog now includes list resizing/fitting,
+  thumbnail sizing, selection totals, conditional media previews, Favorites,
+  Recents, bookmarks, folder-picker constraints and launch notices. Long search,
+  tabs and list-layout descriptions are split into focused topics. Folder-size,
+  Empty Trash and launch-notice entries are shown only when their corresponding
+  runtime capabilities exist; this keeps mixed development installations honest.
+  The catalog contains 72 entries, with counts derived from the available subset.
+- Help uses a single slim title/search row, neutral topic navigation, flat content
+  rows, small shortcut badges and lighter About/License sections. Dedicated
+  `help_style.py` CSS is scoped to the guide and removed when it is destroyed.
+  Search, category navigation, F1/Ctrl+F/Escape, license text, manual checking and
+  browser/picker ownership behavior are preserved.
+
 - Launch update discovery (September 21): ordinary browser windows check stable
   releases from `themediastandard/Gudfiles-For-Omarchy` after their first map.
   Browsing stays usable; Open/Save/folder pickers and temporary external reveals
@@ -726,8 +739,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   focus restoration shared with columns and Quick Look.
 - `omarchy_file_picker/help_catalog.py` — feature descriptions, category metadata
   and search; the single content source for the in-app guide.
-- `omarchy_file_picker/help_window.py` — native help window, category navigation,
-  shortcut badges, search states and owner-bound lifetime.
+- `omarchy_file_picker/help_window.py` / `help_style.py` — native help window,
+  capability-aware catalog, compact scoped styling, category navigation, shortcut
+  badges, search states and owner-bound lifetime.
 - `omarchy_file_picker/about.py` / `LICENSE` — creator credit, website and the
   free-use license; shared by the About page and installed application.
 - `omarchy_file_picker/thumbnails.py`, `thumbnail_decode.py`, `thumbnail_widgets.py`
@@ -1194,14 +1208,26 @@ gdbus introspect --session \
   no large preview for non-media. Package build, deterministic archive checks and
   release verification pass. The complete launch-notice suite also passes against
   the extracted Arch package. The live channel returns no stable public release.
-- This feature is isolated on `codex/launch-update-notice`; it has not been
-  installed into the shared local runtime. During verification, concurrent folder
-  size and Trash work was active in the main checkout and the installed package
-  already contained newer folder-size changes. Preserve those changes; reconcile
-  this branch with completed main work before installing the combined package.
-  Portal services and user windows were left running. No release assets or AUR
-  entry were published. The old 0.1.0 preview needs a one-time package upgrade
-  after an authorized stable release is prepared and accepted.
+- Launch notices and the Help refresh are now installed locally. Installation
+  staged the current runtime plus only eight update/Help paths, checked its full
+  byte manifest before and after an atomic package exchange, and retained a
+  rollback copy. All 70 staged runtime files matched installation; existing
+  folder-size changes were preserved. Portal services and windows stayed running.
+  Existing windows need reopening. Source changes remain on
+  `codex/launch-update-notice`; reconcile them with concurrent main-checkout work
+  before publishing or replacing the installed package from a single checkout.
+  No release assets or AUR entry were published. Old preview users still need a
+  one-time upgrade after an authorized stable release.
+- Help verification (September 21): 304 unit tests pass. Native checks cover
+  source, a combined installation stage and the installed runtime in
+  active/light/dark palettes, full
+  and minimum dimensions, actual new-topic searches and capability omissions,
+  category counts, empty/long searches, unchanged window geometry, update/error
+  states, license expansion, Ctrl+F/Escape/F1, owner cleanup, selection retention
+  and Open/Save/folder/SaveFiles isolation. Light/dark captures were reviewed;
+  dark title/search contrast was corrected. The launch suite also passes against
+  the combined stage. `help_style.py` enters the deterministic runtime archive
+  through the standard recursive runtime allowlist.
 
 - September 21 conditional-preview verification: 295 unit tests pass. Isolated
   native tests exercise empty, folder, document, photo, video and mixed selections

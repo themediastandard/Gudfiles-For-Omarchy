@@ -79,7 +79,10 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
     source.write_text('Help must not change this file or finish the picker.')
     app = PickerApplication(PickerRequest(current_folder=root), None)
     app.register(None)
-    for name, colors in [('active', load_colors()), ('light', DEFAULT_COLORS)]:
+    for name, colors in [('active', load_colors()), ('light', DEFAULT_COLORS), ('dark', {**DEFAULT_COLORS, 'mode': 'dark',
+            'background': '#222222', 'dark_background': '#191919', 'foreground': '#dddddd',
+            'light_foreground': '#bbbbbb', 'darker_background': '#111111',
+            'lighter_background': '#333333', 'selection': '#444444'})]:
         with patch.object(Path, 'home', return_value=root), \
                 patch.object(Gio.VolumeMonitor, 'get_mounts', return_value=[]), \
                 patch('omarchy_file_picker.picker.load_colors', return_value=colors):
@@ -95,9 +98,24 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 guide = window.help_window
                 size_fixture(guide)
                 assert guide.get_visible() and guide.get_transient_for() is window
-                assert guide.visible_features == list(FEATURES)
+                assert guide.visible_features == guide.features
                 assert guide.get_width() <= 820 and guide.get_height() <= 720
                 original_size = guide.get_width(), guide.get_height()
+                ok, bounds = guide.search.compute_bounds(guide)
+                assert ok and bounds.get_width() > 200 and bounds.get_height() < 45
+                assert bounds.get_x() > 0 and bounds.get_x() + bounds.get_width() < guide.get_width()
+                assert guide.get_titlebar().get_height() < 60
+                for query, title in [('thumbnail size', 'Thumbnail size'),
+                                     ('fit columns', 'Resize and fit list columns'),
+                                     ('folder sizes', 'Folder sizes'),
+                                     ('empty trash', 'Empty Trash'),
+                                     ('automatic updater', 'Update notices')]:
+                    guide.search.set_text(query)
+                    settle()
+                    expected = any(f.title == title for f in guide.features)
+                    assert any(f.title == title for f in guide.visible_features) == expected
+                guide.search.set_text('')
+                settle()
                 capture(guide, name + '-overview')
                 for group in CATEGORIES:
                     guide.nav_buttons[group.key].emit('clicked')
@@ -168,7 +186,7 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 settle()
                 assert [f.title for f in guide.visible_features] == ['Stage work for later']
                 assert guide.category is None and guide.nav_buttons[None].get_active()
-                assert len(guide.visible_features) < len(FEATURES)
+                assert len(guide.visible_features) < len(guide.features)
                 capture(guide, name + '-search')
                 guide.search.set_text('no-such-feature-' * 300)
                 settle()
@@ -179,7 +197,7 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 clear = next(w for w in widgets(guide) if isinstance(w, Gtk.Button) and w.get_label() == 'Clear search')
                 clear.emit('clicked')
                 settle()
-                assert guide.visible_features == list(FEATURES)
+                assert guide.visible_features == guide.features
                 guide.nav_buttons['preview'].emit('clicked')
                 settle()
                 capture(guide, name + '-preview')
