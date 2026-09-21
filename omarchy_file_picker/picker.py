@@ -244,6 +244,11 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
 
         self.tabs = BrowserTabs(self)
         browser.append(self.tabs)
+        self.update_notice = None
+        if self.request.explorer and not self.request.external:
+            from .update_ui import UpdateNotice
+            self.update_notice = UpdateNotice(self)
+            browser.append(self.update_notice)
 
         self.toolbar = AdaptiveToolbar(compact=True)
         self._build_toolbar()

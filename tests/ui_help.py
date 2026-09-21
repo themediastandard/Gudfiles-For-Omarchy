@@ -120,11 +120,11 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 # Keep a worker pending while GTK navigates, then finish it.
                 gate = threading.Event()
                 checked = UpdateResult('available', 'Gudfiles 0.2.0 is available.',
-                                       'https://github.com/themediastandard/gudfiles-releases/releases/tag/v0.2.0')
+                                       'https://github.com/themediastandard/Gudfiles-For-Omarchy/releases/tag/v0.2.0')
                 def delayed_check():
                     assert gate.wait(5)
                     return checked
-                with patch('omarchy_file_picker.help_window.check_for_updates', side_effect=delayed_check) as check:
+                with patch('omarchy_file_picker.updates.check_for_updates', side_effect=delayed_check) as check:
                     guide.update_button.emit('clicked')
                     assert guide.update_running and not guide.update_button.get_sensitive()
                     guide._check_updates()
@@ -142,7 +142,7 @@ with tempfile.TemporaryDirectory(prefix='files-help-qa-') as directory:
                 assert guide.release_link.get_uri() == checked.url
                 for status in ('current', 'error', 'unpublished'):
                     result = UpdateResult(status, f'Test {status}')
-                    with patch('omarchy_file_picker.help_window.check_for_updates', return_value=result):
+                    with patch('omarchy_file_picker.updates.check_for_updates', return_value=result):
                         guide.update_button.emit('clicked')
                         settle()
                     assert guide.update_status.get_text() == result.message

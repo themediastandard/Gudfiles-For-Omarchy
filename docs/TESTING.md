@@ -2,12 +2,12 @@
 
 This preview is for **Omarchy on Arch Linux**. It has not been validated on a
 fresh machine yet; this is an early tester build. It is not a Windows or macOS
-installer. Public downloads and AUR updates are not available yet.
+installer. The 0.1.0 preview is publicly downloadable; stable releases and AUR updates are not available yet.
 
 ## Install
 
-1. Download all assets from the private prerelease (GitHub repository access is
-   required), or get the files directly from the developer. Keep the package,
+1. Download all assets from the [public preview](https://github.com/themediastandard/Gudfiles-For-Omarchy/releases/tag/v0.1.0-preview.1),
+   or get the files directly from the developer. Keep the package,
    runtime archive and SHA256SUMS together in one folder.
 2. Open a terminal in that folder and run:
 
@@ -49,9 +49,11 @@ Send the developer your `gudfiles --version` and `gudfiles --doctor` output,
 what you tried, what happened, and what you expected. Include a screenshot or
 terminal error if useful; remove personal paths or filenames before sharing.
 
-This preview does not auto-update. The Help update check looks for public
-stable releases and will not find this private preview. Finish transfers and
-close Gudfiles before installing a newer package supplied by the developer.
+This 0.1.0 preview predates automatic launch notices and does not auto-update.
+Install a newer supplied package once to gain launch-time stable-release notices.
+Stable checks intentionally ignore prereleases. Finish transfers and close
+Gudfiles before installing a newer package; publishing source alone cannot
+update an existing installation.
 
 ## Remove
 

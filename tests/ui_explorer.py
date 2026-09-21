@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='picker-explorer-') as temp, patch.objec
         assert window.tabs.get_visible() and len(window.tabs.items) == 1
         assert request.explorer
         assert not window.footer.get_visible() and not window.footer.get_mapped()
-        assert window.metadata_viewport.get_mapped()
+        assert not window.metadata_viewport.get_mapped()  # No photo/video selection.
         window.flow.select_child(window.children_by_path[path])
         with patch('gi.repository.Gio.AppInfo.launch_default_for_uri', return_value=True) as launch, \
              patch.object(window, '_finish') as finish:
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='picker-explorer-') as temp, patch.objec
         assert window.current_dir == folder
         window._go_back(None)
         assert window.current_dir == root
-        print('PASS: explorer hides action bar, keeps preview, opens via default app, stays open, navigates folders')
+        print('PASS: explorer hides action bar and non-media preview, opens via default app, stays open, navigates folders')
     finally:
         window.destroy()
     for mode in ('open', 'save', 'save_files'):

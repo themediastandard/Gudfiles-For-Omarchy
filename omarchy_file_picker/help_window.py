@@ -1,11 +1,12 @@
 """A compact, searchable native guide, independent of browser/file actions."""
-import threading
+import weakref
 from gi.repository import Gdk, GLib, Gtk, Pango
 
 from .help_catalog import CATEGORIES, FEATURES, matching_features
 from .about import CREATOR, WEBSITE, TAGLINE, LICENSE_NAME, LICENSE_SUMMARY, license_text
 from . import __version__
-from .updates import check_for_updates, releases_url, update_instructions
+from .updates import releases_url, update_instructions
+from .update_ui import checks_for
 
 
 def text(value, css, *, wrap=False):
@@ -29,7 +30,9 @@ class HelpWindow(Gtk.Window):
         self.category = None
         self.visible_features = []
         self.update_running = False
-        self.update_result = None
+        self.update_checks = checks_for(owner.get_application())
+        self.update_result = self.update_checks.result
+        self.update_checks.observers.append(weakref.WeakMethod(self._updates_complete))
 
         heading = Gtk.Box(spacing=8)
         heading.add_css_class('help-heading')
@@ -253,6 +256,7 @@ class HelpWindow(Gtk.Window):
         self.release_link.set_visible(bool(self.update_result and self.update_result.url))
         if self.update_result and self.update_result.url:
             self.release_link.set_uri(self.update_result.url)
+            self.release_link.set_label('View download' if self.update_result.status == 'available' else 'Release notes')
 
     def _check_updates(self, *_):
         if self.update_running:
@@ -260,17 +264,14 @@ class HelpWindow(Gtk.Window):
         self.update_running = True
         self._update_controls()
 
-        def complete(result):
-            self.update_running = False
-            self.update_result = result
-            if self.get_realized() and self.category == 'about':
-                self._update_controls()
-            return GLib.SOURCE_REMOVE
+        self.update_checks.request(force=True)
 
-        def worker():
-            GLib.idle_add(complete, check_for_updates())
+    def _updates_complete(self, result):
+        self.update_running = False
+        self.update_result = result
+        if self.get_realized() and self.category == 'about':
+            self._update_controls()
 
-        threading.Thread(target=worker, name='gudfiles-update-check', daemon=True).start()
 
 
 def show_help(owner):
