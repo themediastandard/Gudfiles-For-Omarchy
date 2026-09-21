@@ -7,10 +7,17 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- A compact bar beneath the file area has a thumbnail-size slider at the left
+  and a centered selected-file count/combined size. The slider works only in grid
+  view, ranges from 96 to 312 pixels wide and persists across windows. Tiles resize
+  in place, preserving selection/native rows; bounded cached textures refresh
+  after dragging settles. The summary is blank with no selection. One background
+  worker cancels obsolete totals and identifies unavailable sizes; folder contents
+  are not scanned and mixed totals explicitly say they cover files only.
 - Open/Save/folder pickers request 1750×1200 by default, capped to 90% of the
   initial monitor geometry while retaining the existing 820×560 minimum.
   Copy/Move destination pickers share this default. Footer Cancel and accept
-  buttons have neutral fills, thin borders and 24-pixel targets with visible
+  buttons have neutral fills, thin borders and compact 22–24-pixel heights with visible
   keyboard focus; the accept action has no blue suggested-action fill.
 - The Name heading's right edge resizes the filename column by dragging;
   double-click fits every filename in the current list, including offscreen
@@ -625,6 +632,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Architecture
 
+- `view_status.py` — the compact file-area bar, persisted grid sizing without
+  rebuilding rows, and one cancellable worker for selected-file totals.
 - `omarchy_file_picker/trash.py` / `trash_ui.py` — desktop Trash enumeration,
   safe original-location restoration and the inline Trash browser location.
 - `omarchy_file_picker/context_menu.py` — shared hover navigation, delayed
@@ -723,6 +732,7 @@ python -m unittest discover -v
 PYTHONPATH=. python tests/ui_list_details.py
 # On a disposable Xvfb display with GDK_BACKEND=x11 and XDOTOOL available:
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_name_resize.py
+POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_view_status.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_rating_columns.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_mount_controls.py
 POINTER_QA_ISOLATED=1 PYTHONPATH=. python tests/ui_trash_inline.py
@@ -1100,6 +1110,18 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 file-area bar verification: 289 unit tests pass. Isolated X11
+  pointer/keyboard tests cover slider endpoints, real tile dimensions, row and
+  selection preservation, grid-only sensitivity, persistence, center alignment,
+  missing sizes and stale-result cancellation in browser/Open/Save and two themes.
+  Native thumbnail regression covers 1,000 images (0.21-second grid switch,
+  20 resident thumbnails), visible-only loading and cancellation. Existing popup
+  thumbnail checks pass in all four modes/two themes; the native Wayland selection
+  summary suite passes in grid/list/columns. Folder totals intentionally exclude
+  directory contents, and mixed summaries label bytes as file sizes only.
+  All 63 installed runtime files match source after an atomic package exchange
+  with rollback backup. The installed bar passes the same pointer/keyboard suite;
+  reopen existing windows to load it.
 - September 21 name-resize and picker-size verification: 288 unit tests pass.
   Real isolated X11 drags/double-clicks cover fit of offscreen Unicode names,
   cancellation, persistence, view switching and horizontal alignment in browser,

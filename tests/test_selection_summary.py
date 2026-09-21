@@ -12,6 +12,14 @@ from omarchy_file_picker.selection_summary import selection_totals
 
 
 class SelectionTotalsTests(unittest.TestCase):
+    def test_cancelled_selection_does_not_read_more_paths(self):
+        first, second = Mock(), Mock()
+        first.stat.return_value = SimpleNamespace(st_mode=stat.S_IFREG, st_size=512)
+        cancelled = Mock(side_effect=[False, True])
+        self.assertIsNone(selection_totals([first, second], cancelled=cancelled))
+        first.stat.assert_called_once()
+        second.stat.assert_not_called()
+
     def test_combines_files_without_folder_contents(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

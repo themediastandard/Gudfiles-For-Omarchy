@@ -46,6 +46,7 @@ from .media_details import MediaDetailsService, make_details_widget
 from .breadcrumbs import BreadcrumbButton, BreadcrumbTrail, scroll_breadcrumbs
 from .columns import ColumnBrowser
 from .selection_summary import show_selection_summary
+from .view_status import ViewStatus
 from .sidebar import SidebarMenus
 from .help_window import show_help
 from .list_navigation import navigate_files
@@ -271,7 +272,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.flow.set_column_spacing(12)
         self.flow.set_valign(Gtk.Align.START)
         self.flow.set_min_children_per_line(1)
-        self.flow.set_max_children_per_line(6)
+        self.flow.set_max_children_per_line(100)
         self.flow.set_homogeneous(False)
         self.flow.connect("child-activated", self._on_child_activated)
         self.selection_changed_handler = self.flow.connect("selected-children-changed", self._on_selection_changed)
@@ -309,6 +310,9 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.empty_detail.set_max_width_chars(48)
         empty.append(self.empty_detail)
         self.browser_stack.add_named(empty, "empty")
+
+        self.view_status = ViewStatus(self)
+        browser.append(self.view_status)
 
         self.metadata = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
         self.metadata.add_css_class("metadata-strip")
@@ -928,6 +932,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
             watcher.sync()
 
     def _rebuild_files(self) -> None:
+        self.view_status.selection = None
         self.list_details.reset()
         self.drag_selection.cancel()
         self._close_context_menu()
@@ -989,6 +994,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         item.append(name)
         if self._computer_search_active():
             item.append(self._search_location_label(path))
+            item._grid_size_parts = (poster, name, None)
+            self.view_status.size_tile(item, self.file_preferences['thumbnail_size'])
             return item
         detail = ""
         try:
@@ -1009,6 +1016,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
                     detail_label.set_text(dimensions)
             poster.on_loaded = show_dimensions
         item.append(detail_label)
+        item._grid_size_parts = (poster, name, detail_label)
+        self.view_status.size_tile(item, self.file_preferences['thumbnail_size'])
         return item
 
     def _list_item(self, path: Path) -> Gtk.Widget:
@@ -1795,6 +1804,8 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         return [child._picker_path for child in self.flow.get_selected_children()]  # type: ignore[attr-defined]
 
     def _update_accept_state(self) -> None:
+        if hasattr(self, 'view_status'):
+            self.view_status.update(self._selected_paths())
         if not hasattr(self, "accept_button"):
             return
         if self.special_mode == 'trash':
@@ -2010,7 +2021,7 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
         self.flow.remove_all()
         self.children_by_path = {}
         self.flow.set_homogeneous(False)
-        self.flow.set_max_children_per_line(6 if mode == "grid" else 1)
+        self.flow.set_max_children_per_line(100 if mode == "grid" else 1)
         self.flow.set_row_spacing(12 if mode == "grid" else 2)
         self.flow.set_column_spacing(12 if mode == "grid" else 0)
         if mode == "list":

@@ -6,10 +6,12 @@ from gi.repository import Gdk, Gtk, Pango
 from .model import format_size
 
 
-def selection_totals(paths):
+def selection_totals(paths, *, cancelled=lambda: False):
     """Count selected entries and logical file bytes, without reading contents."""
     folders = files = total = unavailable = 0
     for path in paths:
+        if cancelled():
+            return None
         try:
             info = path.stat()
         except OSError:

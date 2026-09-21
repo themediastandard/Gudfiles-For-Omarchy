@@ -501,9 +501,23 @@ def build_css(colors: dict[str, str]) -> str:
     .thumbnail-frame {{
       background: {colors['dark_background']};
       border-radius: 7px;
-      min-width: 156px;
-      min-height: 98px;
+      min-width: 0;
+      min-height: 0;
     }}
+    .file-view-status {{
+      min-height: 26px; padding: 0 11px;
+      border-top: 1px solid alpha({colors['foreground']}, 0.08);
+      color: {colors['muted']};
+    }}
+    .file-view-status label {{ font-size: 11px; }}
+    .file-view-status scale {{ padding: 7px 4px; min-height: 0; }}
+    .file-view-status scale trough {{ min-height: 2px; background: alpha({colors['foreground']}, 0.15); }}
+    .file-view-status scale highlight {{ min-height: 2px; background: alpha({colors['foreground']}, 0.5); }}
+    .file-view-status scale slider {{
+      min-width: 10px; min-height: 10px; margin: -5px; border-radius: 50%;
+      background: {colors['foreground']}; border: 0; box-shadow: none;
+    }}
+    .file-view-status scale:disabled {{ opacity: 0.35; }}
     .filename {{ color: {colors['foreground']}; }}
     .muted {{ color: {colors['dark_foreground']}; font-size: 12px; }}
     .metadata-strip {{
