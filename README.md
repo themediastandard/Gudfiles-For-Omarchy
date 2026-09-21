@@ -299,7 +299,7 @@ To try a package shared by the developer, start with the
 [GitHub prereleases](https://github.com/themediastandard/gudfiles/releases);
 downloads are public, or the developer can send you the package directly.
 
-Public downloads and updates are being prepared for **Gudfiles 0.1.0**. See the
+Public downloads and updates are being prepared for **Gudfiles 0.1.2**. See the
 [Omarchy installation guide](docs/INSTALL.md) for package installation, normal
 Omarchy updates, optional portal setup and migration from the development copy.
 The [release guide](docs/RELEASING.md) covers building and publishing each version.

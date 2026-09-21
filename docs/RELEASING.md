@@ -3,11 +3,12 @@
 ## Prepared distribution
 
 `omarchy_file_picker/__init__.py` owns the stable `major.minor.patch` version,
-currently **0.1.0**. `omarchy_file_picker/release.json` owns the public release
+currently **0.1.2**. `omarchy_file_picker/release.json` owns the public release
 repository used by Help and the generated PKGBUILD. It currently targets
 `themediastandard/gudfiles-releases`, a proposed separate public distribution
 repository. Confirm that choice before publication. The development repository
-`themediastandard/gudfiles` remains private.
+`themediastandard/gudfiles` is public; its existing friend preview is separate
+from stable distribution.
 
 The downloadable Python application necessarily contains its runtime Python
 files. A separate release repository keeps development history, tests and
@@ -39,7 +40,7 @@ Do not replace it with an open-source license during packaging.
    confirming the distribution destination and publish sequence; rebuild so the
    shipped guide accurately describes availability. Keep manual download
    instructions until AUR submission is live.
-6. Commit the reviewed source and tag it `v<version>` in the private repository.
+6. Commit the reviewed source and tag it `v<version>` in the source repository.
    Keep that tag tied to the exact archive that was built. Do not put private
    source credentials in the app, PKGBUILD or release repository.
 

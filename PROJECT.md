@@ -7,6 +7,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Current state
 
+- Current app version: 0.1.2, with changes recorded in `releases/0.1.2.md`.
+  This source/version update does not publish new download assets or an AUR package.
+
 - Favorites and Recents are separate sidebar sections in browser/Open/Save/folder
   windows. Right-click a folder, the current folder background, or a sidebar
   folder to Add to Favorites; removal deletes only the shortcut. Existing GTK
@@ -58,7 +61,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   a drag; Reset columns restores the compact default. Sorting, column reordering,
   selection and horizontal header/body alignment remain independent.
 - Thumbnail decoder crash fix (September 21): source and user-local runtime are
-  now 0.1.1. Glycin aborted while creating threads under the old 1 GiB virtual
+  now 0.1.2. Glycin aborted while creating threads under the old 1 GiB virtual
   address-space limit; disposable decoders now allow 4 GiB while retaining the
   20-second CPU/deadline and 256 MiB file-size limits. This is an address-space
   ceiling, not a RAM reservation. Decoder failures log at most 4 KiB of stderr
@@ -337,8 +340,9 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   caller-supplied title while leaving ordinary Gudfiles windows tiled.
 - Gudfiles 0.1.0 has local distribution preparation: an Arch `gudfiles` package,
   pinned AUR recipe and `.SRCINFO`, SHA-256 checksums, deterministic allowlisted
-  runtime archive, release notes and a packaging-only CI workflow. No public
-  download or AUR listing has been published. Source stays private. `release.json` currently uses the
+  runtime archive, release notes and a packaging-only CI workflow. Source and
+  friend-preview downloads are now public; stable releases and an AUR listing
+  remain unpublished. `release.json` currently uses the
   proposed `themediastandard/gudfiles-releases` destination; owner confirmation
   is pending. Shipped Python remains readable regardless of repository privacy.
 - Help → About & License displays the version and a manual asynchronous GitHub
