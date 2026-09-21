@@ -7,7 +7,7 @@ currently **0.1.2**. `omarchy_file_picker/release.json` owns the public release
 repository used by Help and the generated PKGBUILD. It currently targets
 `themediastandard/gudfiles-releases`, a proposed separate public distribution
 repository. Confirm that choice before publication. The development repository
-`themediastandard/gudfiles` is public; its existing friend preview is separate
+`themediastandard/gudfiles-for-omarchy` is public; its existing friend preview is separate
 from stable distribution.
 
 The downloadable Python application necessarily contains its runtime Python
@@ -94,7 +94,7 @@ and [GitHub releases API](https://docs.github.com/en/rest/releases/releases).
 ## Private friend previews
 
 For authorized early testing, use a prerelease in the existing private
-`themediastandard/gudfiles` repository. Build and verify the same allowlisted
+`themediastandard/gudfiles-for-omarchy` repository. Build and verify the same allowlisted
 artifacts, attach `docs/TESTING.md` as `TESTING.md`, and use a distinct preview
 tag such as `v0.1.0-preview.1` tied to the source commit. Keep the release marked
 prerelease. Repository access is required; the owner can also send the assets

@@ -765,7 +765,7 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
 
 ## Development
 
-Canonical repository: https://github.com/themediastandard/gudfiles (`main`).
+Canonical repository: https://github.com/themediastandard/gudfiles-for-omarchy (`main`).
 The local `origin` remote points there and is the default push destination.
 `main` tracks `origin/main`; the older `personal` remote remains a historical
 reference. The primary application and portal IDs and installation paths remain
