@@ -15,6 +15,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   NO FAVORITES YET and NO RECENT FOLDERS in 10-pixel text, aligned with their headings.
   Right-click a Recents entry to Remove from Recents; this persists without
   changing Favorites or deleting anything. A later visit can add it again.
+  Only one sidebar entry highlights the current folder; a Places, Favorites or
+  device shortcut takes precedence over a duplicate in Recents.
   Recents persists the five distinct most recently used folder paths, newest
   first. Explicit navigation (including columns, history and tabs), accepted
   picker choices, file opening/preview, clipboard copy/cut, Properties, ratings,

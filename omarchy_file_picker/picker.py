@@ -1992,11 +1992,20 @@ class PickerWindow(SearchTools, SidebarMenus, CreativeTools, FileManagement, Gtk
     def _update_active_location(self) -> None:
         if hasattr(self, "tabs"):
             self.tabs.update()
+        matches = []
         for button in self.location_buttons:
             active = getattr(button, "_picker_path", None) == self.current_dir and self.special_mode is None
             if button._sidebar_kind == 'location' and button._sidebar_key in {'recent', 'trash'}:
                 active = self.special_mode == button._sidebar_key
             if active:
+                matches.append(button)
+        # The same folder can appear in Places, Favorites and Recents. Give its
+        # stable shortcut precedence, with Recents as a fallback, and highlight
+        # exactly one entry rather than suggesting multiple selected folders.
+        selected = next((button for button in matches if button._sidebar_kind != 'recent-folder'),
+                        matches[0] if matches else None)
+        for button in self.location_buttons:
+            if button is selected:
                 button.add_css_class("active")
             else:
                 button.remove_css_class("active")
