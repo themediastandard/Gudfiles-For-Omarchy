@@ -11,8 +11,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   windows. Right-click a folder, the current folder background, or a sidebar
   folder to Add to Favorites; removal deletes only the shortcut. Existing GTK
   bookmarks and default places are preserved; the former Recent place is labeled
-  Recent Files to distinguish it from folder Recents. Empty Favorites retains
-  its heading without a placeholder message, as requested.
+  Recent Files to distinguish it from folder Recents. Empty sections display
+  NO FAVORITES YET and NO RECENT FOLDERS, aligned with their headings.
   Right-click a Recents entry to Remove from Recents; this persists without
   changing Favorites or deleting anything. A later visit can add it again.
   Recents persists the five distinct most recently used folder paths, newest
@@ -1139,7 +1139,8 @@ gdbus introspect --session \
   menus remove Favorites and Recents independently, preserve folder contents,
   and keep removed Recents absent after passive refresh in all three views,
   four window modes and active/light palettes. Persistence/revisit and locked
-  deletion tests pass. Empty Favorites keeps only its heading.
+  deletion tests pass. The later empty-state styling request restores uppercase
+  placeholders aligned with the section headings.
 - September 21 Favorites/Recents verification: 293 unit tests pass, including
   concurrent SQLite connections, duplicate paths, five-folder eviction, reopen,
   locked writes, corruption preservation and shortcut-only removal. Native tests

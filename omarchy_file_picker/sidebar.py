@@ -114,16 +114,16 @@ class SidebarMenus:
                 if button._sidebar_key == focused_key:
                     button.grab_focus()
             error = self._folder_read_error or (self._recent_write_error if kind == 'recent-folder' else '')
-            if error or (not paths and kind == 'recent-folder'):
+            if error or not paths:
                 text = ('Favorites unavailable' if kind == 'favorite' else 'Recents unavailable') if error else (
-                    'No recent folders yet')
+                    'NO FAVORITES YET' if kind == 'favorite' else 'NO RECENT FOLDERS')
                 if error and kind == 'recent-folder' and not self._folder_read_error:
                     text = 'Could not save recent folders'
                 note = Gtk.Label(label=text, xalign=0)
                 note.add_css_class('muted')
                 note.set_wrap(True)
-                note.set_margin_start(8)
-                note.set_margin_end(8)
+                note.set_margin_start(12)
+                note.set_margin_end(12)
                 if error:
                     note.set_tooltip_text(error)
                 box.append(note)
