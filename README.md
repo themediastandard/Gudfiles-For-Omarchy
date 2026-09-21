@@ -8,7 +8,7 @@ Omarchy theme and serves as an XDG desktop portal backend.
 *Gudfiles 0.1.2, shown with mock folders and sample media.
 [Original capture and media credits](docs/screenshots/README.md).*
 
-Source: [themediastandard/gudfiles-for-omarchy](https://github.com/themediastandard/gudfiles-for-omarchy).
+Source: [themediastandard/Gudfiles-For-Omarchy](https://github.com/themediastandard/Gudfiles-For-Omarchy).
 
 Designed and built by [The Media Standard](https://themediastandard.com) for
 creatives using Linux. Gudfiles is free for personal and commercial use under
@@ -296,7 +296,7 @@ action comparison and intentional differences.
 
 To try a package shared by the developer, start with the
 [friend testing guide](docs/TESTING.md). Preview downloads are attached to
-[GitHub prereleases](https://github.com/themediastandard/gudfiles-for-omarchy/releases);
+[GitHub prereleases](https://github.com/themediastandard/Gudfiles-For-Omarchy/releases);
 downloads are public, or the developer can send you the package directly.
 
 Public downloads and updates are being prepared for **Gudfiles 0.1.2**. See the
