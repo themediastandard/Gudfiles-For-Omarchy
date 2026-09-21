@@ -189,7 +189,7 @@ FEATURES = (
             keywords='movie format export'),
 
     Feature('locations', 'Favorites & recent folders',
-            'Right-click a folder and choose Add to Favorites to keep it in the Favorites sidebar section. Remove from Favorites removes only the shortcut. Favorites persist across windows and launches. Recents lists the five latest folders you used, newest first, including opening folders, choosing files, previewing, copying and file operations. Recent Files still shows recent files. Shared GTK bookmarks remain under Places. Use the eject icon beside supported drives to safely disconnect them.'),
+            'Right-click a folder and choose Add to Favorites to keep it in the Favorites sidebar section. Remove from Favorites removes only the shortcut. Favorites persist across windows and launches. Recents lists the five latest folders you used, newest first, including opening folders, choosing files, previewing, copying and file operations. Right-click a Recents entry and choose Remove from Recents to forget it without deleting anything; using the folder again can bring it back. Recent Files still shows recent files. Shared GTK bookmarks remain under Places. Use the eject icon beside supported drives to safely disconnect them.'),
     Feature('locations', 'Make the sidebar yours',
             'Drag its divider to resize; the width is remembered. Right-click a location to Remove from Sidebar without deleting it. Restore Default Locations brings hidden defaults back.'),
     Feature('locations', 'Open another Gudfiles window',

@@ -36,6 +36,21 @@ class FolderLocationTests(unittest.TestCase):
         self.assertEqual(original.read_text(), 'original')
         self.assertEqual(self.store.database.stat().st_mode & 0o777, 0o600)
 
+    def test_recent_removal_persists_without_removing_favorite_or_folder(self):
+        folder = self.root / 'Folder'; folder.mkdir()
+        original = folder / 'keep.txt'; original.write_text('original')
+        other = self.root / 'Other'
+        self.store.set_favorite(folder, True)
+        self.store.touch([folder, other])
+        self.store.remove_recent(folder)
+        self.store.remove_recent(folder)
+        reopened = FolderLocations(self.store.database)
+        self.assertEqual(reopened.read(), ([folder], [other]))
+        self.assertEqual(original.read_text(), 'original')
+        # Removal forgets the past visit, rather than permanently blacklisting it.
+        reopened.touch([folder])
+        self.assertEqual(reopened.read()[1], [folder, other])
+
     def test_multiple_connections_preserve_each_others_changes(self):
         self.store.touch([self.root])
         folders = [self.root / str(i) for i in range(12)]
@@ -52,11 +67,14 @@ class FolderLocationTests(unittest.TestCase):
 
     def test_corruption_and_locked_writes_preserve_saved_state(self):
         self.store.set_favorite(self.root, True)
+        self.store.touch([self.root])
         with sqlite3.connect(self.store.database) as lock:
             lock.execute('BEGIN IMMEDIATE')
             with self.assertRaises(sqlite3.OperationalError):
                 self.store.set_favorite(self.root, False)
-        self.assertEqual(self.store.read()[0], [self.root])
+            with self.assertRaises(sqlite3.OperationalError):
+                self.store.remove_recent(self.root)
+        self.assertEqual(self.store.read(), ([self.root], [self.root]))
         self.store.database.write_bytes(b'corrupt fixture')
         with self.assertRaises(sqlite3.DatabaseError):
             self.store.set_favorite(self.root, False)

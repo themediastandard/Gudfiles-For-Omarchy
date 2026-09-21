@@ -149,6 +149,14 @@ with tempfile.TemporaryDirectory(prefix='gudfiles-folders-') as temp:
                     window._copy_files([folders[0] / 'file.txt'], record=False)
                     assert window.folder_locations.read()[1] == [folders[2], *expected[:4]]
                     until(lambda: shortcuts(window, 'recent-folder') == [folders[2], *expected[:4]])
+                    recent = next(b for b in window.location_buttons
+                                  if b._sidebar_kind == 'recent-folder' and b._picker_path == folders[2])
+                    window._show_sidebar_context_menu(30, 30, recent)
+                    choose(window, 'Remove from Recents')
+                    assert shortcuts(window, 'recent-folder') == expected[:4]
+                    window._refresh_files(); settle()
+                    assert window.folder_locations.read()[1] == expected[:4]
+                    assert (folders[2] / 'file.txt').read_text() == 'fixture'
                     window.navigate(root)
                     window._set_favorite(target, True)
                     if view == 'columns':

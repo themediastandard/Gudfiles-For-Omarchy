@@ -13,6 +13,8 @@ Open/Save dialogs exposed through the desktop's XDG FileChooser portal backend.
   bookmarks and default places are preserved; the former Recent place is labeled
   Recent Files to distinguish it from folder Recents. Empty Favorites retains
   its heading without a placeholder message, as requested.
+  Right-click a Recents entry to Remove from Recents; this persists without
+  changing Favorites or deleting anything. A later visit can add it again.
   Recents persists the five distinct most recently used folder paths, newest
   first. Explicit navigation (including columns, history and tabs), accepted
   picker choices, file opening/preview, clipboard copy/cut, Properties, ratings,
@@ -1133,6 +1135,11 @@ gdbus introspect --session \
 
 ## Known risks and next actions
 
+- September 21 shortcut-removal follow-up: 294 unit tests pass. Installed native
+  menus remove Favorites and Recents independently, preserve folder contents,
+  and keep removed Recents absent after passive refresh in all three views,
+  four window modes and active/light palettes. Persistence/revisit and locked
+  deletion tests pass. Empty Favorites keeps only its heading.
 - September 21 Favorites/Recents verification: 293 unit tests pass, including
   concurrent SQLite connections, duplicate paths, five-folder eviction, reopen,
   locked writes, corruption preservation and shortcut-only removal. Native tests

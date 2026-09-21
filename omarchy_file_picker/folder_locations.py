@@ -43,6 +43,10 @@ class FolderLocations:
             else:
                 db.execute('DELETE FROM favorites WHERE path=?', (key,))
 
+    def remove_recent(self, path):
+        with self._write() as db:
+            db.execute('DELETE FROM recents WHERE path=?', (self.key(path),))
+
     def touch(self, paths):
         # First path in a single action wins; one action cannot create duplicates.
         keys = list(dict.fromkeys(self.key(path) for path in paths))[:5]

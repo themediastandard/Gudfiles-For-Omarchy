@@ -45,6 +45,14 @@ class SidebarMenus:
             return
         self._update_folder_sections()
 
+    def _remove_recent_folder(self, path):
+        try:
+            self.folder_locations.remove_recent(path)
+        except (OSError, sqlite3.Error) as error:
+            self._show_error('Could not update Recents', str(error))
+            return
+        self._update_folder_sections()
+
     def _record_recent_folders(self, paths):
         try:
             self.folder_locations.touch(paths)
@@ -219,6 +227,9 @@ class SidebarMenus:
                 favorite = self._is_favorite(path)
                 action('Remove from Favorites' if favorite else 'Add to Favorites',
                        lambda: self._set_favorite(path, not favorite), 'starred-symbolic')
+                if kind == 'recent-folder':
+                    action('Remove from Recents', lambda: self._remove_recent_folder(path),
+                           'list-remove-symbolic')
             if kind in {'location', 'bookmark'}:
                 separator()
                 action('Remove from Sidebar', lambda: self._remove_sidebar_item(button), 'list-remove-symbolic',

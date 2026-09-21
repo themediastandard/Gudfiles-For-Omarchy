@@ -193,7 +193,9 @@ folders over 10,000 entries are not recorded. Text fields keep native Undo.
 Cross-drive moves and permanent deletion are excluded; Trash has its own Restore.
 
 Right-click a folder and choose **Add to Favorites** to save it in the sidebar.
-**Remove from Favorites** removes only the shortcut. **Recents** lists your five
+**Remove from Favorites** removes only the shortcut. Right-click a Recents entry
+and choose **Remove from Recents** to forget it; using that folder again can
+bring it back. Neither action deletes files. **Recents** lists your five
 most recently used folders, newest first, including folders used for file
 selection, previews and file operations. Both sections persist across launches
 and are shared by the browser and Open/Save pickers. **Recent Files** still opens
